@@ -447,6 +447,10 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Bugfix Etapa X.13.1 — botón "Comprar ahora" de la card en `index.html`:**
+- El handler antiguo `alert('Próximamente — integración con Mercado Pago y PayPal')` se reemplazó por `window.location.href='${coursePage}&buy=1'` (navega a `venta-curso.html?slug=X&buy=1`).
+- `venta-curso.html` detecta el flag `buy=1` en la URL dentro del callback del `MutationObserver` que setea `_ventaCourse`, y dispara `openCurrencyModal()` automáticamente apenas el course está cargado. Resultado UX: click "Comprar ahora" en landing → aterriza en venta-curso con el modal de selección de moneda ya abierto.
+
 **Integración Mercado Pago (Etapa X.13):**
 - **SDK** cargado en `<head>` de `checkout.html`: `<script src="https://sdk.mercadopago.com/js/v2"></script>`.
 - **Public Key** hardcoded en JS: `APP_USR-50bae8c7-b6bf-4f8b-813e-38a4307e91bd` (producción). Se inicializa con `new MercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' })` para dejar el SDK listo si en el futuro se cambia a checkout-bricks (transparente). Hoy se usa el flujo de **redirect a checkout hosteado** vía `init_point`.

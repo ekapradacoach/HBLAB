@@ -994,7 +994,14 @@
             .select('id, slug, price_ars, price_usd')
             .eq('slug', slug)
             .maybeSingle()
-            .then(({ data }) => { if (data) _ventaCourse = data; });
+            .then(({ data }) => {
+              if (!data) return;
+              _ventaCourse = data;
+              // Si llegan desde la card de la landing con ?buy=1 → abrir el modal directo
+              if (new URLSearchParams(window.location.search).get('buy') === '1') {
+                openCurrencyModal();
+              }
+            });
         }
         obs.disconnect();
       }

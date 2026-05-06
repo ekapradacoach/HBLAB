@@ -1584,7 +1584,7 @@
               <span style="color:var(--gray-text);font-size:0.8rem">ARS</span>
               <span class="price-usd">/ USD ${Number(c.price_usd||0).toLocaleString('es-AR')}</span>
             </div>
-            <button class="btn-buy" onclick="event.stopPropagation();alert('Próximamente — integración con Mercado Pago y PayPal')">Comprar ahora</button>
+            <button class="btn-buy" onclick="event.stopPropagation();window.location.href='${coursePage}&buy=1'">Comprar ahora</button>
           </div>
         </div>`;
       }).join('');
