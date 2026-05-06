@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finalizar compra | HB Lab</title>
+
+  <!-- SEO mínimo (Etapa X.12 — checkout no se indexa) -->
+  <meta name="description" content="Finalizá tu compra del curso HB Lab." />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="canonical" href="https://hblab.com/checkout.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:           #1E2A3A;
+      --navy:         #1E2A3A;
+      --navy-light:   #243042;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+      --green:        #68D391;
+      --red:          #FC8181;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg); color: var(--white);
+      min-height: 100vh; line-height: 1.5;
+      padding-bottom: 40px;
+    }
+
+    /* Navbar simple */
+    .navbar {
+      background: rgba(30,42,58,0.95);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px; position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .navbar-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-wrap {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; color: inherit;
+    }
+    .logo-svg { width: 32px; height: 32px; }
+    .logo-text { display: inline-flex; align-items: baseline; gap: 4px; }
+    .logo-text .hb  { font-weight: 900; letter-spacing: -0.02em; font-size: 1.05rem; }
+    .logo-text .lab { font-style: italic; color: var(--lime); font-size: 0.95rem; }
+
+    /* Layout principal */
+    .checkout-container {
+      max-width: 1100px; margin: 0 auto; padding: 36px 24px;
+    }
+    .checkout-grid {
+      display: grid; grid-template-columns: 1.5fr 1fr; gap: 32px;
+    }
+    @media (max-width: 880px) {
+      .checkout-grid { grid-template-columns: 1fr; gap: 24px; }
+      .summary-card { order: -1; }   /* en mobile el resumen va arriba */
+    }
+
+    .checkout-title {
+      font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .checkout-sub {
+      font-size: 0.88rem; color: var(--gray-text); margin-bottom: 28px;
+    }
+
+    /* Form */
+    .form-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 26px;
+    }
+    .form-section-title {
+      font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--gray-text);
+      margin: 0 0 14px;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 540px) { .form-row { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .field label {
+      font-size: 0.78rem; font-weight: 700;
+      color: var(--gray-text); text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .field input[type="text"], .field input[type="email"] {
+      width: 100%; background: var(--navy);
+      border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      padding: 11px 14px; border-radius: 9px;
+      transition: border-color 0.18s;
+    }
+    .field input:focus { outline: none; border-color: var(--lime); }
+    .field input.invalid { border-color: var(--red); }
+    .field-hint {
+      font-size: 0.74rem; color: var(--gray-text);
+    }
+    .field-error {
+      font-size: 0.74rem; color: var(--red); display: none;
+    }
+    .field-error.show { display: block; }
+
+    /* Cupón */
+    .coupon-row {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .coupon-row input { flex: 1; }
+    .btn-coupon {
+      background: transparent; border: 1.5px solid var(--lime);
+      color: var(--lime); font-family: inherit; font-weight: 700; font-size: 0.85rem;
+      padding: 10px 18px; border-radius: 9px; cursor: pointer;
+      transition: background 0.18s;
+    }
+    .btn-coupon:hover { background: rgba(200,230,0,0.08); }
+    .btn-coupon:disabled { opacity: 0.5; cursor: not-allowed; }
+    .coupon-msg {
+      font-size: 0.84rem; margin-top: 8px;
+      padding: 8px 12px; border-radius: 8px; display: none;
+    }
+    .coupon-msg.ok {
+      display: block;
+      background: rgba(200,230,0,0.08);
+      border: 1px solid rgba(200,230,0,0.28);
+      color: var(--lime);
+    }
+    .coupon-msg.bad {
+      display: block;
+      background: rgba(252,129,129,0.08);
+      border: 1px solid rgba(252,129,129,0.28);
+      color: var(--red);
+    }
+
+    /* Términos */
+    .terms-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin: 18px 0 18px;
+    }
+    .terms-row input[type="checkbox"] {
+      margin-top: 2px; accent-color: var(--lime);
+      width: 18px; height: 18px; cursor: pointer;
+    }
+    .terms-row label {
+      font-size: 0.84rem; color: var(--gray-text); cursor: pointer;
+      user-select: none;
+    }
+    .terms-row label a { color: var(--lime); text-decoration: none; }
+    .terms-row label a:hover { text-decoration: underline; }
+
+    /* Botón continuar */
+    .btn-continue {
+      width: 100%; padding: 14px 22px;
+      background: var(--lime); color: var(--navy); border: none;
+      border-radius: 10px; font-family: inherit; font-weight: 800; font-size: 0.95rem;
+      cursor: pointer; transition: transform 0.18s, opacity 0.18s, box-shadow 0.18s;
+    }
+    .btn-continue:hover:not(:disabled) {
+      transform: translateY(-2px); box-shadow: 0 10px 30px rgba(200,230,0,0.36);
+    }
+    .btn-continue:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Resumen del curso */
+    .summary-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 22px;
+      position: sticky; top: 84px;
+      align-self: start;
+    }
+    .summary-cover {
+      width: 100%; aspect-ratio: 16 / 9; border-radius: 10px;
+      background-size: cover; background-position: center;
+      background-color: var(--navy); margin-bottom: 16px;
+    }
+    .summary-title {
+      font-size: 1.05rem; font-weight: 700; line-height: 1.35;
+      margin-bottom: 6px;
+    }
+    .summary-tag {
+      font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--violet-light);
+      margin-bottom: 10px;
+    }
+    .summary-divider { height: 1px; background: var(--card-border); margin: 16px 0; }
+    .summary-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 0.85rem; color: var(--gray-text);
+      margin-bottom: 6px;
+    }
+    .summary-row.total {
+      font-size: 1.1rem; color: var(--white); font-weight: 800;
+      margin-top: 4px;
+    }
+    .price-strike {
+      color: var(--gray-text); text-decoration: line-through;
+      font-size: 0.8rem; margin-right: 6px; font-weight: 600;
+    }
+    .price-final {
+      color: var(--lime); font-weight: 900;
+    }
+    .summary-coupon-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(200,230,0,0.1);
+      border: 1px solid rgba(200,230,0,0.28);
+      color: var(--lime); font-size: 0.74rem; font-weight: 700;
+      padding: 4px 10px; border-radius: 100px;
+      margin-top: 6px;
+    }
+
+    /* Estado de pago / loading */
+    .checkout-loading,
+    .checkout-error {
+      text-align: center; padding: 48px 20px;
+      color: var(--gray-text); font-size: 0.92rem;
+    }
+    .spinner {
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid var(--card-border); border-top-color: var(--lime);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin-bottom: 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .redirect-msg {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 20px 22px; margin-top: 24px;
+      display: none;
+    }
+    .redirect-msg.show { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar simple -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="index.html" class="logo-wrap" aria-label="HB Lab">
+        <svg class="logo-svg" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="10" fill="#253347"/>
+          <path d="M10 28V12h4l6 10 6-10h4v16h-4V19l-6 9-6-9v9h-4z" fill="#C8E600"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span><span class="lab">lab</span>
+        </div>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Loader inicial -->
+  <div id="checkout-loading" class="checkout-loading">
+    <div class="spinner"></div>
+    <p>Cargando…</p>
+  </div>
+
+  <!-- Error si el slug no existe -->
+  <div id="checkout-error" class="checkout-error" style="display:none;">
+    <p>Curso no encontrado o moneda inválida. <a href="index.html" style="color:var(--lime)">Volver a la landing</a>.</p>
+  </div>
+
+  <!-- Contenedor principal -->
+  <div id="checkout-main" class="checkout-container" style="display:none;">
+    <h1 class="checkout-title">Finalizar compra</h1>
+    <p class="checkout-sub">Completá tus datos para continuar al medio de pago.</p>
+
+    <div class="checkout-grid">
+      <!-- ── Formulario ─────────────────────────────── -->
+      <div class="form-card">
+        <p class="form-section-title">Tus datos</p>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="ck-nombre">Nombre</label>
+            <input type="text" id="ck-nombre" oninput="onFieldChange()" required />
+            <span class="field-error" id="ck-nombre-err">Ingresá tu nombre.</span>
+          </div>
+          <div class="field">
+            <label for="ck-apellido">Apellido</label>
+            <input type="text" id="ck-apellido" oninput="onFieldChange()" required />
+            <span class="field-error" id="ck-apellido-err">Ingresá tu apellido.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="ck-email">Email</label>
+          <input type="email" id="ck-email" oninput="onFieldChange()" required />
+          <span class="field-error" id="ck-email-err">Email inválido.</span>
+          <span class="field-hint">Ahí te llegarán los accesos al curso.</span>
+        </div>
+
+        <div class="field">
+          <label for="ck-email2">Confirmar email</label>
+          <input type="email" id="ck-email2" oninput="onFieldChange()" required />
+          <span class="field-error" id="ck-email2-err">Los emails no coinciden.</span>
+        </div>
+
+        <p class="form-section-title" style="margin-top:24px;">Cupón de descuento</p>
+        <div class="coupon-row">
+          <input type="text" id="ck-coupon" placeholder="CÓDIGO"
+                 style="text-transform:uppercase;letter-spacing:0.08em;font-weight:700;" />
+          <button type="button" class="btn-coupon" id="btn-apply-coupon" onclick="validateCoupon()">Aplicar</button>
+        </div>
+        <div class="coupon-msg" id="coupon-msg"></div>
+
+        <!-- Términos -->
+        <div class="terms-row">
+          <input type="checkbox" id="ck-terms" onchange="onFieldChange()" />
+          <label for="ck-terms">
+            Acepto los <a href="#" target="_blank" rel="noopener">términos y condiciones</a> de HB Lab y la política de privacidad.
+          </label>
+        </div>
+
+        <button class="btn-continue" id="btn-continue" disabled onclick="goToPayment()">
+          Continuar al pago →
+        </button>
+
+        <div class="redirect-msg" id="redirect-msg">
+          <p>🔒 Redirigiendo al medio de pago… Una vez aprobado el pago recibirás un email con tus accesos.</p>
+        </div>
+      </div>
+
+      <!-- ── Resumen del curso ─────────────────────── -->
+      <div class="summary-card">
+        <p class="form-section-title">Resumen</p>
+
+        <div class="summary-cover" id="sum-cover"></div>
+        <div class="summary-tag" id="sum-tag">Curso · Online</div>
+        <div class="summary-title" id="sum-title">—</div>
+
+        <div class="summary-divider"></div>
+
+        <div class="summary-row">
+          <span>Precio del curso</span>
+          <span id="sum-price-original">—</span>
+        </div>
+        <div class="summary-row" id="sum-discount-row" style="display:none;">
+          <span>Descuento</span>
+          <span id="sum-discount-amount" style="color:var(--lime);">—</span>
+        </div>
+        <div class="summary-row total">
+          <span>Total a pagar</span>
+          <span id="sum-total">—</span>
+        </div>
+        <div id="sum-coupon-tag-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    /* ══════════════════════════════════════════════════
+       Etapa X.12 — checkout.html
+       Página pública sin auth requerida.
+       Lee ?slug=&currency= → carga el curso → muestra form + resumen →
+       cupones (tabla `coupons`) → redirect a MP/PayPal.
+    ══════════════════════════════════════════════════ */
+
+    let _course        = null;     // course completo cargado
+    let _currency      = '';       // 'ARS' | 'USD'
+    let _basePrice     = 0;        // precio según moneda elegida
+    let _appliedCoupon = null;     // { code, discount_pct, discount_fixed, ... } o null
+    let _finalPrice    = 0;        // precio final tras descuento (cap a 0)
+
+    const fmtMoney = (n, currency) => {
+      n = Math.max(0, Number(n || 0));
+      if (currency === 'USD') return 'USD ' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+      return '$' + n.toLocaleString('es-AR') + ' ARS';
+    };
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function showError() {
+      document.getElementById('checkout-loading').style.display = 'none';
+      document.getElementById('checkout-main').style.display    = 'none';
+      document.getElementById('checkout-error').style.display   = '';
+    }
+    function showMain() {
+      document.getElementById('checkout-loading').style.display = 'none';
+      document.getElementById('checkout-error').style.display   = 'none';
+      document.getElementById('checkout-main').style.display    = '';
+    }
+
+    /* ── Init ───────────────────────────────────────── */
+    (async function init() {
+      const params  = new URLSearchParams(window.location.search);
+      const slug    = params.get('slug');
+      const currency = (params.get('currency') || '').toUpperCase();
+
+      if (!slug || !['ARS','USD'].includes(currency)) {
+        showError();
+        return;
+      }
+      _currency = currency;
+
+      const { data: course, error } = await sb
+        .from('courses')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, is_active')
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error || !course) {
+        console.error('checkout init: curso no encontrado o error', error);
+        showError();
+        return;
+      }
+
+      _course    = course;
+      _basePrice = currency === 'ARS' ? Number(course.price_ars || 0) : Number(course.price_usd || 0);
+      _finalPrice = _basePrice;
+
+      // Si la moneda elegida no tiene precio configurado, mostrar error
+      if (_basePrice <= 0) {
+        showError();
+        return;
+      }
+
+      // Title dinámico
+      document.title = `Comprar ${course.title} | HB Lab`;
+
+      // Resumen
+      renderSummary();
+      showMain();
+    })();
+
+    function renderSummary() {
+      const cover = document.getElementById('sum-cover');
+      if (_course.cover_url) {
+        cover.style.backgroundImage = `url('${_course.cover_url}')`;
+      } else {
+        cover.style.background = 'linear-gradient(135deg, var(--violet) 0%, var(--navy-light) 100%)';
+      }
+      document.getElementById('sum-title').textContent = _course.title || '';
+      document.getElementById('sum-tag').textContent   = 'Curso · Online';
+
+      // Precio original (siempre visible)
+      document.getElementById('sum-price-original').textContent = fmtMoney(_basePrice, _currency);
+
+      // Si hay cupón aplicado, mostrar fila descuento + cambiar total
+      const discountRow      = document.getElementById('sum-discount-row');
+      const discountAmount   = document.getElementById('sum-discount-amount');
+      const totalEl          = document.getElementById('sum-total');
+      const couponTagWrap    = document.getElementById('sum-coupon-tag-wrap');
+
+      if (_appliedCoupon) {
+        const discount = _basePrice - _finalPrice;
+        discountRow.style.display = '';
+        discountAmount.textContent = '− ' + fmtMoney(discount, _currency);
+        totalEl.innerHTML =
+          `<span class="price-strike">${fmtMoney(_basePrice, _currency)}</span>` +
+          `<span class="price-final">${fmtMoney(_finalPrice, _currency)}</span>`;
+        couponTagWrap.innerHTML =
+          `<div class="summary-coupon-tag">🎟 Cupón ${escHtml(_appliedCoupon.code)} aplicado</div>`;
+      } else {
+        discountRow.style.display = 'none';
+        totalEl.innerHTML = `<span class="price-final">${fmtMoney(_basePrice, _currency)}</span>`;
+        couponTagWrap.innerHTML = '';
+      }
+    }
+
+    /* ── Validación del form ────────────────────────── */
+    function onFieldChange() {
+      const nombre  = document.getElementById('ck-nombre').value.trim();
+      const apell   = document.getElementById('ck-apellido').value.trim();
+      const email   = document.getElementById('ck-email').value.trim();
+      const email2  = document.getElementById('ck-email2').value.trim();
+      const terms   = document.getElementById('ck-terms').checked;
+
+      const emailOk      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      const emailMatchOk = email && email === email2;
+
+      // Errores inline
+      toggleError('ck-nombre',   !!nombre);
+      toggleError('ck-apellido', !!apell);
+      toggleError('ck-email',    !email   || emailOk);
+      toggleError('ck-email2',   !email2  || emailMatchOk);
+
+      const formOk = !!nombre && !!apell && emailOk && emailMatchOk && terms;
+      document.getElementById('btn-continue').disabled = !formOk;
+    }
+    function toggleError(id, ok) {
+      const inp = document.getElementById(id);
+      const err = document.getElementById(id + '-err');
+      if (!inp) return;
+      inp.classList.toggle('invalid', !ok);
+      if (err) err.classList.toggle('show', !ok);
+    }
+
+    /* ── Cupones ─────────────────────────────────────── */
+    async function validateCoupon() {
+      const inp     = document.getElementById('ck-coupon');
+      const msg     = document.getElementById('coupon-msg');
+      const btn     = document.getElementById('btn-apply-coupon');
+      const code    = (inp.value || '').trim().toUpperCase();
+      if (!code) {
+        msg.className = 'coupon-msg bad';
+        msg.textContent = 'Ingresá un código.';
+        return;
+      }
+      btn.disabled = true; btn.textContent = '...';
+
+      try {
+        const { data: cps, error } = await sb
+          .from('coupons')
+          .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
+          .eq('code', code)
+          .eq('is_active', true);
+
+        if (error) throw error;
+        if (!cps || cps.length === 0) {
+          _appliedCoupon = null; _finalPrice = _basePrice;
+          msg.className = 'coupon-msg bad';
+          msg.textContent = '❌ Cupón inválido o inexistente.';
+          renderSummary();
+          return;
+        }
+        // Tomamos el primero (code debería ser único, pero por las dudas)
+        const coupon = cps[0];
+
+        // Validar vencimiento
+        if (coupon.valid_until) {
+          const now    = new Date();
+          const vencen = new Date(coupon.valid_until);
+          if (vencen < now) {
+            _appliedCoupon = null; _finalPrice = _basePrice;
+            msg.className = 'coupon-msg bad';
+            msg.textContent = '❌ Cupón vencido.';
+            renderSummary();
+            return;
+          }
+        }
+
+        // Validar usos máximos (max_uses = 0 → ilimitado)
+        if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
+          _appliedCoupon = null; _finalPrice = _basePrice;
+          msg.className = 'coupon-msg bad';
+          msg.textContent = '❌ Cupón agotado.';
+          renderSummary();
+          return;
+        }
+
+        // Validar curso (course_id null → todos los cursos)
+        if (coupon.course_id && coupon.course_id !== _course.id) {
+          _appliedCoupon = null; _finalPrice = _basePrice;
+          msg.className = 'coupon-msg bad';
+          msg.textContent = '❌ Cupón no válido para este curso.';
+          renderSummary();
+          return;
+        }
+
+        // Calcular precio final
+        let finalPrice = _basePrice;
+        if (coupon.discount_pct && coupon.discount_pct > 0) {
+          finalPrice = _basePrice * (1 - Number(coupon.discount_pct) / 100);
+        } else if (coupon.discount_fixed && coupon.discount_fixed > 0) {
+          // discount_fixed está expresado en ARS; si la moneda elegida es USD,
+          // no aplicamos cupones fijos (mensaje claro). Si es ARS, descontar.
+          if (_currency !== 'ARS') {
+            _appliedCoupon = null; _finalPrice = _basePrice;
+            msg.className = 'coupon-msg bad';
+            msg.textContent = '❌ Este cupón solo aplica para pagos en ARS.';
+            renderSummary();
+            return;
+          }
+          finalPrice = Math.max(0, _basePrice - Number(coupon.discount_fixed));
+        }
+        finalPrice = Math.max(0, Math.round(finalPrice * 100) / 100);  // redondeo a 2 decimales
+
+        _appliedCoupon = coupon;
+        _finalPrice    = finalPrice;
+        const pctLabel = coupon.discount_pct
+          ? `${coupon.discount_pct}% de descuento`
+          : `$${Number(coupon.discount_fixed).toLocaleString('es-AR')} de descuento`;
+        msg.className = 'coupon-msg ok';
+        msg.textContent = `✅ Cupón aplicado — ${pctLabel}`;
+        renderSummary();
+      } catch (e) {
+        console.error('validateCoupon error:', e);
+        _appliedCoupon = null; _finalPrice = _basePrice;
+        msg.className = 'coupon-msg bad';
+        msg.textContent = '❌ No se pudo validar el cupón. Intentá de nuevo.';
+        renderSummary();
+      } finally {
+        btn.disabled = false; btn.textContent = 'Aplicar';
+      }
+    }
+
+    /* ── Continuar al pago ───────────────────────────── */
+    function goToPayment() {
+      const btn = document.getElementById('btn-continue');
+      btn.disabled = true;
+
+      const payload = {
+        nombre:      document.getElementById('ck-nombre').value.trim(),
+        apellido:    document.getElementById('ck-apellido').value.trim(),
+        email:       document.getElementById('ck-email').value.trim().toLowerCase(),
+        slug:        _course.slug,
+        course_id:   _course.id,
+        currency:    _currency,
+        base_price:  _basePrice,
+        coupon_code: _appliedCoupon?.code || null,
+        coupon_id:   _appliedCoupon?.id   || null,
+        final_price: _finalPrice,
+        timestamp:   new Date().toISOString(),
+      };
+
+      try {
+        sessionStorage.setItem('checkout_payload', JSON.stringify(payload));
+      } catch (e) {
+        console.warn('sessionStorage no disponible:', e);
+      }
+
+      // Mostrar mensaje de redirect
+      document.getElementById('redirect-msg').classList.add('show');
+
+      // Determinar URL del medio de pago según moneda
+      // ⚠️ Etapa X.12 — placeholder. La integración real (MP / PayPal SDK)
+      //   debe (a) crear una "preference" o "order" del lado del proveedor,
+      //   (b) redirigir al checkout hosteado del proveedor con el ID retornado.
+      //   La validación final llega vía webhook → process-payment Edge Function (Etapa X.11).
+      const redirectUrl = _currency === 'ARS'
+        ? '#mercadopago-pending'
+        : '#paypal-pending';
+
+      // Pequeño delay para que el usuario vea el mensaje
+      setTimeout(() => { window.location.href = redirectUrl; }, 1200);
+    }
+  </script>
+
+</body>
+</html>

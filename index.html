@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HB Lab | Cursos de Entrenamiento con Respaldo Científico</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47) ─── -->
+  <meta name="description" content="Plataforma de cursos online de entrenamiento deportivo con respaldo científico. Hipertrofia, programación, entrenamiento híbrido y más." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://hblab.com/" />
+
+  <meta property="og:title" content="HB Lab | Cursos de Entrenamiento con Respaldo Científico" />
+  <meta property="og:description" content="Plataforma de cursos online de entrenamiento deportivo con respaldo científico. Hipertrofia, programación, entrenamiento híbrido y más." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="HB Lab | Cursos de Entrenamiento con Respaldo Científico" />
+  <meta name="twitter:description" content="Plataforma de cursos online de entrenamiento deportivo con respaldo científico. Hipertrofia, programación, entrenamiento híbrido y más." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,400;1,600&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:    #1E2A3A;
+      --navy-light: #253347;
+      --navy-mid: #2d3f55;
+      --lime:    #C8E600;
+      --violet:  #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:   #FFFFFF;
+      --gray-text: #94A3B8;
+      --card-bg: #243042;
+      --card-border: #2f3e52;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── Utility ──────────────────────────────────── */
+    .italic { font-family: 'Playfair Display', serif; font-style: italic; }
+    .lime   { color: var(--lime); }
+    .violet { color: var(--violet-light); }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ─── Navbar ───────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(30, 42, 58, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(200, 230, 0, 0.12);
+      padding: 14px 0;
+      transition: box-shadow 0.3s;
+    }
+    #navbar.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Logo */
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .logo-svg { width: 44px; height: 44px; flex-shrink: 0; }
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+    .logo-text .hb {
+      font-family: 'Inter', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--white);
+      letter-spacing: 0.02em;
+    }
+    .logo-text .lab {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 0.78rem;
+      color: var(--lime);
+      letter-spacing: 0.12em;
+      text-transform: lowercase;
+    }
+
+    .btn-nav {
+      background: transparent;
+      border: 1.5px solid var(--lime);
+      color: var(--lime);
+      padding: 9px 22px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      letter-spacing: 0.03em;
+    }
+    .btn-nav:hover { background: var(--lime); color: var(--navy); }
+
+    /* ─── Hero ─────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;  /* evita que los blobs sangren hacia #launches-section */
+      padding-top: 80px;
+    }
+
+    /* animated background grid */
+    #hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(200,230,0,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,230,0,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+    }
+    @keyframes gridMove {
+      from { background-position: 0 0; }
+      to   { background-position: 60px 60px; }
+    }
+
+    /* glow blobs */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+    }
+    .blob-1 {
+      width: 500px; height: 500px;
+      background: rgba(123, 79, 190, 0.2);
+      top: -120px; right: -150px;
+    }
+    .blob-2 {
+      width: 380px; height: 380px;
+      background: rgba(200, 230, 0, 0.1);
+      bottom: -80px; left: -100px;
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 780px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(200,230,0,0.08);
+      border: 1px solid rgba(200,230,0,0.25);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--lime);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero-badge span { width: 6px; height: 6px; background: var(--lime); border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+    .hero-title {
+      font-size: clamp(2.2rem, 5.5vw, 4rem);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+    }
+    .hero-title .accent {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-weight: 600;
+      color: var(--lime);
+    }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--gray-text);
+      max-width: 580px;
+      margin-bottom: 40px;
+      line-height: 1.7;
+    }
+
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--lime);
+      color: var(--navy);
+      border: none;
+      padding: 15px 34px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      letter-spacing: 0.01em;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(200,230,0,0.35);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--white);
+      border: 1.5px solid rgba(255,255,255,0.25);
+      padding: 15px 34px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      text-decoration: none;
+    }
+    .btn-secondary:hover { border-color: var(--white); background: rgba(255,255,255,0.06); }
+
+    .hero-stats {
+      display: flex;
+      gap: 40px;
+      margin-top: 56px;
+      padding-top: 40px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      flex-wrap: wrap;
+    }
+    .stat-item { text-align: left; }
+    .stat-num {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--lime);
+      line-height: 1;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--gray-text); margin-top: 4px; font-weight: 500; }
+
+    /* ─── Section shared ───────────────────────────── */
+    section { padding: 100px 0; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--lime);
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+    .section-sub {
+      font-size: 1rem;
+      color: var(--gray-text);
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    /* ─── ¿Qué es HB Lab? ──────────────────────────── */
+    #about {
+      background: var(--navy-light);
+      position: relative;
+      overflow: hidden;
+    }
+    #about::after {
+      content: '';
+      position: absolute;
+      right: -200px; top: 50%;
+      transform: translateY(-50%);
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(123,79,190,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .about-logo-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .about-logo-big {
+      width: 140px;
+      height: 140px;
+    }
+
+    .about-logo-tagline {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1.1rem;
+      color: var(--violet-light);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .about-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+    .pill {
+      background: rgba(123,79,190,0.15);
+      border: 1px solid rgba(123,79,190,0.3);
+      color: var(--violet-light);
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .about-features { margin-top: 36px; display: flex; flex-direction: column; gap: 20px; }
+    .feature-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .feature-icon {
+      width: 40px; height: 40px;
+      background: rgba(200,230,0,0.1);
+      border: 1px solid rgba(200,230,0,0.2);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 1.1rem;
+    }
+    .feature-text h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+    .feature-text p  { font-size: 0.85rem; color: var(--gray-text); line-height: 1.5; }
+
+    /* ─── Cursos ───────────────────────────────────── */
+    #cursos { background: var(--navy); }
+
+    .courses-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 56px;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    /* ─── Buscador de cursos (Sesión 46) ────────────── */
+    .courses-search-wrap {
+      max-width: 400px;
+      margin: 0 auto 36px;
+      position: relative;
+    }
+    .courses-search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .courses-search-input {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      color: var(--white);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
+      padding: 12px 16px 12px 42px;
+      border-radius: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
+    }
+    .courses-search-input::placeholder { color: var(--gray-text); }
+    .courses-search-input:focus {
+      outline: none;
+      border-color: var(--lime);
+      box-shadow: 0 0 0 3px rgba(200,230,0,0.12);
+    }
+    .courses-empty-search {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 48px 0;
+      color: var(--gray-text);
+      font-size: 0.92rem;
+      display: none;
+    }
+
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+    }
+
+    .course-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+      position: relative;
+    }
+    .course-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(200,230,0,0.2);
+      border-color: rgba(200,230,0,0.3);
+    }
+
+    /* colored top accent bar */
+    .course-card::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: linear-gradient(90deg, var(--lime), var(--violet));
+    }
+
+    .course-card.featured::before {
+      height: 4px;
+    }
+    .course-card.featured {
+      border-color: rgba(200,230,0,0.25);
+      box-shadow: 0 0 0 1px rgba(200,230,0,0.15), inset 0 0 60px rgba(200,230,0,0.03);
+    }
+
+    .badge-featured {
+      position: absolute;
+      top: 18px; right: 18px;
+      background: var(--lime);
+      color: var(--navy);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 100px;
+    }
+
+    .card-body {
+      padding: 28px 28px 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--violet-light);
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      line-height: 1.3;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .card-desc {
+      font-size: 0.875rem;
+      color: var(--gray-text);
+      line-height: 1.65;
+      flex: 1;
+    }
+
+    .card-audience {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      font-size: 0.78rem;
+      color: var(--gray-text);
+    }
+    .card-audience svg { flex-shrink: 0; }
+
+    .card-divider {
+      height: 1px;
+      background: var(--card-border);
+      margin: 20px 28px;
+    }
+
+    .card-footer {
+      padding: 0 28px 28px;
+    }
+
+    .price-block {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .price-ars {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--lime);
+      letter-spacing: -0.02em;
+    }
+    .price-usd {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--gray-text);
+    }
+    .price-label {
+      font-size: 0.7rem;
+      color: var(--gray-text);
+      letter-spacing: 0.06em;
+    }
+
+    .btn-buy {
+      width: 100%;
+      background: var(--lime);
+      color: var(--navy);
+      border: none;
+      padding: 13px 20px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      letter-spacing: 0.02em;
+    }
+    .btn-buy:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(200,230,0,0.3);
+    }
+
+    /* ─── Próximamente ─────────────────────────────── */
+    #proximos { background: var(--navy-light); }
+
+    .soon-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 28px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .soon-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      opacity: 0.75;
+      filter: saturate(0.6);
+      display: flex;
+      flex-direction: column;
+    }
+    .soon-card::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: linear-gradient(90deg, #4a5568, #718096);
+    }
+
+    .badge-soon {
+      position: absolute;
+      top: 18px; right: 18px;
+      background: rgba(113,128,150,0.9);
+      color: var(--white);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 100px;
+    }
+
+    .soon-lock {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 48px;
+      background: rgba(30,42,58,0.8);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .soon-card:hover .soon-lock { opacity: 1; }
+    .soon-card:hover { opacity: 0.9; }
+
+    .btn-waitlist {
+      width: 100%;
+      background: transparent;
+      color: var(--gray-text);
+      border: 1.5px solid rgba(113,128,150,0.4);
+      padding: 13px 20px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-waitlist:hover { border-color: var(--violet-light); color: var(--violet-light); }
+
+    /* ─── Footer ───────────────────────────────────── */
+    footer {
+      background: #151f2b;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 60px 0 32px;
+    }
+
+    .footer-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 40px;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+
+    .footer-brand { max-width: 300px; }
+    .footer-tagline {
+      margin-top: 14px;
+      font-size: 0.875rem;
+      color: var(--gray-text);
+      line-height: 1.6;
+    }
+
+    .footer-links h4 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-text);
+      margin-bottom: 18px;
+    }
+    .footer-links ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .footer-links a { color: var(--white); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; opacity: 0.8; }
+    .footer-links a:hover { color: var(--lime); opacity: 1; }
+
+    .footer-social { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+    .footer-social h4 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-text);
+    }
+    .social-link {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--white);
+      font-size: 0.9rem; font-weight: 500;
+      transition: color 0.2s;
+      opacity: 0.8;
+    }
+    .social-link:hover { color: var(--lime); opacity: 1; }
+    .social-icon {
+      width: 38px; height: 38px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .social-link:hover .social-icon { border-color: var(--lime); background: rgba(200,230,0,0.08); }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .footer-copyright { font-size: 0.8rem; color: var(--gray-text); }
+    .footer-made { font-size: 0.78rem; color: var(--gray-text); }
+    .footer-made span { color: var(--lime); }
+
+    /* ─── Slider de lanzamientos ──────────────────── */
+    #launches-section {
+      background: var(--navy-light);
+      /* padding-top generoso para que el contenido quede por debajo del navbar fijo (~68px) */
+      padding: 110px 0 80px;
+    }
+    .launches-header { text-align: center; margin-bottom: 36px; }
+    .slider-wrap { position: relative; border-radius: 20px; overflow: hidden; }
+    .slider-track { display: flex; transition: transform 0.45s cubic-bezier(0.4,0,0.2,1); }
+    .slide {
+      min-width: 100%; position: relative; min-height: 420px;
+      display: flex; align-items: flex-end; overflow: hidden; border-radius: 20px;
+    }
+    .slide-bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+      transition: transform 0.6s ease;
+    }
+    .slide:hover .slide-bg { transform: scale(1.03); }
+    .slide-overlay {
+      position: absolute; inset: 0; z-index: 0;
+      /* Capa base semitransparente + degradado para más profundidad en la parte inferior */
+      background:
+        linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 60%),
+        rgba(0,0,0,0.50);
+    }
+    .slide-content { position: relative; z-index: 1; padding: 48px 52px; width: 100%; max-width: 720px; }
+    .slide-tag {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--lime); margin-bottom: 12px;
+      position: relative; z-index: 2;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.80);
+    }
+    .slide-title {
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 900;
+      line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 14px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.75);
+    }
+    .slide-desc {
+      font-size: 0.95rem; color: rgba(255,255,255,0.88);
+      line-height: 1.65; margin-bottom: 22px; max-width: 480px;
+      text-shadow: 0 1px 5px rgba(0,0,0,0.65);
+    }
+    .slide-price {
+      font-size: 1.4rem; font-weight: 800; color: var(--lime);
+      margin-bottom: 26px; letter-spacing: -0.02em;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.70);
+    }
+    .slide-cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 13px 30px; border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .slide-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(200,230,0,0.35); }
+    .slider-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 10;
+      width: 44px; height: 44px; background: rgba(30,42,58,0.78);
+      border: 1px solid rgba(200,230,0,0.25); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--white); font-size: 1.1rem;
+      transition: background 0.2s, border-color 0.2s; backdrop-filter: blur(8px);
+    }
+    .slider-arrow:hover { background: rgba(200,230,0,0.18); border-color: var(--lime); }
+    .slider-arrow.prev { left: 16px; }
+    .slider-arrow.next { right: 16px; }
+    .slider-dots { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
+    .slider-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.25); cursor: pointer;
+      transition: background 0.2s, transform 0.2s; border: none;
+    }
+    .slider-dot.active { background: var(--lime); transform: scale(1.35); }
+
+    /* ─── Responsive ───────────────────────────────── */
+    @media (max-width: 900px) {
+      .about-grid { grid-template-columns: 1fr; gap: 48px; }
+      .about-logo-col { flex-direction: row; justify-content: flex-start; }
+      .courses-grid { grid-template-columns: repeat(2, 1fr); }
+      .soon-grid { grid-template-columns: 1fr; max-width: 460px; }
+    }
+
+    @media (max-width: 680px) {
+      section { padding: 72px 0; }
+      .courses-grid { grid-template-columns: 1fr; }
+      .courses-header { flex-direction: column; align-items: flex-start; }
+      .hero-stats { gap: 24px; }
+      .footer-top { flex-direction: column; }
+      .about-logo-col { flex-direction: column; align-items: center; text-align: center; }
+      .about-pills { justify-content: center; }
+      .slide { min-height: 340px; }
+      .slide-content { padding: 32px 28px; }
+      .slider-arrow { display: none; }
+    }
+
+    @media (max-width: 440px) {
+      .hero-ctas { flex-direction: column; }
+      .btn-primary, .btn-secondary { justify-content: center; }
+    }
+
+    /* ─── Anuncio global · marquee/rotación (Sesión 55) ─── */
+    .global-announcement {
+      position: fixed; left: 0; right: 0; top: 70px;
+      z-index: 99; height: 36px; overflow: hidden;
+      display: flex; align-items: center;
+      font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.9rem;
+      letter-spacing: 0.01em; color: var(--navy);
+    }
+    .global-announcement.color-lime   { background: var(--lime); }
+    .global-announcement.color-violet { background: var(--violet); color: var(--white); }
+    .global-announcement.color-red    { background: #FC8181; color: var(--navy); }
+    .ann-marquee { width: 100%; height: 100%; display: flex; align-items: center; }
+    /* Modo rotación (texto con `|`): centrado, fade in/out controlado por JS */
+    .ann-marquee.rotating { justify-content: center; }
+    .ann-marquee.rotating span {
+      transition: opacity 0.4s ease;
+      padding: 0 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    /* Modo marquee (sin `|`): scroll horizontal infinito */
+    .ann-marquee.scrolling { justify-content: flex-start; }
+    .ann-marquee.scrolling span {
+      display: inline-block; white-space: nowrap; padding-left: 100%;
+      animation: ann-marquee-scroll 22s linear infinite;
+    }
+    @keyframes ann-marquee-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    /* ─── Cuenta regresiva (Sesión 55 redesign) ─── */
+    .countdown-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      width: fit-content; margin: 0 auto 28px; padding: 22px 32px;
+      background: #243042; border: 1.5px solid var(--lime);
+      border-radius: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .countdown-wrap.clickable { cursor: pointer; }
+    .countdown-wrap.clickable:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(200,230,0,0.22);
+    }
+    .countdown-label {
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--gray-text);
+      text-align: center;
+    }
+    .countdown-grid {
+      display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+    }
+    .countdown-cell {
+      display: flex; flex-direction: column; align-items: center; min-width: 64px;
+    }
+    .countdown-cell span {
+      font-size: 2.1rem; font-weight: 800; color: var(--white);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .countdown-cell em {
+      font-style: normal; font-size: 0.66rem; font-weight: 700;
+      color: var(--gray-text); letter-spacing: 0.1em; text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* ─── Card del curso vinculado al countdown (Sesión 56) ─── */
+    .countdown-course-wrap {
+      width: 100%; max-width: 380px; margin: 0 auto 32px;
+    }
+    .countdown-course-wrap .course-card { width: 100%; }
+    .countdown-course-wrap .card-cover {
+      width: 100%; aspect-ratio: 16/9;
+      background-size: cover; background-position: center;
+      background-color: var(--card-bg);
+      border-bottom: 1px solid var(--card-border);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── NAVBAR ────────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="container nav-inner">
+      <a href="#" class="logo-wrap" aria-label="HB Lab">
+        <!-- Logo SVG: DNA helix + dumbbell + text -->
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Background circle subtle glow -->
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+
+          <!-- DNA strand 1 (lime) -->
+          <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38"
+                stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <!-- DNA strand 2 (violet) -->
+          <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38"
+                stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+          <!-- DNA rungs -->
+          <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="16" x2="28" y2="16" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="24" x2="28" y2="24" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="32" x2="28" y2="32" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <a href="login.html" class="btn-nav" style="text-decoration:none">Ingresar</a>
+    </div>
+  </nav>
+
+  <!-- ─── ANUNCIO GLOBAL (Sesión 55 — marquee/rotación) ── -->
+  <div id="global-announcement" class="global-announcement" style="display:none">
+    <div class="ann-marquee">
+      <span id="global-announcement-text"></span>
+    </div>
+  </div>
+
+  <!-- ─── LANZAMIENTOS (dinámico, oculto si no hay activos) ── -->
+  <section id="launches-section" style="display:none">
+    <div class="container">
+      <div class="launches-header">
+        <span class="section-label">🚀 Novedad</span>
+        <h2 class="section-title">En foco</h2>
+      </div>
+      <div class="slider-wrap">
+        <div id="slider-track" class="slider-track"></div>
+        <button class="slider-arrow prev" id="slider-prev" onclick="prevSlide()" aria-label="Anterior">&#8592;</button>
+        <button class="slider-arrow next" id="slider-next" onclick="nextSlide()" aria-label="Siguiente">&#8594;</button>
+      </div>
+      <div class="slider-dots" id="slider-dots"></div>
+    </div>
+  </section>
+
+  <!-- ─── HERO ──────────────────────────────────────── -->
+  <section id="hero">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="container">
+      <div class="hero-inner">
+        <!-- Countdown (Sesión 54 — controlado desde admin Tab Landing) -->
+        <div id="countdown-wrap" class="countdown-wrap" style="display:none">
+          <div class="countdown-label" id="countdown-label"></div>
+          <div class="countdown-grid">
+            <div class="countdown-cell"><span id="cd-d">00</span><em>días</em></div>
+            <div class="countdown-cell"><span id="cd-h">00</span><em>hs</em></div>
+            <div class="countdown-cell"><span id="cd-m">00</span><em>min</em></div>
+            <div class="countdown-cell"><span id="cd-s">00</span><em>seg</em></div>
+          </div>
+        </div>
+        <!-- Card del curso vinculado al countdown (Sesión 56 — populated by JS) -->
+        <div id="countdown-course-wrap" class="countdown-course-wrap" style="display:none"></div>
+        <div class="hero-badge">
+          <span></span>
+          Academia de Entrenamiento Online
+        </div>
+        <h1 class="hero-title">
+          El conocimiento que te<br>
+          <span class="accent">diferencia</span> como<br>
+          entrenador
+        </h1>
+        <p class="hero-sub">
+          Cursos con respaldo científico para entrenadores y atletas que quieren ir más lejos. Programación, fisiología y metodología aplicada al rendimiento real.
+        </p>
+        <div class="hero-ctas">
+          <a href="#cursos" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-14 9V3z"/></svg>
+            Ver cursos
+          </a>
+          <a href="#about" class="btn-secondary">
+            Conocer HB Lab
+          </a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-item">
+            <div class="stat-num" style="font-size:1.4rem">Presencial y Virtual</div>
+            <div class="stat-label">Cursos para todos los formatos</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">100%</div>
+            <div class="stat-label">Respaldo científico</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">∞</div>
+            <div class="stat-label">Acceso ilimitado</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── ¿QUÉ ES HB LAB? ───────────────────────────── -->
+  <section id="about">
+    <div class="container">
+      <div class="about-grid">
+
+        <div class="about-logo-col">
+          <!-- Big logo SVG -->
+          <svg class="about-logo-big" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="70" cy="70" r="69" fill="#253347" stroke="rgba(200,230,0,0.2)" stroke-width="1"/>
+            <!-- Glowing orb behind helix -->
+            <circle cx="70" cy="70" r="40" fill="rgba(123,79,190,0.08)"/>
+
+            <!-- DNA strand left (lime) -->
+            <path d="M52 24 Q60 38 52 52 Q44 66 52 80 Q60 94 52 108 Q44 118 52 124"
+                  stroke="#C8E600" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <!-- DNA strand right (violet) -->
+            <path d="M88 24 Q80 38 88 52 Q96 66 88 80 Q80 94 88 108 Q96 118 88 124"
+                  stroke="#7B4FBE" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+            <!-- Rungs lime -->
+            <line x1="52" y1="38" x2="88" y2="38" stroke="rgba(200,230,0,0.7)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="52" y1="66" x2="88" y2="66" stroke="rgba(200,230,0,0.7)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="52" y1="94" x2="88" y2="94" stroke="rgba(200,230,0,0.7)" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Rungs violet -->
+            <line x1="52" y1="52" x2="88" y2="52" stroke="rgba(155,111,222,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="52" y1="80" x2="88" y2="80" stroke="rgba(155,111,222,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="52" y1="108" x2="88" y2="108" stroke="rgba(155,111,222,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+
+            <!-- HB text -->
+            <text x="70" y="148" text-anchor="middle" font-family="Inter, sans-serif" font-weight="800" font-size="16" fill="white" letter-spacing="0.5">HB</text>
+          </svg>
+
+          <div>
+            <p class="about-logo-tagline">Ciencia aplicada<br>al rendimiento humano</p>
+            <div class="about-pills">
+              <span class="pill">Fisiología</span>
+              <span class="pill">Programación</span>
+              <span class="pill">Hipertrofia</span>
+              <span class="pill">Fuerza</span>
+              <span class="pill">Híbrido</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-text">
+          <span class="section-label">¿Qué es HB Lab?</span>
+          <h2 class="section-title">
+            Conocimiento que <span class="italic lime">transforma</span><br>entrenadores
+          </h2>
+          <p class="section-sub">
+            HB Lab es una academia online creada para entrenadores y atletas que buscan ir más allá de la práctica empírica. Combinamos ciencia del ejercicio, fisiología aplicada y metodología práctica para que puedas diseñar programas que realmente funcionen.
+          </p>
+
+          <div class="about-features">
+            <div class="feature-item">
+              <div class="feature-icon">🔬</div>
+              <div class="feature-text">
+                <h4>Evidencia científica</h4>
+                <p>Cada contenido está basado en investigación actual y aplicada al contexto real del entrenamiento.</p>
+              </div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">⚡</div>
+              <div class="feature-text">
+                <h4>Metodología práctica</h4>
+                <p>No solo teoría — aprendés a programar, planificar y ejecutar de manera sistemática y efectiva.</p>
+              </div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">🎯</div>
+              <div class="feature-text">
+                <h4>Perfil diferenciador</h4>
+                <p>Construí una identidad como coach híbrido y destacate en un mercado cada vez más competitivo.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CURSOS ─────────────────────────────────────── -->
+  <section id="cursos">
+    <div class="container">
+      <div class="courses-header">
+        <div>
+          <span class="section-label">Formación disponible</span>
+          <h2 class="section-title">Nuestros cursos</h2>
+        </div>
+        <p style="color:var(--gray-text);font-size:0.9rem;max-width:280px;text-align:right">
+          Acceso inmediato tras la compra. Disponibles en ARS y USD.
+        </p>
+      </div>
+
+      <div class="courses-search-wrap" id="courses-search-wrap" style="display:none">
+        <span class="courses-search-icon">🔍</span>
+        <input type="text" id="courses-search-input" class="courses-search-input"
+               placeholder="Buscar curso..." oninput="filterCursos(this.value)" />
+      </div>
+
+      <div class="courses-grid" id="courses-grid">
+        <!-- dinámico desde Supabase -->
+        <div style="grid-column:1/-1;text-align:center;padding:60px 0;color:var(--gray-text)">Cargando cursos...</div>
+      </div>
+
+      <div class="courses-empty-search" id="courses-empty-search">
+        No se encontraron cursos para tu búsqueda.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── PRÓXIMAMENTE (dinámico, oculto si no hay cursos) ─── -->
+  <section id="proximos" style="display:none">
+    <div class="container">
+      <div style="text-align:center;margin-bottom:56px">
+        <span class="section-label">En camino</span>
+        <h2 class="section-title">Próximamente</h2>
+        <p class="section-sub" style="margin:0 auto;text-align:center">
+          Nuevos cursos en desarrollo. Anotate en la lista de espera y sé el primero en enterarte.
+        </p>
+      </div>
+      <div class="soon-grid" id="soon-grid">
+        <!-- dinámico desde Supabase -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── IN-COMPANY ──────────────────────────────────── -->
+  <section id="incompany" style="background:var(--navy);padding:80px 0;">
+    <div class="container">
+      <div style="
+        background: linear-gradient(135deg, rgba(123,79,190,0.18) 0%, rgba(200,230,0,0.08) 100%);
+        border: 1px solid rgba(123,79,190,0.3);
+        border-radius: 20px;
+        padding: clamp(40px, 6vw, 72px);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 40px;
+        flex-wrap: wrap;
+      ">
+        <div style="max-width: 560px;">
+          <span class="section-label">Capacitaciones grupales</span>
+          <h2 class="section-title" style="margin-bottom:16px">
+            ¿Querés que llevemos un curso<br>a tu <span class="italic lime">box o institución</span>?
+          </h2>
+          <p style="color:var(--gray-text);font-size:1rem;line-height:1.7;">
+            Capacitaciones in-company para equipos de entrenadores. Adaptamos el contenido al perfil de tu grupo y lo coordinamos en el formato que mejor te funcione — presencial o virtual. Escribinos y lo organizamos.
+          </p>
+        </div>
+        <button
+          onclick="alert('Próximamente — formulario de consulta')"
+          style="
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: transparent;
+            color: var(--white);
+            border: 1.5px solid rgba(255,255,255,0.35);
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: border-color 0.2s, background 0.2s, color 0.2s;
+          "
+          onmouseover="this.style.borderColor='var(--lime)';this.style.color='var(--lime)';this.style.background='rgba(200,230,0,0.06)'"
+          onmouseout="this.style.borderColor='rgba(255,255,255,0.35)';this.style.color='var(--white)';this.style.background='transparent'"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Consultar disponibilidad
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ────────────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-top">
+
+        <div class="footer-brand">
+          <a href="#" class="logo-wrap" aria-label="HB Lab">
+            <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+              <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38" stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38" stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="16" x2="28" y2="16" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="24" x2="28" y2="24" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+              <line x1="16" y1="32" x2="28" y2="32" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+            </svg>
+            <div class="logo-text">
+              <span class="hb">HB</span>
+              <span class="lab">lab</span>
+            </div>
+          </a>
+          <p class="footer-tagline">
+            Academia online de entrenamiento con respaldo científico. Formamos entrenadores que marcan la diferencia.
+          </p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Cursos</h4>
+          <ul>
+            <li><a href="venta-curso.html?slug=webinar-hipertrofia">Webinar Hipertrofia y Musculación</a></li>
+            <li><a href="venta-curso.html?slug=carrera-hibrida">Planificación Carrera Híbrida</a></li>
+            <li><a href="venta-curso.html?slug=entrenamiento-hibrido">Bases del Entrenamiento Híbrido</a></li>
+            <li><a href="#proximos">Próximamente</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-social">
+          <h4>Seguinos</h4>
+          <a class="social-link" href="https://instagram.com/ekaprada.coach" target="_blank" rel="noopener">
+            <div class="social-icon">
+              <!-- Instagram icon -->
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C8E600" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+            </div>
+            @ekaprada.coach
+          </a>
+        </div>
+
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-copyright">© 2025 HB Lab. Todos los derechos reservados.</p>
+        <p class="footer-made">Hecho con <span>♥</span> para entrenadores que buscan más</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ─── JS ────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    // ── Navbar scroll shadow ─────────────────────────
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    // ── Smooth scroll ────────────────────────────────
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          const top = target.getBoundingClientRect().top + window.pageYOffset - 80;
+          window.scrollTo({ top, behavior: 'smooth' });
+        }
+      });
+    });
+
+    // ── Fade-in observer ─────────────────────────────
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    // Solo observa .feature-item estáticos (las cards de cursos son dinámicas)
+    document.querySelectorAll('.feature-item').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(24px)';
+      el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      observer.observe(el);
+    });
+
+    // ── Escape HTML ──────────────────────────────────
+    function escHtml(s) {
+      return String(s || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // ── Slider state ─────────────────────────────────
+    let sliderIndex = 0;
+    let sliderTotal = 0;
+
+    function goToSlide(i) {
+      sliderIndex = ((i % sliderTotal) + sliderTotal) % sliderTotal;
+      document.getElementById('slider-track').style.transform = `translateX(-${sliderIndex * 100}%)`;
+      document.querySelectorAll('.slider-dot').forEach((d, idx) =>
+        d.classList.toggle('active', idx === sliderIndex));
+    }
+    function prevSlide() { goToSlide(sliderIndex - 1); }
+    function nextSlide() { goToSlide(sliderIndex + 1); }
+
+    // ── Slug → tag visual ─────────────────────────────
+    const SLUG_TAG = {
+      'webinar-hipertrofia':    'Webinar · Online',
+      'carrera-hibrida':        'Capacitación · Online',
+      'entrenamiento-hibrido':  'Masterclass · Online',
+    };
+
+    // ── Etapa X.9: LEGACY_PAGES eliminado. TODOS los cursos usan venta-curso.html?slug=X ──
+
+    // ── Init ─────────────────────────────────────────
+    (async function initIndex() {
+      try {
+        await Promise.all([loadLaunches(), loadCursos(), loadProximos(), loadSiteConfig()]);
+      } catch(e) { console.error('initIndex error:', e); }
+    })();
+
+    // ── Site config (Sesión 54+55): anuncio global + countdown ──────
+    let _countdownTimer = null;
+    let _annRotateTimer = null;
+
+    async function loadSiteConfig() {
+      const { data, error } = await sb.from('site_config').select('key, value');
+      if (error) { console.warn('loadSiteConfig error:', error); return; }
+      const map = {};
+      (data || []).forEach(r => { map[r.key] = r.value; });
+
+      // ── Anuncio global con marquee/rotación (Sesión 55) ──
+      let ann = null;
+      if (map.global_announcement) {
+        try { ann = JSON.parse(map.global_announcement); } catch (e) { console.warn('parse ann:', e); }
+      }
+      const annEl     = document.getElementById('global-announcement');
+      const annTextEl = document.getElementById('global-announcement-text');
+      const annMarq   = annEl ? annEl.querySelector('.ann-marquee') : null;
+      if (_annRotateTimer) { clearInterval(_annRotateTimer); _annRotateTimer = null; }
+
+      if (annEl && annTextEl && annMarq) {
+        if (ann && ann.active && ann.text) {
+          annEl.className = `global-announcement color-${ann.color || 'lime'}`;
+          annEl.style.display = '';
+          document.body.classList.add('has-announcement');
+
+          const parts = String(ann.text).split('|').map(s => s.trim()).filter(Boolean);
+          if (parts.length > 1) {
+            // Rotación entre oraciones cada 3s con fade in/out
+            annMarq.className = 'ann-marquee rotating';
+            annTextEl.style.opacity = '1';
+            annTextEl.textContent = parts[0];
+            let idx = 1;
+            _annRotateTimer = setInterval(() => {
+              annTextEl.style.opacity = '0';
+              setTimeout(() => {
+                annTextEl.textContent = parts[idx % parts.length];
+                annTextEl.style.opacity = '1';
+                idx++;
+              }, 400);
+            }, 3000);
+          } else {
+            // Marquee scroll horizontal en loop
+            annMarq.className = 'ann-marquee scrolling';
+            annTextEl.style.opacity = '1';
+            annTextEl.textContent = parts[0] || ann.text;
+          }
+        } else {
+          annEl.style.display = 'none';
+          document.body.classList.remove('has-announcement');
+        }
+      }
+
+      // ── Countdown con link a curso (Sesión 55) ──
+      let cd = null;
+      if (map.countdown) {
+        try { cd = JSON.parse(map.countdown); } catch (e) { console.warn('parse cd:', e); }
+      }
+      const cdWrap  = document.getElementById('countdown-wrap');
+      const cdLabel = document.getElementById('countdown-label');
+      const cdCardWrap = document.getElementById('countdown-course-wrap');
+      if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
+      if (cdWrap)     { cdWrap.classList.remove('clickable'); cdWrap.onclick = null; }
+      if (cdCardWrap) { cdCardWrap.style.display = 'none'; cdCardWrap.innerHTML = ''; }
+
+      if (cdWrap && cd && cd.active && cd.target) {
+        const target = new Date(cd.target).getTime();
+        if (!isNaN(target)) {
+          if (cdLabel) cdLabel.textContent = cd.label || 'Tiempo restante:';
+          cdWrap.style.display = '';
+
+          // Si hay course_id → resolver curso completo, hacer countdown clickeable
+          // y renderizar la card del curso debajo (Sesión 56)
+          if (cd.course_id) {
+            try {
+              const { data: course } = await sb.from('courses')
+                .select('id, slug, title, description, price_ars, price_usd, cover_url, is_live, is_coming_soon')
+                .eq('id', cd.course_id).maybeSingle();
+              if (course && course.slug) {
+                const url = `venta-curso.html?slug=${course.slug}`;
+                cdWrap.classList.add('clickable');
+                cdWrap.onclick = () => { window.location.href = url; };
+                renderCountdownCourseCard(course, url);
+              }
+            } catch (e) { console.warn('countdown course fetch:', e); }
+          }
+
+          const tick = () => {
+            const diff = target - Date.now();
+            if (diff <= 0) {
+              cdWrap.style.display = 'none';
+              if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
+              return;
+            }
+            const d = Math.floor(diff / 86400000);
+            const h = Math.floor((diff % 86400000) / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            const set = (id, v) => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = String(v).padStart(2, '0');
+            };
+            set('cd-d', d); set('cd-h', h); set('cd-m', m); set('cd-s', s);
+          };
+          tick();
+          _countdownTimer = setInterval(tick, 1000);
+        } else {
+          cdWrap.style.display = 'none';
+        }
+      } else if (cdWrap) {
+        cdWrap.style.display = 'none';
+      }
+    }
+
+    // Renderiza la card del curso vinculado al countdown (Sesión 56)
+    // Reutiliza el mismo HTML/CSS de .course-card de la sección #cursos.
+    function renderCountdownCourseCard(course, url) {
+      const wrap = document.getElementById('countdown-course-wrap');
+      if (!wrap || !course) return;
+      const tag   = SLUG_TAG[course.slug] || 'Curso · Online';
+      const cover = course.cover_url
+        ? `<div class="card-cover" style="background-image:url('${escHtml(course.cover_url)}')"></div>`
+        : '';
+      wrap.innerHTML = `
+        <div class="course-card" style="cursor:pointer" onclick="window.location='${url}'">
+          ${cover}
+          <div class="card-body">
+            <div class="card-tag">${tag}</div>
+            <h3 class="card-title">${escHtml(course.title || '')}</h3>
+            ${course.description ? `<p class="card-desc">${escHtml(course.description)}</p>` : ''}
+          </div>
+          <div class="card-divider"></div>
+          <div class="card-footer">
+            <div class="price-block">
+              <span class="price-ars">$${Number(course.price_ars||0).toLocaleString('es-AR')}</span>
+              <span style="color:var(--gray-text);font-size:0.8rem">ARS</span>
+              <span class="price-usd">/ USD ${Number(course.price_usd||0).toLocaleString('es-AR')}</span>
+            </div>
+            <a href="${url}" class="btn-buy" onclick="event.stopPropagation()">Ver curso</a>
+          </div>
+        </div>`;
+      wrap.style.display = '';
+    }
+
+    // ── Lanzamientos ─────────────────────────────────
+    async function loadLaunches() {
+      const { data, error } = await sb
+        .from('launches')
+        .select('*, courses(slug, price_ars, price_usd)')
+        .eq('active', true)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (error || !data?.length) return;
+
+      const section = document.getElementById('launches-section');
+      const track   = document.getElementById('slider-track');
+      const dotsEl  = document.getElementById('slider-dots');
+      sliderTotal   = data.length;
+
+      track.innerHTML = data.map(l => {
+        const priceArs = l.courses?.price_ars;
+        const priceUsd = l.courses?.price_usd;
+        const priceStr = priceArs
+          ? `$${Number(priceArs).toLocaleString('es-AR')} ARS${priceUsd ? ' / USD ' + Number(priceUsd).toLocaleString('es-AR') : ''}`
+          : '';
+        const courseSlug = l.courses?.slug;
+        const courseUrl  = courseSlug
+          ? `venta-curso.html?slug=${courseSlug}`
+          : '#';
+        const bgStyle   = l.image_url
+          ? `background-image:url('${l.image_url}')`
+          : 'background:linear-gradient(135deg,#243042 0%,#1a2635 100%)';
+        return `
+          <div class="slide">
+            <div class="slide-bg" style="${bgStyle}"></div>
+            <div class="slide-overlay"></div>
+            <div class="slide-content">
+              <p class="slide-tag">🚀 Lanzamiento</p>
+              <h2 class="slide-title">${escHtml(l.title)}</h2>
+              <p class="slide-desc">${escHtml(l.description || '')}</p>
+              ${priceStr ? `<p class="slide-price">${priceStr}</p>` : ''}
+              <a href="${courseUrl}" class="slide-cta">${escHtml(l.cta_text || 'Ver curso')} →</a>
+            </div>
+          </div>`;
+      }).join('');
+
+      if (sliderTotal > 1) {
+        dotsEl.innerHTML = data.map((_, i) =>
+          `<button class="slider-dot${i === 0 ? ' active' : ''}" onclick="goToSlide(${i})" aria-label="Slide ${i+1}"></button>`
+        ).join('');
+      } else {
+        dotsEl.style.display = 'none';
+        document.getElementById('slider-prev').style.display = 'none';
+        document.getElementById('slider-next').style.display = 'none';
+      }
+
+      section.style.display = '';
+      goToSlide(0);
+    }
+
+    // ── Cursos activos (dinámico) ─────────────────────
+    async function loadCursos() {
+      const grid = document.getElementById('courses-grid');
+      if (!grid) return;
+
+      const { data, error } = await sb
+        .from('courses')
+        .select('id, title, slug, description, price_ars, price_usd, is_active, is_coming_soon, display_order')
+        .eq('is_active', true)
+        .or('is_coming_soon.is.null,is_coming_soon.eq.false')
+        .order('display_order', { ascending: true })
+        .order('created_at',    { ascending: true });
+
+      if (error || !data?.length) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 0;color:var(--gray-text)">No hay cursos disponibles por el momento.</div>`;
+        return;
+      }
+
+      grid.innerHTML = data.map(c => {
+        const coursePage = `venta-curso.html?slug=${c.slug}`;
+        return `
+        <div class="course-card" style="cursor:pointer" data-title="${escHtml((c.title || '').toLowerCase())}" onclick="window.location='${coursePage}'">
+          <div class="card-body">
+            <div class="card-tag">${SLUG_TAG[c.slug] || 'Curso · Online'}</div>
+            <h3 class="card-title">${escHtml(c.title)}</h3>
+            <p class="card-desc">${escHtml(c.description || '')}</p>
+            <div class="card-audience">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Dirigido a entrenadores y aficionados
+            </div>
+            <a href="${coursePage}" style="display:inline-flex;align-items:center;gap:5px;margin-top:14px;font-size:0.8rem;font-weight:600;color:var(--violet-light);text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='var(--lime)'" onmouseout="this.style.color='var(--violet-light)'" onclick="event.stopPropagation()">Ver contenido completo →</a>
+          </div>
+          <div class="card-divider"></div>
+          <div class="card-footer">
+            <div class="price-block">
+              <span class="price-ars">$${Number(c.price_ars||0).toLocaleString('es-AR')}</span>
+              <span style="color:var(--gray-text);font-size:0.8rem">ARS</span>
+              <span class="price-usd">/ USD ${Number(c.price_usd||0).toLocaleString('es-AR')}</span>
+            </div>
+            <button class="btn-buy" onclick="event.stopPropagation();alert('Próximamente — integración con Mercado Pago y PayPal')">Comprar ahora</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      grid.querySelectorAll('.course-card').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(el);
+      });
+
+      // Mostrar buscador solo si hay más de 3 cursos (Sesión 46)
+      const searchWrap = document.getElementById('courses-search-wrap');
+      if (searchWrap) searchWrap.style.display = data.length > 3 ? '' : 'none';
+    }
+
+    // ── Filtro en tiempo real del buscador (Sesión 46) ─
+    function filterCursos(rawQuery) {
+      const q = (rawQuery || '').trim().toLowerCase();
+      const grid    = document.getElementById('courses-grid');
+      const emptyEl = document.getElementById('courses-empty-search');
+      if (!grid) return;
+
+      const cards = grid.querySelectorAll('.course-card');
+      let visibleCount = 0;
+      cards.forEach(card => {
+        const title = card.dataset.title || '';
+        const match = !q || title.includes(q);
+        card.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+      });
+
+      if (emptyEl) {
+        emptyEl.style.display = (q && visibleCount === 0) ? '' : 'none';
+      }
+    }
+
+    // ── Próximamente (dinámico) ───────────────────────
+    async function loadProximos() {
+      const section = document.getElementById('proximos');
+      const grid    = document.getElementById('soon-grid');
+      if (!grid) return;
+
+      const { data, error } = await sb
+        .from('courses')
+        .select('id, title, slug, description, price_ars')
+        .eq('is_coming_soon', true)
+        .order('created_at');
+
+      if (error || !data?.length) return; // sección permanece oculta
+
+      grid.innerHTML = data.map(c => `
+        <div class="soon-card">
+          <div class="badge-soon">Próximamente</div>
+          <div class="soon-lock">🔒</div>
+          <div class="card-body" style="padding-top:22px">
+            <div class="card-tag" style="color:#718096">${SLUG_TAG[c.slug] || 'Curso · Online'}</div>
+            <h3 class="card-title" style="color:#94A3B8">${escHtml(c.title)}</h3>
+            <p class="card-desc">${escHtml(c.description || '')}</p>
+          </div>
+          <div class="card-divider"></div>
+          <div class="card-footer">
+            <div class="price-block">
+              <span style="font-size:1.1rem;font-weight:700;color:#718096">${c.price_ars ? `$${Number(c.price_ars).toLocaleString('es-AR')} ARS` : 'Precio por confirmar'}</span>
+            </div>
+            <button class="btn-waitlist" onclick="alert('¡Gracias! Te anotamos en la lista de espera.')">Anotarme en lista de espera</button>
+          </div>
+        </div>`).join('');
+
+      section.style.display = '';
+
+      grid.querySelectorAll('.soon-card').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(el);
+      });
+    }
+  </script>
+
+</body>
+</html>

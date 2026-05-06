@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi perfil — HB Lab</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47/57) ─── -->
+  <meta name="description" content="Tu perfil HB Lab — datos personales, foto y cursos completados." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://hblab.com/perfil.html" />
+
+  <meta property="og:title" content="Mi perfil — HB Lab" />
+  <meta property="og:description" content="Tu perfil HB Lab — datos personales, foto y cursos completados." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/perfil.html" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Mi perfil — HB Lab" />
+  <meta name="twitter:description" content="Tu perfil HB Lab — datos personales, foto y cursos completados." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+      --red:          #FC8181;
+      --green:        #68D391;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy); color: var(--white);
+      min-height: 100vh; padding-top: 70px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Navbar ── */
+    #navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(30,42,58,0.92); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      height: 70px; display: flex; align-items: center;
+    }
+    .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; width: 100%; }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg { width: 40px; height: 40px; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.05; }
+    .logo-text .hb { font-size: 1.05rem; font-weight: 800; color: var(--white); letter-spacing: 0.02em; }
+    .logo-text .lab { font-size: 0.7rem; color: var(--lime); font-weight: 600; }
+    .nav-right { display: flex; align-items: center; gap: 14px; }
+    .nav-link {
+      color: var(--gray-text); font-size: 0.86rem; font-weight: 600;
+      text-decoration: none; padding: 6px 10px; border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover { color: var(--lime); background: rgba(200,230,0,0.06); }
+    .nav-email { font-size: 0.82rem; color: var(--gray-text); }
+    .btn-logout {
+      background: transparent; border: 1.5px solid var(--card-border); color: var(--white);
+      padding: 7px 14px; border-radius: 7px; cursor: pointer;
+      font-family: inherit; font-size: 0.82rem; font-weight: 600;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-logout:hover { border-color: var(--red); color: var(--red); }
+    @media (max-width: 640px) { .nav-email { display: none; } }
+
+    /* ── Layout principal ── */
+    main { padding: 32px 0 60px; }
+    .page-title { font-size: 1.7rem; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.01em; }
+    .page-sub { font-size: 0.92rem; color: var(--gray-text); margin-bottom: 28px; }
+
+    .card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 24px; margin-bottom: 22px;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── Sección 1: avatar grande ── */
+    .avatar-section { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .avatar-big {
+      width: 120px; height: 120px; border-radius: 50%;
+      object-fit: cover; border: 3px solid var(--lime); flex-shrink: 0;
+      background: var(--card-bg);
+    }
+    .avatar-initials-big {
+      width: 120px; height: 120px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--violet); color: var(--white);
+      font-size: 2.4rem; font-weight: 800; letter-spacing: 0.04em;
+      border: 3px solid var(--lime); flex-shrink: 0;
+    }
+    .avatar-actions { display: flex; flex-direction: column; gap: 8px; }
+    .btn-photo {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: transparent; border: 1.5px solid var(--card-border);
+      color: var(--white); padding: 9px 18px; border-radius: 8px;
+      cursor: pointer; font-family: inherit; font-weight: 600; font-size: 0.85rem;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .btn-photo:hover { border-color: var(--lime); color: var(--lime); background: rgba(200,230,0,0.06); }
+    .avatar-status { font-size: 0.8rem; color: var(--gray-text); }
+    .avatar-status.success { color: var(--green); }
+    .avatar-status.error { color: var(--red); }
+
+    /* ── Sección 2: form de datos ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.col2 { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 0.74rem; color: var(--gray-text); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.07em;
+    }
+    .form-input, .form-select, .form-textarea {
+      background: rgba(0,0,0,0.25); border: 1.5px solid var(--card-border);
+      color: var(--white); padding: 10px 14px; border-radius: 8px;
+      font-family: inherit; font-size: 0.875rem;
+      transition: border-color 0.2s; width: 100%;
+    }
+    .form-input:read-only { opacity: 0.65; cursor: not-allowed; }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: var(--lime);
+    }
+    .form-textarea { resize: vertical; min-height: 80px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-primary {
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 10px 22px; border-radius: 8px; cursor: pointer;
+      font-family: inherit; font-weight: 700; font-size: 0.88rem;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(200,230,0,0.28); }
+    .btn-primary:disabled { opacity: 0.6; cursor: wait; transform: none; box-shadow: none; }
+    .form-msg {
+      display: none; padding: 9px 14px; border-radius: 8px;
+      font-size: 0.85rem; margin-top: 12px;
+    }
+    .form-msg.show { display: block; }
+    .form-msg.success { background: rgba(104,211,145,0.1); border: 1px solid rgba(104,211,145,0.3); color: var(--green); }
+    .form-msg.error   { background: rgba(252,129,129,0.1); border: 1px solid rgba(252,129,129,0.3); color: var(--red); }
+
+    /* ── Sección 3: cursos ── */
+    .courses-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;
+    }
+    .course-item {
+      background: rgba(47,62,82,0.35); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .course-item-title { font-weight: 600; font-size: 0.92rem; line-height: 1.35; }
+    .course-item-prog { font-size: 0.78rem; color: var(--gray-text); }
+    .course-item-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(104,211,145,0.12); border: 1px solid rgba(104,211,145,0.35);
+      color: var(--green); padding: 3px 10px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 700; align-self: flex-start;
+    }
+    .course-item-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+    .btn-cert-mini {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 7px 14px; border-radius: 7px; cursor: pointer;
+      font-family: inherit; font-weight: 700; font-size: 0.78rem;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-cert-mini:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(200,230,0,0.25); }
+    .btn-cert-mini:disabled { opacity: 0.6; cursor: wait; transform: none; box-shadow: none; }
+    .btn-curso-link {
+      background: transparent; border: 1.5px solid var(--card-border);
+      color: var(--white); padding: 7px 14px; border-radius: 7px;
+      font-family: inherit; font-weight: 600; font-size: 0.78rem;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s;
+      display: inline-flex; align-items: center;
+    }
+    .btn-curso-link:hover { border-color: var(--lime); color: var(--lime); }
+    .empty-state {
+      padding: 30px 0; text-align: center; color: var(--gray-text);
+      font-size: 0.9rem; font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Navbar ───────────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="container nav-inner">
+      <a href="dashboard.html" class="logo-wrap" aria-label="HB Lab">
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+          <path d="M14 12 Q22 22 14 32" stroke="#C8E600" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <path d="M30 12 Q22 22 30 32" stroke="#7B4FBE" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <line x1="14" y1="14" x2="30" y2="14" stroke="#fff" stroke-width="1.2"/>
+          <line x1="14" y1="22" x2="30" y2="22" stroke="#fff" stroke-width="1.2"/>
+          <line x1="14" y1="30" x2="30" y2="30" stroke="#fff" stroke-width="1.2"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <div class="nav-right">
+        <a href="dashboard.html" class="nav-link">← Volver</a>
+        <span class="nav-email" id="nav-email"></span>
+        <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+      <h1 class="page-title">Mi perfil</h1>
+      <p class="page-sub">Gestioná tu información personal, foto y revisá los cursos que completaste.</p>
+
+      <!-- Sección 1: Foto de perfil -->
+      <div class="card">
+        <div class="card-title">📷 Foto de perfil</div>
+        <div class="avatar-section">
+          <div id="avatar-display"></div>
+          <div class="avatar-actions">
+            <label class="btn-photo" for="avatar-file">
+              📷 Cambiar foto
+              <input type="file" id="avatar-file" accept="image/*" style="display:none" />
+            </label>
+            <span class="avatar-status" id="avatar-status"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 2: Datos personales -->
+      <div class="card">
+        <div class="card-title">📝 Datos personales</div>
+        <div class="form-grid">
+          <div class="form-group col2">
+            <label class="form-label">Nombre completo</label>
+            <input class="form-input" id="p-fullname" type="text" placeholder="Tu nombre y apellido" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="p-email" type="email" readonly />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha de nacimiento</label>
+            <input class="form-input" id="p-birthdate" type="date" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono / WhatsApp</label>
+            <input class="form-input" id="p-phone" type="tel" placeholder="+54 9 ..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nivel de experiencia</label>
+            <select class="form-select" id="p-experience">
+              <option value="">— Seleccionar —</option>
+              <option value="principiante">Principiante</option>
+              <option value="intermedio">Intermedio</option>
+              <option value="avanzado">Avanzado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Objetivo de entrenamiento</label>
+            <select class="form-select" id="p-goal">
+              <option value="">— Seleccionar —</option>
+              <option value="hipertrofia">Hipertrofia</option>
+              <option value="hibrido">Híbrido</option>
+              <option value="rendimiento">Rendimiento</option>
+              <option value="salud">Salud</option>
+            </select>
+          </div>
+          <div class="form-group col2">
+            <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--gray-text)">(visible para coaches y en página de venta si sos coach)</span></label>
+            <textarea class="form-textarea" id="p-bio" placeholder="Contanos brevemente sobre vos…"></textarea>
+          </div>
+        </div>
+        <div class="form-msg" id="p-msg"></div>
+        <div class="form-actions">
+          <button class="btn-primary" id="p-save-btn" onclick="saveProfile()">Guardar cambios</button>
+        </div>
+      </div>
+
+      <!-- Sección 3: Mis cursos completados -->
+      <div class="card">
+        <div class="card-title">🎓 Mis cursos</div>
+        <div id="completed-courses">
+          <div class="empty-state">Cargando cursos…</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ─── Scripts ─────────────────────────────────────── -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="notifs.js"></script>
+  <script>
+    let currentUser    = null;
+    let currentProfile = null;
+
+    /* ── Helpers ── */
+    function escHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function getInitials(name, email) {
+      const src = (name || email || '?').trim();
+      const parts = src.split(/\s+/).filter(Boolean).slice(0, 2);
+      const initials = parts.map(p => p[0] || '').join('').toUpperCase();
+      return initials || (email?.[0] || '?').toUpperCase();
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('p-msg');
+      if (!el) return;
+      el.className = `form-msg show ${type === 'error' ? 'error' : 'success'}`;
+      el.textContent = text;
+      setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    /* ── Avatar render ── */
+    function renderAvatar() {
+      const wrap = document.getElementById('avatar-display');
+      if (!wrap || !currentProfile) return;
+      if (currentProfile.avatar_url) {
+        // Cache-buster para refrescar tras upload
+        wrap.innerHTML = `<img class="avatar-big" src="${escHtml(currentProfile.avatar_url)}?t=${Date.now()}" alt="Avatar" />`;
+      } else {
+        wrap.innerHTML = `<div class="avatar-initials-big">${escHtml(getInitials(currentProfile.full_name, currentUser.email))}</div>`;
+      }
+    }
+
+    /* ── Logout ── */
+    async function logout() {
+      await sb.auth.signOut();
+      window.location.href = 'login.html';
+    }
+
+    /* ── Avatar upload ── */
+    async function handleAvatarUpload(file) {
+      if (!file) return;
+      const status = document.getElementById('avatar-status');
+      status.className = 'avatar-status';
+      status.textContent = '⏳ Subiendo...';
+
+      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `avatars/${currentUser.id}.${ext}`;
+
+      // upsert:true → reemplaza si ya hay foto
+      const { error: upErr } = await sb.storage
+        .from('course-materials')
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+
+      if (upErr) {
+        console.error('avatar upload error:', upErr);
+        status.className = 'avatar-status error';
+        status.textContent = '⚠️ ' + upErr.message;
+        return;
+      }
+
+      const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+      const avatarUrl = urlData.publicUrl;
+
+      const { error: updErr } = await sb.from('profiles')
+        .update({ avatar_url: avatarUrl }).eq('id', currentUser.id);
+      if (updErr) {
+        console.error('avatar update profile error:', updErr);
+        status.className = 'avatar-status error';
+        status.textContent = '⚠️ ' + updErr.message;
+        return;
+      }
+
+      currentProfile.avatar_url = avatarUrl;
+      renderAvatar();
+      status.className = 'avatar-status success';
+      status.textContent = '✓ Foto actualizada';
+      setTimeout(() => { status.textContent = ''; status.className = 'avatar-status'; }, 3000);
+    }
+
+    /* ── Load profile ── */
+    async function loadProfile() {
+      const { data, error } = await sb.from('profiles')
+        .select('id, full_name, email, avatar_url, bio, role, birth_date, phone, experience_level, training_goal')
+        .eq('id', currentUser.id).maybeSingle();
+      if (error) { console.error('loadProfile error:', error); return; }
+      if (!data) {
+        // Defensivo: crear fila si no existe
+        await sb.from('profiles').insert({
+          id: currentUser.id, email: currentUser.email,
+          full_name: currentUser.user_metadata?.full_name || ''
+        });
+        return loadProfile();
+      }
+      currentProfile = data;
+
+      document.getElementById('p-fullname').value   = data.full_name || '';
+      document.getElementById('p-email').value      = data.email || currentUser.email || '';
+      document.getElementById('p-birthdate').value  = data.birth_date || '';
+      document.getElementById('p-phone').value      = data.phone || '';
+      document.getElementById('p-bio').value        = data.bio || '';
+      document.getElementById('p-experience').value = data.experience_level || '';
+      document.getElementById('p-goal').value       = data.training_goal || '';
+
+      renderAvatar();
+    }
+
+    /* ── Save profile ── */
+    async function saveProfile() {
+      const btn = document.getElementById('p-save-btn');
+      btn.disabled = true; btn.textContent = 'Guardando...';
+
+      const payload = {
+        full_name:        document.getElementById('p-fullname').value.trim() || null,
+        birth_date:       document.getElementById('p-birthdate').value || null,
+        phone:            document.getElementById('p-phone').value.trim() || null,
+        bio:              document.getElementById('p-bio').value.trim() || null,
+        experience_level: document.getElementById('p-experience').value || null,
+        training_goal:    document.getElementById('p-goal').value || null,
+      };
+
+      const { error } = await sb.from('profiles').update(payload).eq('id', currentUser.id);
+
+      btn.disabled = false; btn.textContent = 'Guardar cambios';
+
+      if (error) {
+        console.error('saveProfile error:', error);
+        showMsg('Error al guardar: ' + error.message, 'error');
+        return;
+      }
+      Object.assign(currentProfile, payload);
+      renderAvatar();  // refresca iniciales si cambió full_name
+      showMsg('✓ Cambios guardados.', 'success');
+    }
+
+    /* ── Cursos comprados + estado de progreso ── */
+    async function loadCompletedCourses() {
+      const wrap = document.getElementById('completed-courses');
+      if (!wrap) return;
+
+      const { data: ucs, error } = await sb.from('user_courses')
+        .select('course_id, courses(id, title, slug, certificate_url, total_videos, course_type, is_live, live_completed)')
+        .eq('user_id', currentUser.id)
+        .eq('payment_status', 'paid')
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('loadCompletedCourses error:', error);
+        wrap.innerHTML = `<div class="empty-state">⚠️ Error al cargar cursos: ${escHtml(error.message)}</div>`;
+        return;
+      }
+      if (!ucs?.length) {
+        wrap.innerHTML = '<div class="empty-state">📚 Todavía no tenés cursos comprados.</div>';
+        return;
+      }
+
+      // Progreso: cuenta de video_progress completados por curso
+      const courseIds = ucs.map(u => u.course_id).filter(Boolean);
+      let completedByCourse = {};
+      if (courseIds.length) {
+        const { data: progressData } = await sb.from('video_progress')
+          .select('course_id')
+          .eq('user_id', currentUser.id).eq('completed', true)
+          .in('course_id', courseIds);
+        (progressData || []).forEach(r => {
+          completedByCourse[r.course_id] = (completedByCourse[r.course_id] || 0) + 1;
+        });
+      }
+
+      const items = ucs.map(uc => {
+        const c = uc.courses;
+        if (!c) return '';
+        const completed = completedByCourse[c.id] || 0;
+        const total     = c.total_videos || 0;
+        const isComplete = total > 0 && completed >= total;
+        const cursoUrl  = c.slug ? `curso.html?slug=${encodeURIComponent(c.slug)}` : '#';
+        const badge = isComplete
+          ? `<span class="course-item-badge">✅ Completado</span>`
+          : (total > 0
+              ? `<span class="course-item-prog">${completed} / ${total} video${total !== 1 ? 's' : ''} completado${completed !== 1 ? 's' : ''}</span>`
+              : `<span class="course-item-prog">${completed} video${completed !== 1 ? 's' : ''} completado${completed !== 1 ? 's' : ''}</span>`);
+        const certBtn = (isComplete && c.certificate_url)
+          ? `<button class="btn-cert-mini" onclick="generarCertificado('${escHtml(c.id)}','${escHtml(c.title)}','${escHtml(c.certificate_url)}', this)">📄 Descargar certificado</button>`
+          : '';
+        return `
+          <div class="course-item">
+            <div class="course-item-title">${escHtml(c.title || 'Curso')}</div>
+            ${badge}
+            <div class="course-item-actions">
+              <a class="btn-curso-link" href="${cursoUrl}">Ir al curso →</a>
+              ${certBtn}
+            </div>
+          </div>`;
+      }).filter(Boolean).join('');
+
+      wrap.innerHTML = items
+        ? `<div class="courses-grid">${items}</div>`
+        : '<div class="empty-state">📚 Todavía no tenés cursos comprados.</div>';
+    }
+
+    /* ── Certificate generation (espejo de curso.html) ── */
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload  = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo cargar la imagen del certificado'));
+        img.src = src;
+      });
+    }
+
+    async function generarCertificado(courseId, courseTitle, certUrl, btn) {
+      if (!certUrl) { showMsg('Este curso no tiene certificado configurado.', 'error'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
+      try {
+        const fullName = (currentProfile && currentProfile.full_name)
+          || currentUser.user_metadata?.full_name
+          || currentUser.user_metadata?.name
+          || currentUser.email.split('@')[0];
+
+        const img = await loadImage(certUrl);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        doc.addImage(img, 'PNG', 0, 0, 297, 210);
+
+        const now = new Date();
+        const dateStr = [
+          String(now.getDate()).padStart(2, '0'),
+          String(now.getMonth() + 1).padStart(2, '0'),
+          now.getFullYear(),
+        ].join('/');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(16);
+        doc.setTextColor(45, 27, 107);
+        doc.text(dateStr, 148.5, 72, { align: 'center' });
+
+        doc.setFont('helvetica', 'bolditalic');
+        doc.setFontSize(32);
+        doc.setTextColor(45, 27, 107);
+        doc.text(fullName, 148.5, 108, { align: 'center' });
+
+        const safeName  = fullName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+        const slugTitle = (courseTitle || 'curso').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+        doc.save(`certificado-${slugTitle}-${safeName}.pdf`);
+
+        if (btn) { btn.disabled = false; btn.textContent = '📄 Descargar certificado'; }
+      } catch (e) {
+        console.error('generarCertificado error:', e);
+        if (btn) { btn.disabled = false; btn.textContent = '⚠ Error — reintentar'; }
+      }
+    }
+
+    /* ── Init ── */
+    (async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { window.location.replace('login.html'); return; }
+      currentUser = session.user;
+      document.getElementById('nav-email').textContent = currentUser.email || '';
+
+      // Notificaciones in-app (Sesión 58)
+      if (typeof initNotifs === 'function') initNotifs(currentUser);
+
+      const fileInput = document.getElementById('avatar-file');
+      if (fileInput) fileInput.addEventListener('change', e => handleAvatarUpload(e.target.files[0]));
+
+      await loadProfile();
+      await loadCompletedCourses();
+    })();
+
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) window.location.replace('login.html');
+    });
+  </script>
+
+</body>
+</html>

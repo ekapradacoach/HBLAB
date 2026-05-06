@@ -1,0 +1,3861 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Coach — HB Lab</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47) ─── -->
+  <meta name="description" content="Panel del coach HB Lab — gestión de foro, materiales y progreso de alumnos." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://hblab.com/coach.html" />
+
+  <meta property="og:title" content="Panel Coach — HB Lab" />
+  <meta property="og:description" content="Panel del coach HB Lab — gestión de foro, materiales y progreso de alumnos." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/coach.html" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Panel Coach — HB Lab" />
+  <meta name="twitter:description" content="Panel del coach HB Lab — gestión de foro, materiales y progreso de alumnos." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+      --red:          #FC8181;
+      --green:        #68D391;
+    }
+
+    body { font-family: 'Inter', sans-serif; background: var(--navy); color: var(--white); min-height: 100vh; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Loading ─────────────────────────────────── */
+    #loading-screen {
+      position: fixed; inset: 0; background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 300; transition: opacity 0.3s ease;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(200,230,0,0.15); border-top-color: var(--lime);
+      border-radius: 50%; animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Navbar ──────────────────────────────────── */
+    #navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(30,42,58,0.97); backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(200,230,0,0.12); padding: 13px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg  { width: 40px; height: 40px; flex-shrink: 0; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+    .logo-text .hb  { font-weight: 800; font-size: 1.2rem; color: var(--white); }
+    .logo-text .lab { font-family: 'Georgia', serif; font-style: italic; font-size: 0.75rem; color: var(--lime); letter-spacing: 0.12em; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .nav-email { font-size: 0.82rem; color: var(--gray-text); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Mini avatar 32px → link a perfil.html (Sesión 57) */
+    .nav-avatar-link { line-height: 0; text-decoration: none; }
+    .avatar-nav {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--violet); color: var(--white);
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+      border: 2px solid var(--lime); flex-shrink: 0; overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .avatar-nav img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .nav-avatar-link:hover .avatar-nav { transform: scale(1.06); box-shadow: 0 0 0 4px rgba(200,230,0,0.18); }
+    .badge-role {
+      font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 4px 11px; border-radius: 100px;
+      background: rgba(200,230,0,0.12); border: 1px solid rgba(200,230,0,0.3); color: var(--lime);
+    }
+    .btn-logout {
+      background: transparent; border: 1.5px solid rgba(252,129,129,0.35); color: var(--red);
+      padding: 7px 16px; border-radius: 6px; font-family: 'Inter', sans-serif;
+      font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: background 0.2s;
+    }
+    .btn-logout:hover { background: rgba(252,129,129,0.1); }
+
+    /* ── Page ────────────────────────────────────── */
+    #page { padding-top: 66px; }
+
+    /* ── Tabs bar ────────────────────────────────── */
+    .tabs-bar {
+      background: var(--navy-light); border-bottom: 1px solid var(--card-border);
+      position: sticky; top: 66px; z-index: 50;
+    }
+    .tabs-inner { display: flex; }
+    .tab-btn {
+      background: none; border: none; border-bottom: 3px solid transparent;
+      color: var(--gray-text); font-family: 'Inter', sans-serif; font-weight: 600;
+      font-size: 0.88rem; padding: 16px 26px; cursor: pointer; white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn.active { color: var(--lime); border-bottom-color: var(--lime); }
+    .tab-btn:hover:not(.active) { color: var(--white); }
+
+    /* ── Tab panels ──────────────────────────────── */
+    .tab-panel { display: none; padding: 36px 0 60px; }
+    .tab-panel.active { display: block; }
+
+    /* ── Section heading ─────────────────────────── */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-bottom: 22px;
+    }
+    .section-head h2 { font-size: 1.25rem; font-weight: 700; }
+
+    /* ── Curso section divider ───────────────────── */
+    .curso-section {
+      margin-top: 44px; padding-top: 40px;
+      border-top: 1px solid var(--card-border);
+    }
+    .curso-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+    /* ── Course selector (prominent) ────────────── */
+    .curso-selector-main {
+      margin-bottom: 32px;
+    }
+    .curso-selector-main label {
+      display: block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--gray-text); margin-bottom: 8px;
+    }
+    .course-select-prominent {
+      background: var(--card-bg); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 600;
+      padding: 13px 16px; border-radius: 10px; width: 100%; max-width: 520px;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 16px center;
+      padding-right: 40px; transition: border-color 0.2s;
+    }
+    .course-select-prominent:focus { outline: none; border-color: var(--violet); }
+
+    /* ── Course selector (legacy, kept for gains tab) */
+    .course-selector-wrap { margin-bottom: 28px; }
+    .course-selector-wrap label { display: block; font-size: 0.82rem; color: var(--gray-text); font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .course-select {
+      background: var(--card-bg); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.9rem; padding: 10px 14px;
+      border-radius: 8px; width: 100%; max-width: 400px; cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+      padding-right: 36px;
+    }
+    .course-select:focus { outline: none; border-color: var(--violet); }
+
+    /* ── Card ────────────────────────────────────── */
+    .card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .card-body { padding: 20px; }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray-text); font-size: 0.9rem; }
+    .empty-state .emoji { font-size: 2rem; display: block; margin-bottom: 10px; }
+
+    /* ── Buttons ─────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.82rem;
+      border: none; cursor: pointer; padding: 8px 16px; border-radius: 7px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-lime    { background: var(--lime); color: var(--navy); }
+    .btn-violet  { background: var(--violet); color: var(--white); }
+    .btn-ghost   { background: transparent; border: 1.5px solid var(--card-border); color: var(--gray-text); }
+    .btn-danger  { background: transparent; border: 1.5px solid rgba(252,129,129,0.35); color: var(--red); }
+    .btn-sm      { padding: 5px 11px; font-size: 0.76rem; }
+
+    /* ── Badge coach ─────────────────────────────── */
+    .badge-coach {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+      padding: 3px 9px; border-radius: 100px;
+      background: rgba(200,230,0,0.13); border: 1px solid rgba(200,230,0,0.35); color: var(--lime);
+    }
+
+    /* ── Foro ────────────────────────────────────── */
+    .forum-thread { border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+    .forum-thread-head {
+      background: var(--card-bg); padding: 16px 20px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .forum-thread-head .q-meta { font-size: 0.78rem; color: var(--gray-text); margin-bottom: 4px; }
+    .forum-thread-head .q-text { font-size: 0.93rem; font-weight: 500; }
+    .forum-replies { background: rgba(30,42,58,0.6); }
+    .forum-reply { padding: 14px 20px; border-top: 1px solid var(--card-border); display: flex; align-items: flex-start; gap: 12px; }
+    .forum-reply .r-meta { font-size: 0.76rem; color: var(--gray-text); margin-bottom: 3px; display: flex; align-items: center; gap: 7px; }
+    .forum-reply .r-text { font-size: 0.88rem; line-height: 1.5; }
+    .forum-reply-form { padding: 14px 20px; border-top: 1px solid var(--card-border); background: rgba(123,79,190,0.06); }
+    .forum-reply-form textarea {
+      width: 100%; background: var(--navy); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.87rem; padding: 10px 14px;
+      border-radius: 8px; resize: vertical; min-height: 72px;
+      transition: border-color 0.2s;
+    }
+    .forum-reply-form textarea:focus { outline: none; border-color: var(--violet); }
+    .forum-reply-form .form-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+    /* ── Foro — acciones coach/admin ─────────────── */
+    .forum-post-actions { padding: 4px 20px 10px; display: flex; gap: 8px; }
+    .btn-forum-action {
+      background: none; border: none; color: var(--gray-text);
+      font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 600;
+      cursor: pointer; padding: 3px 8px; border-radius: 5px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .btn-forum-action:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+    .btn-forum-action.danger:hover { color: var(--red); background: rgba(252,129,129,0.08); }
+    .forum-anon-tag { font-size: 0.68rem; color: var(--gray-text); font-style: italic; }
+
+    /* ── Foro — edición de respuestas ───────────── */
+    .reply-edit-wrap { display: none; padding: 10px 16px 12px; background: rgba(255,255,255,0.03); border-top: 1px solid var(--card-border); }
+    .reply-edit-textarea {
+      width: 100%; box-sizing: border-box;
+      background: var(--navy-light); border: 1px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.87rem; padding: 8px 12px;
+      border-radius: 8px; resize: vertical; min-height: 64px;
+      transition: border-color 0.2s;
+    }
+    .reply-edit-textarea:focus { outline: none; border-color: var(--violet); }
+    .reply-edit-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+    /* ── Foro — emoji picker ─────────────────────── */
+    .emoji-picker-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 1.1rem; padding: 2px 5px; border-radius: 6px;
+      color: var(--gray-text); line-height: 1;
+      transition: background 0.15s;
+    }
+    .emoji-picker-btn:hover { background: rgba(255,255,255,0.08); }
+    .emoji-picker-wrap {
+      display: none; position: fixed; z-index: 9999;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 10px; width: 230px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .emoji-picker-wrap.open { display: flex; flex-wrap: wrap; gap: 4px; }
+    .emoji-item {
+      font-size: 1.3rem; cursor: pointer; padding: 4px 5px; border-radius: 6px;
+      line-height: 1; transition: background 0.12s;
+    }
+    .emoji-item:hover { background: rgba(255,255,255,0.1); }
+
+    /* ── Foro — adjuntar imagen ──────────────────── */
+    .forum-img-attach-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 1.05rem; padding: 2px 5px; border-radius: 6px;
+      color: var(--gray-text); line-height: 1;
+      transition: background 0.15s;
+    }
+    .forum-img-attach-btn:hover { background: rgba(255,255,255,0.08); }
+    .forum-img-uploading { font-size: 0.75rem; color: var(--gray-text); font-style: italic; margin-top: 4px; }
+    .forum-img-preview { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .forum-img-preview-item { position: relative; }
+    .forum-img-preview-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--card-border); display: block; }
+    .forum-img-preview-item .cancel-img-btn { position: absolute; top: -5px; right: -5px; background: rgba(0,0,0,0.75); color: #fff; border-radius: 50%; width: 17px; height: 17px; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .forum-img-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .forum-img-grid img { flex: 1 1 calc(33.33% - 6px); max-width: calc(33.33% - 4px); max-height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer; }
+
+    /* ── Materiales ──────────────────────────────── */
+    .material-add-form {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 20px; margin-bottom: 20px;
+    }
+    .material-add-form h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 16px; color: var(--lime); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid.single { grid-template-columns: 1fr; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .field label { display: block; font-size: 0.77rem; color: var(--gray-text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; }
+    .field input, .field textarea {
+      width: 100%; background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.87rem;
+      padding: 9px 13px; border-radius: 7px; transition: border-color 0.2s;
+    }
+    .field input:focus, .field textarea:focus { outline: none; border-color: var(--violet); }
+    .field textarea { resize: vertical; min-height: 68px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+    /* ── Lista dinámica de grabaciones (post-live) ── */
+    .rec-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+    .rec-row  { display: flex; gap: 8px; align-items: center; }
+    .rec-row .field-input {
+      flex: 1; background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.87rem;
+      padding: 9px 13px; border-radius: 7px; transition: border-color 0.2s;
+    }
+    .rec-row .field-input.url { flex: 1.4; }
+    .rec-row .field-input:focus { outline: none; border-color: var(--violet); }
+    .btn-icon-rec {
+      width: 32px; height: 32px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1.5px solid rgba(252,129,129,0.3); color: var(--red);
+      border-radius: 7px; cursor: pointer; font-size: 1rem; line-height: 1;
+      transition: background 0.2s;
+    }
+    .btn-icon-rec:hover { background: rgba(252,129,129,0.1); }
+    .btn-add-rec {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 1.5px dashed var(--card-border); color: var(--gray-text);
+      padding: 7px 14px; border-radius: 7px; font-family: 'Inter', sans-serif;
+      font-weight: 600; font-size: 0.8rem; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s; margin-top: 4px; align-self: flex-start;
+    }
+    .btn-add-rec:hover { border-color: var(--lime); color: var(--lime); }
+
+    .materials-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .materials-table th {
+      background: rgba(47,62,82,0.5); text-align: left; font-size: 0.75rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--gray-text); padding: 11px 16px; border-bottom: 1px solid var(--card-border);
+    }
+    .materials-table td { padding: 13px 16px; border-bottom: 1px solid rgba(47,62,82,0.4); vertical-align: top; }
+    .materials-table tr:last-child td { border-bottom: none; }
+    .materials-table tr:hover td { background: rgba(47,62,82,0.3); }
+    .mat-title { font-weight: 600; margin-bottom: 3px; }
+    .mat-desc { font-size: 0.8rem; color: var(--gray-text); }
+    .drive-link { color: var(--violet-light); font-size: 0.82rem; text-decoration: none; }
+    .drive-link:hover { text-decoration: underline; }
+    .td-actions { white-space: nowrap; }
+
+    /* ── Progreso ────────────────────────────────── */
+    .progress-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .progress-table th {
+      background: rgba(47,62,82,0.5); text-align: left; font-size: 0.75rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--gray-text); padding: 11px 16px; border-bottom: 1px solid var(--card-border);
+    }
+    .progress-table td { padding: 12px 16px; border-bottom: 1px solid rgba(47,62,82,0.4); }
+    .progress-table tr:last-child td { border-bottom: none; }
+    .progress-table tr:hover td { background: rgba(47,62,82,0.3); }
+    .pct-bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .pct-bar { height: 6px; border-radius: 100px; background: var(--card-border); flex: 1; max-width: 120px; overflow: hidden; }
+    .pct-fill { height: 100%; border-radius: 100px; background: var(--lime); transition: width 0.5s ease; }
+    .pct-fill.mid  { background: #f6c90e; }
+    .pct-fill.low  { background: var(--red); }
+    .pct-label { font-size: 0.82rem; font-weight: 600; min-width: 38px; }
+    .badge-no-total { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: rgba(148,163,184,0.12); color: var(--gray-text); letter-spacing: 0.02em; }
+
+    /* ── Ganancias ───────────────────────────────── */
+    .gains-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+    .gains-controls label { font-size: 0.78rem; color: var(--gray-text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+    .gains-select {
+      background: var(--card-bg); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.875rem; padding: 9px 13px;
+      border-radius: 8px; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+    }
+    .gains-select:focus { outline: none; border-color: var(--violet); }
+    .btn-gains-load {
+      background: var(--violet); color: var(--white); border: none;
+      padding: 9px 18px; border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-gains-load:hover { opacity: 0.85; }
+    .gains-total-box {
+      background: linear-gradient(135deg, rgba(123,79,190,0.2), rgba(200,230,0,0.08));
+      border: 1px solid rgba(200,230,0,0.25); border-radius: 14px;
+      padding: 28px 32px; text-align: center; margin-bottom: 28px;
+    }
+    .gains-total-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gray-text); margin-bottom: 8px; }
+    .gains-total-amount { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; color: var(--lime); }
+    .gains-total-detail { font-size: 0.8rem; color: var(--gray-text); margin-top: 6px; }
+    .gains-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .gains-table th {
+      background: rgba(47,62,82,0.5); text-align: left; font-size: 0.73rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-text);
+      padding: 11px 16px; border-bottom: 1px solid var(--card-border);
+    }
+    .gains-table td { padding: 14px 16px; border-bottom: 1px solid rgba(47,62,82,0.4); }
+    .gains-table tr:last-child td { border-bottom: none; }
+    .gains-table tr:hover td { background: rgba(47,62,82,0.3); }
+    .gains-course-title { font-weight: 600; margin-bottom: 2px; }
+    .gains-commission-pct { font-size: 0.76rem; color: var(--violet-light); }
+    .gains-amount { font-weight: 700; color: var(--lime); }
+    .gains-amount-zero { color: var(--gray-text); }
+
+    /* ── No-courses banner ───────────────────────── */
+    #no-courses-banner {
+      display: none;
+      align-items: center; gap: 16px;
+      background: rgba(200,230,0,0.05);
+      border: 1px solid rgba(200,230,0,0.18);
+      border-radius: 12px; padding: 18px 22px;
+      margin: 28px auto 0;
+      max-width: 1100px;
+    }
+    #no-courses-banner .banner-icon { font-size: 1.6rem; flex-shrink: 0; }
+    #no-courses-banner p { font-size: 0.9rem; color: var(--gray-text); line-height: 1.55; }
+    #no-courses-banner strong { color: var(--white); }
+
+    /* ── Materiales — tipo select & file input ───── */
+    .field select {
+      width: 100%; background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.87rem;
+      padding: 9px 13px; border-radius: 7px; appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+      transition: border-color 0.2s;
+    }
+    .field select:focus { outline: none; border-color: var(--violet); }
+    .mat-file-wrap {
+      width: 100%; background: var(--navy-light); border: 1.5px dashed var(--card-border);
+      border-radius: 7px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .mat-file-wrap:focus-within { border-color: var(--violet); }
+    .mat-file-wrap input[type="file"] {
+      color: var(--gray-text); font-family: 'Inter', sans-serif; font-size: 0.82rem;
+      background: none; border: none; padding: 0; cursor: pointer; width: 100%;
+    }
+    .mat-file-wrap input[type="file"]::-webkit-file-upload-button {
+      background: var(--violet); color: var(--white); border: none; border-radius: 5px;
+      padding: 5px 12px; font-family: 'Inter', sans-serif; font-size: 0.78rem;
+      font-weight: 600; cursor: pointer; margin-right: 10px;
+    }
+    .mat-pdf-current {
+      font-size: 0.78rem; color: var(--violet-light); display: flex; align-items: center; gap: 6px;
+    }
+    .mat-uploading {
+      font-size: 0.8rem; color: var(--gray-text); font-style: italic;
+    }
+
+    /* ── Foro — búsqueda y paginación ───────────── */
+    .foro-search-wrap { margin-bottom: 18px; }
+    .foro-search-input {
+      width: 100%; max-width: 420px;
+      background: var(--card-bg); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.87rem;
+      padding: 9px 13px; border-radius: 8px; transition: border-color 0.2s;
+    }
+    .foro-search-input:focus { outline: none; border-color: var(--violet); }
+    .foro-search-input::placeholder { color: var(--gray-text); }
+    .foro-ver-mas-wrap { text-align: center; margin-top: 18px; }
+    .foro-count-label { font-size: 0.78rem; color: var(--gray-text); margin-bottom: 14px; }
+
+    /* ── Toast ───────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 500;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-left: 4px solid var(--lime); color: var(--white);
+      padding: 14px 20px; border-radius: 10px; font-size: 0.88rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transform: translateY(16px); opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.error { border-left-color: var(--red); }
+
+    /* ── Módulos manager (course_type='modules' — Sesión 48) ── */
+    .mod-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+    .mod-card {
+      background: rgba(47,62,82,0.3); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 14px;
+    }
+    .mod-card-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .mod-card-head .field-input { flex: 1; font-weight: 600; }
+    .mod-lessons-list {
+      display: flex; flex-direction: column; gap: 8px;
+      padding-left: 14px; margin-left: 4px; padding-top: 4px; padding-bottom: 4px;
+      border-left: 2px solid rgba(123,79,190,0.3);
+    }
+    .mod-lesson-row { display: flex; gap: 8px; align-items: center; }
+    .mod-lesson-row .field-input { flex: 1; }
+    .mod-lesson-row .field-input.url { flex: 1.4; }
+    .mod-add-lesson-btn {
+      background: transparent; border: 1.5px dashed var(--card-border);
+      color: var(--gray-text); padding: 6px 12px; border-radius: 6px;
+      font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; align-self: flex-start; margin-top: 6px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .mod-add-lesson-btn:hover { border-color: var(--lime); color: var(--lime); }
+
+    /* ── Etapa X.8: panel inline de materiales por lección ── */
+    .mod-lesson-block { display: flex; flex-direction: column; gap: 0; }
+    .btn-lesson-mats {
+      position: relative;
+      width: 32px; height: 32px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1.5px solid rgba(123,79,190,0.35); color: var(--violet-light, #9B6FDE);
+      border-radius: 7px; cursor: pointer; font-size: 0.95rem; line-height: 1;
+      transition: background 0.18s, border-color 0.18s;
+    }
+    .btn-lesson-mats:hover:not(:disabled) {
+      background: rgba(123,79,190,0.1); border-color: var(--violet-light, #9B6FDE);
+    }
+    .btn-lesson-mats .lmat-badge {
+      position: absolute; top: -6px; right: -6px;
+      min-width: 16px; height: 16px; padding: 0 4px; border-radius: 100px;
+      background: var(--lime); color: var(--navy); font-size: 0.65rem; font-weight: 800;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--card-bg);
+      line-height: 1;
+    }
+
+    .mod-lesson-mats {
+      margin: 8px 0 12px 18px;
+      padding: 12px 14px;
+      background: rgba(0,0,0,0.18);
+      border: 1px dashed var(--card-border);
+      border-radius: 8px;
+    }
+    .lesson-mats-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .lesson-mat-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 10px;
+      background: rgba(47,62,82,0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+    }
+    .lesson-mat-icon { font-size: 1rem; flex-shrink: 0; }
+    .lesson-mat-title { flex: 1; min-width: 0; font-size: 0.84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lmat-empty { font-size: 0.8rem; color: var(--gray-text); font-style: italic; padding: 6px 0; }
+
+    .lesson-mats-add-btn {
+      background: transparent; border: 1.5px dashed var(--card-border);
+      color: var(--gray-text); padding: 6px 12px; border-radius: 6px;
+      font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.18s, color 0.18s;
+    }
+    .lesson-mats-add-btn:hover { border-color: var(--violet-light, #9B6FDE); color: var(--violet-light, #9B6FDE); }
+
+    .lesson-mats-form {
+      display: flex; flex-direction: column; gap: 8px;
+      margin-top: 10px; padding: 10px;
+      background: rgba(123,79,190,0.06);
+      border: 1px solid rgba(123,79,190,0.18);
+      border-radius: 7px;
+    }
+    .lesson-mats-form .field-input {
+      background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.84rem;
+      padding: 7px 11px; border-radius: 6px;
+      transition: border-color 0.18s;
+    }
+    .lesson-mats-form .field-input:focus { outline: none; border-color: var(--violet-light, #9B6FDE); }
+    .lesson-mats-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    /* ── Quiz editor (Etapa U) ──────────────────────── */
+    .qz-config-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 20px; margin-bottom: 24px;
+    }
+    .qz-config-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;
+    }
+    @media (max-width: 600px) { .qz-config-grid { grid-template-columns: 1fr; } }
+    .qz-toggle-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; cursor: pointer; user-select: none;
+    }
+    .qz-toggle-row input[type="checkbox"] { display: none; }
+    .qz-toggle-track {
+      width: 40px; height: 22px; background: var(--card-border);
+      border-radius: 100px; position: relative; transition: background 0.2s; flex-shrink: 0;
+    }
+    .qz-toggle-thumb {
+      position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+      background: var(--white); border-radius: 50%; transition: transform 0.2s;
+    }
+    .qz-toggle-row input:checked ~ .qz-toggle-track { background: var(--lime); }
+    .qz-toggle-row input:checked ~ .qz-toggle-track .qz-toggle-thumb { transform: translateX(18px); }
+    .qz-toggle-label { font-size: 0.9rem; font-weight: 600; }
+    .qz-section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin: 28px 0 16px;
+    }
+    .qz-section-head h3 { font-size: 1.05rem; font-weight: 700; }
+    .qz-section-head .qz-section-sub { font-size: 0.8rem; color: var(--gray-text); }
+    .qz-q-list { display: flex; flex-direction: column; gap: 16px; }
+    .qz-q-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 18px;
+    }
+    .qz-q-head {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .qz-q-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--violet); color: var(--white);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+    }
+    .qz-q-type-select {
+      background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.85rem;
+      padding: 7px 11px; border-radius: 7px; cursor: pointer;
+    }
+    .qz-q-type-select:focus { outline: none; border-color: var(--violet); }
+    .qz-q-statement {
+      width: 100%; box-sizing: border-box;
+      background: var(--navy-light); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.9rem; padding: 10px 13px;
+      border-radius: 8px; resize: vertical; min-height: 60px;
+      transition: border-color 0.2s;
+    }
+    .qz-q-statement:focus { outline: none; border-color: var(--violet); }
+    .qz-options-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .qz-option-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .qz-option-row input[type="text"] {
+      flex: 1; background: var(--navy-light); border: 1.5px solid var(--card-border);
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.87rem;
+      padding: 8px 12px; border-radius: 7px; transition: border-color 0.2s;
+    }
+    .qz-option-row input[type="text"]:focus { outline: none; border-color: var(--violet); }
+    .qz-option-row .qz-correct-control {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; color: var(--gray-text); font-weight: 600;
+      cursor: pointer; user-select: none; flex-shrink: 0;
+    }
+    .qz-option-row .qz-correct-control input { accent-color: var(--lime); }
+    .qz-add-option-btn {
+      background: transparent; border: 1.5px dashed var(--card-border); color: var(--gray-text);
+      padding: 6px 12px; border-radius: 6px; font-family: 'Inter', sans-serif;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; align-self: flex-start;
+      transition: border-color 0.2s, color 0.2s; margin-top: 4px;
+    }
+    .qz-add-option-btn:hover { border-color: var(--lime); color: var(--lime); }
+    .qz-text-note {
+      font-size: 0.8rem; color: var(--gray-text); font-style: italic;
+      background: rgba(123,79,190,0.08); border-left: 3px solid var(--violet);
+      padding: 8px 12px; border-radius: 6px; margin-top: 10px;
+    }
+    .qz-images-wrap { margin-top: 12px; }
+    .qz-images-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .qz-img-thumb { position: relative; width: 80px; height: 80px; }
+    .qz-img-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid var(--card-border); display: block; }
+    .qz-img-thumb .qz-img-x {
+      position: absolute; top: -5px; right: -5px;
+      background: rgba(0,0,0,0.75); color: #fff; border-radius: 50%;
+      width: 18px; height: 18px; font-size: 0.65rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .qz-img-add-btn {
+      background: transparent; border: 1.5px dashed var(--card-border); color: var(--gray-text);
+      padding: 6px 12px; border-radius: 6px; font-family: 'Inter', sans-serif;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: border-color 0.2s, color 0.2s;
+    }
+    .qz-img-add-btn:hover { border-color: var(--violet); color: var(--violet-light); }
+    .qz-q-footer {
+      display: flex; justify-content: flex-end; margin-top: 14px;
+      padding-top: 12px; border-top: 1px solid var(--card-border);
+    }
+    .qz-add-q-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 1.5px dashed var(--card-border); color: var(--gray-text);
+      padding: 9px 18px; border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: border-color 0.2s, color 0.2s;
+    }
+    .qz-add-q-btn:hover { border-color: var(--lime); color: var(--lime); }
+    .qz-modules-notice {
+      background: rgba(123,79,190,0.08); border: 1px dashed var(--card-border);
+      border-radius: 10px; padding: 16px 18px; color: var(--gray-text);
+      font-size: 0.85rem; line-height: 1.5;
+    }
+    .qz-results-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .qz-results-table th {
+      background: rgba(47,62,82,0.5); text-align: left; font-size: 0.74rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--gray-text); padding: 11px 14px; border-bottom: 1px solid var(--card-border);
+    }
+    .qz-results-table td { padding: 12px 14px; border-bottom: 1px solid rgba(47,62,82,0.4); }
+    .qz-results-table tr:last-child td { border-bottom: none; }
+    .qz-pass-yes { color: var(--lime); font-weight: 700; }
+    .qz-pass-no  { color: var(--red); font-weight: 700; }
+    .qz-action-msg { font-size: 0.85rem; margin-top: 10px; }
+    .qz-action-msg.success { color: var(--lime); }
+    .qz-action-msg.error   { color: var(--red); }
+
+    /* Modal de respuestas de texto */
+    .qz-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
+      padding: 20px;
+    }
+    .qz-modal-overlay.open { display: flex; }
+    .qz-modal {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 26px;
+      max-width: 640px; width: 100%; max-height: 86vh; overflow-y: auto;
+    }
+    .qz-modal h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 14px; color: var(--lime); }
+    .qz-modal-q { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--card-border); }
+    .qz-modal-q:last-child { border-bottom: none; margin-bottom: 0; }
+    .qz-modal-q-stmt { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+    .qz-modal-q-ans  { font-size: 0.85rem; color: var(--gray-text); white-space: pre-wrap; line-height: 1.5; }
+    .qz-modal-close-row { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+    /* ── Quiz inline en "Mi curso" (Etapa X — rediseño) ──── */
+    .btn-quiz-toggle {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: transparent; border: 1.5px solid var(--lime); color: var(--lime);
+      padding: 11px 20px; border-radius: 9px;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.88rem;
+      cursor: pointer; transition: background 0.18s, color 0.18s;
+    }
+    .btn-quiz-toggle:hover { background: rgba(200,230,0,0.08); }
+    .btn-quiz-toggle.open  { background: rgba(200,230,0,0.12); }
+    .quiz-toggle-arrow { font-size: 0.78rem; transition: transform 0.2s; }
+    .btn-quiz-toggle.open .quiz-toggle-arrow { transform: rotate(180deg); }
+
+    /* ── Scope card (cada quiz: del curso o por módulo) ──── */
+    .qz-scope-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 20px;
+      margin-bottom: 18px;
+    }
+    .qz-scope-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .qz-scope-title { font-size: 0.98rem; font-weight: 700; }
+    .qz-scope-sub   { font-size: 0.78rem; color: var(--gray-text); margin-top: 2px; }
+
+    /* Pills internos para alternar Config / Preguntas */
+    .qz-pill-row {
+      display: inline-flex; gap: 6px;
+      background: rgba(0,0,0,0.18); padding: 4px;
+      border-radius: 9px; border: 1px solid var(--card-border);
+    }
+    .qz-pill {
+      background: transparent; border: none; color: var(--gray-text);
+      font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.82rem;
+      padding: 7px 14px; border-radius: 6px; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .qz-pill:hover { color: var(--white); }
+    .qz-pill.active {
+      background: var(--lime); color: var(--navy);
+    }
+
+    /* Vistas dentro del scope card */
+    .qz-view { display: none; }
+    .qz-view.active { display: block; }
+
+    /* Mini-card de pregunta en la vista "Preguntas" */
+    .qz-mini-list { display: flex; flex-direction: column; gap: 10px; }
+    .qz-mini-q-card {
+      background: rgba(47,62,82,0.3); border: 1px solid var(--card-border);
+      border-radius: 9px; padding: 12px 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .qz-mini-q-info { flex: 1; min-width: 0; }
+    .qz-mini-q-stmt {
+      font-size: 0.88rem; font-weight: 600; color: var(--white);
+      margin-bottom: 4px; line-height: 1.3;
+    }
+    .qz-mini-q-meta {
+      font-size: 0.74rem; color: var(--gray-text);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .qz-mini-q-type-badge {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 100px;
+      background: rgba(123,79,190,0.18); color: var(--violet-light, #9B6FDE);
+      border: 1px solid rgba(123,79,190,0.32);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .qz-mini-q-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-qz-mini-action {
+      background: transparent; border: 1.5px solid var(--card-border);
+      color: var(--gray-text); padding: 6px 10px; border-radius: 6px;
+      font-size: 0.78rem; cursor: pointer; transition: border-color 0.18s, color 0.18s;
+    }
+    .btn-qz-mini-action:hover { border-color: var(--lime); color: var(--lime); }
+    .btn-qz-mini-action.danger:hover { border-color: var(--red); color: var(--red); }
+
+    .qz-add-q-row { margin-top: 14px; }
+
+    /* Subhead de "Tests por módulo" + "Resultados de alumnos" */
+    .qz-subhead {
+      font-size: 0.78rem; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--gray-text);
+      margin: 28px 0 12px;
+    }
+
+    /* Modal ancho para edición de pregunta */
+    .qz-modal-wide { max-width: 720px; }
+    .qz-modal-footer {
+      display: flex; justify-content: flex-end; gap: 8px;
+      margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading-screen"><div class="spinner"></div></div>
+
+<!-- Navbar -->
+<nav id="navbar">
+  <div class="container nav-inner">
+    <a href="dashboard.html" class="logo-wrap">
+      <svg class="logo-svg" viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="10" fill="#253347"/>
+        <path d="M10 28V12h4l6 10 6-10h4v16h-4V19l-6 9-6-9v9h-4z" fill="#C8E600"/>
+      </svg>
+      <div class="logo-text">
+        <span class="hb">HB</span>
+        <span class="lab">lab</span>
+      </div>
+    </a>
+    <div class="nav-right">
+      <a href="perfil.html" class="nav-avatar-link" title="Mi perfil">
+        <span id="nav-avatar-mini" class="avatar-nav">?</span>
+      </a>
+      <span id="nav-email" class="nav-email"></span>
+      <span id="nav-badge" class="badge-role">Coach</span>
+      <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Page -->
+<div id="page" style="display:none;">
+
+  <!-- Tabs bar -->
+  <div class="tabs-bar">
+    <div class="container tabs-inner">
+      <button class="tab-btn active" onclick="switchTab('micurso')">📋 Mi curso</button>
+      <button class="tab-btn" onclick="switchTab('ganancias')">💰 Ganancias</button>
+    </div>
+  </div>
+
+  <!-- No-courses banner — visible solo si coach sin cursos asignados -->
+  <div id="no-courses-banner" style="padding: 0 24px;">
+    <span class="banner-icon">📋</span>
+    <p><strong>Todavía no tenés cursos asignados.</strong> Contactá al administrador para que te asigne un curso a tu perfil de coach.</p>
+  </div>
+
+  <!-- ─── TAB: MI CURSO ────────────────────────────────────── -->
+  <div id="tab-micurso" class="tab-panel active">
+    <div class="container">
+
+      <!-- Selector de curso principal -->
+      <div class="curso-selector-main">
+        <label for="mi-curso-sel">Curso</label>
+        <select id="mi-curso-sel" class="course-select-prominent" onchange="onCursoChange()">
+          <option value="">— Seleccioná un curso —</option>
+        </select>
+      </div>
+
+      <!-- Todo el contenido del curso se inyecta aquí -->
+      <div id="micurso-content">
+        <div class="empty-state"><span class="emoji">📋</span>Seleccioná un curso para ver su contenido.</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ─── TAB: GANANCIAS ─────────────────────────────────── -->
+  <div id="tab-ganancias" class="tab-panel">
+    <div class="container">
+
+      <div class="section-head">
+        <h2>Mis ganancias</h2>
+      </div>
+
+      <!-- Selector mes / año -->
+      <div class="gains-controls">
+        <label>Mes</label>
+        <select id="gains-mes" class="gains-select"></select>
+        <label>Año</label>
+        <select id="gains-anio" class="gains-select"></select>
+        <button class="btn-gains-load" onclick="loadGanancias()">Ver ganancias</button>
+      </div>
+
+      <!-- Total destacado -->
+      <div id="gains-total-box" style="display:none;" class="gains-total-box">
+        <div class="gains-total-label">Total del mes</div>
+        <div class="gains-total-amount" id="gains-total-amount">$0</div>
+        <div class="gains-total-detail" id="gains-total-detail"></div>
+      </div>
+
+      <!-- Tabla por curso -->
+      <div id="gains-content">
+        <div class="empty-state"><span class="emoji">💰</span>Seleccioná un mes y año para ver tus ganancias.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- Modal de respuestas de texto del quiz -->
+<div id="qz-text-modal" class="qz-modal-overlay" onclick="if(event.target===this) closeQzTextModal()">
+  <div class="qz-modal">
+    <h3>Respuestas de texto</h3>
+    <div id="qz-text-modal-body"></div>
+    <div class="qz-modal-close-row">
+      <button class="btn btn-ghost" onclick="closeQzTextModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de edición de pregunta del quiz (Etapa X — rediseño) -->
+<div id="qz-question-modal" class="qz-modal-overlay" onclick="if(event.target===this) closeQzQuestionModal()">
+  <div class="qz-modal qz-modal-wide">
+    <h3 id="qz-question-modal-title">Editar pregunta</h3>
+    <div id="qz-question-modal-body"></div>
+    <div class="qz-modal-footer">
+      <button class="btn btn-ghost" onclick="closeQzQuestionModal()">Cancelar</button>
+      <button class="btn btn-lime" id="btn-qz-question-save" onclick="saveQuestionFromModal()">Guardar pregunta</button>
+    </div>
+    <div id="qz-question-modal-msg" class="qz-action-msg" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+<script src="notifs.js"></script>
+<script>
+/* ══════════════════════════════════════════════════
+   GLOBALS
+══════════════════════════════════════════════════ */
+let currentUser    = null;
+let currentRole    = null;
+let coachCourses   = [];   // { id, title, slug }
+let currentCourseId = '';  // curso actualmente seleccionado en Tab Mi curso
+let _replyData      = {};  // { replyId: { content, image_urls } } — para edición inline de respuestas
+let _replyImageUrls = {};  // { parentId: string[] } — URLs de imágenes pendientes al responder (max 3)
+let _loadSeq        = 0;   // versión de carga para cancelar renders obsoletos
+
+// Estado del foro (en memoria, sin re-query)
+let _foroPosts           = [];  // posts raíz ordenados desc (más nuevo primero)
+let _foroRepliesByParent = {};  // { postId → reply[] }
+let _foroCourseId        = '';  // courseId al momento de la carga
+let _foroVisibleCount    = 5;   // cuántos posts raíz mostrar (paginación)
+let _foroSearchQuery     = '';  // query de búsqueda activo
+
+// Solo el selector del tab Mi curso
+const SELECTORS = {
+  micurso: () => document.getElementById('mi-curso-sel'),
+};
+
+/* ══════════════════════════════════════════════════
+   LOADING HELPERS
+══════════════════════════════════════════════════ */
+// Timeout de 10 s — si init no termina, muestra error amigable
+let _loadTimer = setTimeout(() => {
+  showLoadingError('La carga tardó demasiado. Verificá tu conexión e intentá recargar la página.');
+}, 10000);
+
+function hideLoading() {
+  clearTimeout(_loadTimer);
+  document.getElementById('page').style.display = '';
+  const ls = document.getElementById('loading-screen');
+  if (!ls) return;
+  ls.classList.add('fade-out');
+  setTimeout(() => ls.remove(), 350);
+}
+
+function showLoadingError(msg) {
+  clearTimeout(_loadTimer);
+  const ls = document.getElementById('loading-screen');
+  if (!ls) return;
+  ls.innerHTML = `
+    <div style="text-align:center;padding:32px 24px;max-width:380px">
+      <div style="font-size:2.4rem;margin-bottom:16px">⚠️</div>
+      <p style="color:var(--red);font-weight:700;margin-bottom:8px;font-size:1rem">Error al cargar</p>
+      <p style="color:var(--gray-text);font-size:0.875rem;line-height:1.6;margin-bottom:24px">${msg}</p>
+      <button onclick="location.reload()"
+        style="background:var(--lime);color:var(--navy);border:none;padding:10px 24px;
+               border-radius:8px;font-family:Inter,sans-serif;font-weight:700;
+               font-size:0.9rem;cursor:pointer">
+        Recargar página
+      </button>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════
+   INIT — session + role check
+══════════════════════════════════════════════════ */
+(async function init() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    currentUser = session.user;
+
+    const { data: profile, error: pErr } = await sb.from('profiles')
+      .select('full_name, role, avatar_url')
+      .eq('id', currentUser.id)
+      .single();
+
+    if (pErr || !profile) { location.href = 'login.html'; return; }
+
+    currentRole = profile.role;
+    if (currentRole !== 'coach' && currentRole !== 'admin') {
+      location.href = 'dashboard.html';
+      return;
+    }
+
+    // Navbar (Sesión 57: avatar mini + Mi perfil link)
+    document.getElementById('nav-email').textContent = currentUser.email;
+    document.getElementById('nav-badge').textContent = currentRole === 'admin' ? 'Admin' : 'Coach';
+
+    // Notificaciones in-app (Sesión 58)
+    if (typeof initNotifs === 'function') initNotifs(currentUser);
+    const navAv = document.getElementById('nav-avatar-mini');
+    if (navAv) {
+      if (profile.avatar_url) {
+        navAv.innerHTML = `<img src="${profile.avatar_url}?t=${Date.now()}" alt="" />`;
+      } else {
+        const src = (profile.full_name || currentUser.email || '?').trim();
+        const parts = src.split(/\s+/).filter(Boolean).slice(0, 2);
+        const initials = parts.map(p => p[0] || '').join('').toUpperCase() || (currentUser.email[0] || '?').toUpperCase();
+        navAv.textContent = initials;
+      }
+    }
+
+    // Load courses accessible to this coach
+    await loadCoachCourses();
+
+    // Si es coach sin cursos asignados → mostrar banner informativo
+    if (currentRole !== 'admin' && coachCourses.length === 0) {
+      document.getElementById('no-courses-banner').style.display = 'flex';
+    }
+
+    // Auto-seleccionar si solo hay 1 curso asignado (corre PRIMERO — Sesión 70)
+    if (coachCourses.length === 1) {
+      const sel = document.getElementById('mi-curso-sel');
+      if (sel) sel.value = coachCourses[0].id;
+      await loadCursoCompleto(coachCourses[0].id);
+    }
+
+    // Deep-link desde notificación: ?course=SLUG#foro (Sesión 66 + fix 67-70)
+    // Corre DESPUÉS de loadCoachCourses() y DESPUÉS del auto-select de 1-curso,
+    // para garantizar que coachCourses ya esté poblado y que el flujo del
+    // deep-link tenga la última palabra al setear el selector + cargar el
+    // curso correcto. Scroll a #forum-section incondicional tras 1200ms.
+    const courseParam = new URLSearchParams(window.location.search).get('course');
+    console.log('[REDIRECT]', courseParam, coachCourses.map(c => c.slug));
+    console.log('[URL COURSE]', courseParam);
+    console.log('[MATCH]', coachCourses.find(c => c.slug === courseParam));
+    console.log('[SELECT ID]', document.getElementById('mi-curso-sel'));
+    if (courseParam) {
+      const target = coachCourses.find(c => c.slug === courseParam);
+      if (target) {
+        const sel = document.getElementById('mi-curso-sel');
+        if (sel) {
+          sel.value = target.id;
+          console.log('[REDIRECT] selector seteado, sel.value =', sel.value);
+        } else {
+          console.warn('[REDIRECT] #mi-curso-sel no está en el DOM al momento de setear');
+        }
+        console.log('[REDIRECT] llamando loadCursoCompleto(' + target.id + ')...');
+        try {
+          await loadCursoCompleto(target.id);
+          console.log('[REDIRECT] loadCursoCompleto retornó OK');
+        } catch (e) {
+          console.error('[REDIRECT] loadCursoCompleto throw:', e);
+        }
+        console.log('[REDIRECT] programando scroll a #forum-section en 1200ms...');
+        setTimeout(() => {
+          const el = document.getElementById('forum-section');
+          console.log('[REDIRECT] scroll fire, elemento =', el);
+          el?.scrollIntoView({ behavior: 'smooth' });
+        }, 1200);
+      } else {
+        console.warn('[REDIRECT] slug no encontrado en coachCourses:', courseParam);
+      }
+    }
+
+    // Inicializar selectores de ganancias
+    initGananciasSelectors();
+
+    // Mostrar página y quitar loading
+    hideLoading();
+
+  } catch (err) {
+    console.error('Error en init coach.html:', err);
+    showLoadingError('Ocurrió un error inesperado. Intentá recargar la página.');
+  }
+})();
+
+/* ══════════════════════════════════════════════════
+   LOAD COACH COURSES
+══════════════════════════════════════════════════ */
+async function loadCoachCourses() {
+  let courses = [];
+
+  if (currentRole === 'admin') {
+    // Admin ve todos los cursos
+    const { data, error } = await sb.from('courses')
+      .select('id, title, slug')
+      .eq('is_active', true)
+      .order('title');
+    if (!error && data) courses = data;
+  } else {
+    // Coach ve solo los cursos asignados
+    const { data, error } = await sb.from('coach_courses')
+      .select('course_id, courses(id, title, slug)')
+      .eq('coach_id', currentUser.id);
+    if (!error && data) {
+      courses = data
+        .filter(r => r.courses)
+        .map(r => r.courses);
+    }
+  }
+
+  coachCourses = courses;
+
+  // Poblar el selector de Mi Curso
+  const sel = document.getElementById('mi-curso-sel');
+  if (sel) {
+    while (sel.options.length > 1) sel.remove(1);
+    courses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.title;
+      sel.appendChild(opt);
+    });
+  }
+
+  // (Etapa X) El editor de tests ya no vive en un tab aparte — se renderiza
+  // dentro de "Mi curso" cuando el curso seleccionado tiene has_quiz=true.
+}
+
+/* ══════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════ */
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isError ? 'error show' : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3200);
+}
+
+/* ══════════════════════════════════════════════════
+   LOGOUT
+══════════════════════════════════════════════════ */
+async function logout() {
+  await sb.auth.signOut();
+  location.href = 'login.html';
+}
+
+/* ══════════════════════════════════════════════════
+   ─── ORQUESTADOR: CURSO COMPLETO ─────────────────
+══════════════════════════════════════════════════ */
+function onCursoChange() {
+  const sel = document.getElementById('mi-curso-sel');
+  const courseId = sel ? sel.value : '';
+  loadCursoCompleto(courseId);
+}
+
+async function loadCursoCompleto(courseId) {
+  currentCourseId = courseId;
+  const seq = ++_loadSeq;
+  const wrap = document.getElementById('micurso-content');
+  if (!wrap) return;
+
+  if (!courseId) {
+    wrap.innerHTML = '<div class="empty-state"><span class="emoji">📋</span>Seleccioná un curso para ver su contenido.</div>';
+    return;
+  }
+
+  // Renderizar esqueleto con las 4 secciones
+  wrap.innerHTML = `
+    <!-- Sección: Clase en vivo -->
+    <div class="curso-section">
+      <div class="section-head"><h2>🔴 Clase en vivo</h2></div>
+      <div id="live-content"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></div>
+    </div>
+
+    <!-- Sección: Módulos (solo visible si course_type='modules' — Sesión 48) -->
+    <!-- Etapa X.8: movida ARRIBA de Materiales para cursos con módulos. -->
+    <div class="curso-section" id="modulos-section" style="display:none">
+      <div class="section-head"><h2>📚 Módulos del curso</h2></div>
+      <div id="modulos-content"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></div>
+    </div>
+
+    <!-- Sección: Materiales (Etapa X.8: ahora aparece DESPUÉS de Módulos) -->
+    <div class="curso-section" id="materiales-section">
+      <!-- Header default — visible para cursos sin módulos -->
+      <div class="section-head" id="mat-section-head-default">
+        <h2>📁 Materiales</h2>
+      </div>
+      <!-- Toggle button — visible solo para cursos con módulos (oculto por default) -->
+      <button class="btn-quiz-toggle" id="btn-mat-toggle" onclick="toggleMatSection()" style="display:none;">
+        <span style="font-size:1.05rem;">📚</span>
+        <span id="mat-toggle-label">Materiales generales del curso</span>
+        <span class="quiz-toggle-arrow" id="mat-toggle-arrow">▾</span>
+      </button>
+
+      <div id="mat-section-body">
+        <!-- Etapa X.7: scope selector — filtra la tabla y define lesson_id del próximo INSERT.
+             Etapa X.8: se oculta cuando el curso es de módulos (per-lesson va inline). -->
+        <div class="field" id="mat-scope-wrap" style="margin-bottom:18px; max-width:520px;">
+          <label>Alcance del material</label>
+          <select id="mat-lesson-select" onchange="_renderMaterialesList()">
+            <option value="">— Material general del curso —</option>
+          </select>
+          <p style="font-size:0.74rem;color:var(--gray-text);margin-top:4px;">
+            "General" = visible en la sección Materiales de la página del curso. Si elegís una lección, el material se asocia a esa lección y aparece debajo del video.
+          </p>
+        </div>
+
+        <div class="material-add-form" id="mat-form-wrap">
+          <h3>+ Agregar material</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>Título</label>
+              <input type="text" id="mat-titulo" placeholder="Ej: Guía de entrenamiento semana 1" />
+            </div>
+            <div class="field">
+              <label>Tipo</label>
+              <select id="mat-tipo" onchange="toggleMaterialTipo()">
+                <option value="link">🔗 Link externo</option>
+                <option value="pdf">📄 Subir PDF</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid single" id="mat-link-field" style="margin-top:12px;">
+            <div class="field">
+              <label>URL (Drive, YouTube, Notion, etc.)</label>
+              <input type="url" id="mat-link" placeholder="https://..." />
+            </div>
+          </div>
+          <div class="form-grid single" id="mat-pdf-field" style="margin-top:12px; display:none;">
+            <div class="field">
+              <label>Archivo PDF <span style="font-weight:400;color:var(--gray-text);font-size:0.78rem;">(podés seleccionar hasta 5)</span></label>
+              <div class="mat-file-wrap">
+                <input type="file" id="mat-pdf" accept=".pdf,application/pdf" multiple />
+                <div id="mat-pdf-current" class="mat-pdf-current" style="display:none;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid single" style="margin-top:12px;">
+            <div class="field">
+              <label>Descripción (opcional)</label>
+              <textarea id="mat-desc" placeholder="Breve descripción del material..."></textarea>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-lime" id="btn-save-material" onclick="saveMaterial()">Guardar material</button>
+          </div>
+        </div>
+
+        <div id="mat-content"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Sección: Quiz (solo visible si courses.has_quiz=true) -->
+    <div class="curso-section" id="quiz-section-wrap" style="display:none">
+      <button class="btn-quiz-toggle" id="btn-quiz-toggle" onclick="toggleQuizSection()">
+        <span style="font-size:1.05rem;">📝</span>
+        <span id="quiz-toggle-label">Configurar test</span>
+        <span class="quiz-toggle-arrow" id="quiz-toggle-arrow">▾</span>
+      </button>
+      <div id="quiz-section-content" style="display:none;margin-top:18px;">
+        <div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+    </div>
+
+    <!-- Sección: Foro -->
+    <div class="curso-section" id="forum-section">
+      <div class="section-head"><h2>💬 Foro — consultas de alumnos</h2></div>
+      <div id="foro-content"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></div>
+    </div>
+
+    <!-- Sección: Progreso -->
+    <div class="curso-section">
+      <div class="section-head"><h2>📊 Progreso de alumnos</h2></div>
+      <div id="prog-content"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></div>
+    </div>
+  `;
+
+  // Resetear estado del form de materiales
+  editingMaterialId  = null;
+  editingMaterialUrl = '';
+
+  // Cargar todas las secciones en paralelo
+  try {
+    await Promise.all([
+      loadLiveSection(seq),
+      loadMateriales(seq),
+      loadForo(seq),
+      loadProgreso(courseId, seq),
+      loadModulos(seq),
+      loadQuizSection(seq),
+    ]);
+  } catch (err) {
+    console.error('Error en loadCursoCompleto:', err);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   ─── SECCIÓN: FORO ───────────────────────────────
+══════════════════════════════════════════════════ */
+async function loadForo(seq) {
+  const courseId = currentCourseId;
+  const wrap = document.getElementById('foro-content');
+  if (!wrap) return;
+
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  // RPC SECURITY DEFINER — evita JOIN implícito a profiles (no hay FK directa).
+  // Retorna filas planas: id, content, created_at, parent_id, user_id, full_name, role, is_anonymous, image_urls
+  const { data, error } = await sb.rpc('get_forum_posts', { p_course_id: courseId });
+
+  // Si el curso cambió mientras cargaba, ignorar resultado
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow = document.getElementById('foro-content');
+  if (!wrapNow) return;
+
+  if (error) {
+    console.error('loadForo error (coach):', error);
+    wrapNow.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Error al cargar el foro: ${error.message}</div>`;
+    return;
+  }
+
+  // Fallback de email para usuarios sin full_name:
+  // La RPC retorna full_name pero no email; hacemos una query secundaria para
+  // los user_id con full_name nulo y augmentamos el array en memoria.
+  const allRows = data || [];
+  const nullNameIds = [...new Set(
+    allRows.filter(r => !r.full_name).map(r => r.user_id)
+  )];
+  const emailMap = {};
+  if (nullNameIds.length) {
+    const { data: emailProfiles } = await sb.from('profiles')
+      .select('id, email')
+      .in('id', nullNameIds);
+    (emailProfiles || []).forEach(p => { emailMap[p.id] = p.email || null; });
+  }
+  // Inyectar _email en cada fila que no tiene full_name
+  allRows.forEach(r => {
+    if (!r.full_name) r._email = emailMap[r.user_id] || null;
+  });
+
+  // Separar posts raíz de respuestas
+  const posts   = allRows.filter(r => r.parent_id === null);
+  const replies = allRows.filter(r => r.parent_id !== null);
+
+  // Construir mapa de respuestas por post padre
+  const repliesByParent = {};
+  replies.forEach(r => {
+    if (!repliesByParent[r.parent_id]) repliesByParent[r.parent_id] = [];
+    repliesByParent[r.parent_id].push(r);
+  });
+
+  // Guardar en globals para paginación/búsqueda (orden desc: más nuevo primero)
+  _foroPosts           = posts.slice().reverse();
+  _foroRepliesByParent = repliesByParent;
+  _foroCourseId        = courseId;
+  _foroVisibleCount    = 5;
+  _foroSearchQuery     = '';
+  _replyData           = {};
+  _replyImageUrls      = {};
+
+  renderForoSection();
+}
+
+/* Renderiza los posts con paginación y/o filtro de búsqueda (sin re-query) */
+function renderForoSection() {
+  const wrapNow = document.getElementById('foro-content');
+  if (!wrapNow) return;
+
+  if (!_foroPosts.length) {
+    wrapNow.innerHTML = '<div class="empty-state"><span class="emoji">💬</span>Aún no hay preguntas en este curso.</div>';
+    return;
+  }
+
+  // Filtrar si hay búsqueda activa
+  const q = _foroSearchQuery.trim().toLowerCase();
+  const filtered = q
+    ? _foroPosts.filter(p =>
+        (p.full_name || p._email || '').toLowerCase().includes(q) ||
+        (p.content   || '').toLowerCase().includes(q)
+      )
+    : _foroPosts;
+
+  // En modo búsqueda: mostrar todos los resultados; sin búsqueda: paginar
+  const isSearching = !!q;
+  const visible  = isSearching ? filtered : filtered.slice(0, _foroVisibleCount);
+  const remaining = filtered.length - _foroVisibleCount;
+  const hasMore  = !isSearching && remaining > 0;
+
+  // Contenedor: buscador + lista + contador/ver-más
+  wrapNow.innerHTML = `
+    <div class="foro-search-wrap">
+      <input type="text" id="foro-buscar" class="foro-search-input"
+             placeholder="Buscar por alumno o contenido…"
+             value="${escapeHtml(_foroSearchQuery)}"
+             oninput="onForoBuscar(this.value)">
+    </div>
+    <div id="foro-posts-list"></div>
+    ${isSearching && !filtered.length
+      ? '<div class="empty-state" style="padding:28px 0;"><span class="emoji">🔍</span>Sin resultados para esa búsqueda.</div>'
+      : ''}
+    ${hasMore
+      ? `<div class="foro-ver-mas-wrap">
+           <button class="btn btn-ghost" onclick="foroVerMas()">
+             Ver más (${remaining} restante${remaining !== 1 ? 's' : ''})
+           </button>
+         </div>`
+      : ''}
+  `;
+
+  const postsList = document.getElementById('foro-posts-list');
+  if (!postsList) return;
+
+  _replyData = {};
+  _replyImageUrls = {};
+
+  visible.forEach(post => {
+    const authorName  = post.full_name || post._email || 'Alumno sin nombre';
+    const anonTag     = post.is_anonymous ? ' <span class="forum-anon-tag">· 🎭 anónimo</span>' : '';
+    const dateStr     = new Date(post.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+    const postReplies = _foroRepliesByParent[post.id] || [];
+    const postImgHtml = renderImgGrid(post.image_urls);
+    const courseId    = _foroCourseId;
+
+    const thread = document.createElement('div');
+    thread.className = 'forum-thread';
+    thread.innerHTML = `
+      <div class="forum-thread-head">
+        <div style="flex:1;min-width:0;">
+          <div class="q-meta">${escapeHtml(authorName)}${anonTag} · ${dateStr}</div>
+          <div class="q-text">${linkify(post.content)}</div>
+          ${postImgHtml}
+        </div>
+        <span style="font-size:1.1rem; color:var(--gray-text);">❓</span>
+      </div>
+      <div class="forum-post-actions">
+        <button class="btn-forum-action danger" onclick="eliminarPost('${post.id}')">🗑 Eliminar post</button>
+      </div>
+      <div class="forum-replies" id="replies-${post.id}">
+        ${postReplies.map(r => renderReply(r)).join('')}
+      </div>
+      <div class="forum-reply-form">
+        <textarea id="reply-text-${post.id}" placeholder="Escribí tu respuesta como coach…"></textarea>
+        <div class="forum-img-uploading" id="reply-img-status-${post.id}" style="display:none">Subiendo imagen…</div>
+        <div class="forum-img-preview" id="reply-img-preview-${post.id}" style="display:none"></div>
+        <div class="form-row" style="justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="emoji-picker-btn" onclick="toggleEmojiPicker(this,'reply-text-${post.id}')" title="Insertar emoji">😊</button>
+            <label class="forum-img-attach-btn" title="Adjuntar imagen">
+              📎<input type="file" accept="image/*" multiple style="display:none" onchange="handleReplyImage(this.files,'${post.id}')">
+            </label>
+          </div>
+          <button class="btn btn-lime btn-sm" onclick="submitReply('${post.id}', '${courseId}')">Responder</button>
+        </div>
+      </div>
+    `;
+    postsList.appendChild(thread);
+  });
+}
+
+/* Búsqueda en tiempo real — filtra sobre los posts en memoria */
+function onForoBuscar(value) {
+  _foroSearchQuery  = value;
+  _foroVisibleCount = 5;  // reset al buscar
+  renderForoSection();
+  // Restaurar el foco en el input (se pierde al re-renderizar)
+  const input = document.getElementById('foro-buscar');
+  if (input) {
+    input.focus();
+    // Mover cursor al final
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  }
+}
+
+/* Carga 5 posts más */
+function foroVerMas() {
+  _foroVisibleCount += 5;
+  renderForoSection();
+}
+
+function renderReply(r) {
+  const name    = r.full_name || r._email || 'Alumno sin nombre';
+  const isCoach = r.role === 'coach' || r.role === 'admin';
+  const dateStr = new Date(r.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+  const badgeHtml = isCoach ? `<span class="badge-coach">Coach 🎓</span>` : '';
+  const isOwn   = currentUser && r.user_id === currentUser.id;
+
+  _replyData[r.id] = { content: r.content, image_urls: r.image_urls || [] };
+
+  const imgHtml = renderImgGrid(r.image_urls);
+
+  const actionBtns = isOwn ? `
+    <div class="forum-post-actions" style="padding:4px 0 0;">
+      <button class="btn-forum-action" onclick="iniciarEdicionReply('${r.id}')">✏️ Editar</button>
+      <button class="btn-forum-action danger" onclick="eliminarReply('${r.id}')">🗑 Eliminar</button>
+    </div>` : '';
+
+  const editWrap = isOwn ? `
+    <div class="reply-edit-wrap" id="reply-edit-${r.id}">
+      <textarea class="reply-edit-textarea" id="reply-edit-ta-${r.id}">${escapeHtml(r.content)}</textarea>
+      <div class="reply-edit-row">
+        <button class="btn btn-ghost btn-sm" onclick="cancelarEdicionReply('${r.id}')">Cancelar</button>
+        <button class="btn btn-lime btn-sm" onclick="guardarEdicionReply('${r.id}')">Guardar</button>
+      </div>
+    </div>` : '';
+
+  return `
+    <div class="forum-reply" id="reply-item-${r.id}">
+      <div style="flex:1;">
+        <div class="r-meta">${escapeHtml(name)} ${badgeHtml} <span>· ${dateStr}</span></div>
+        <div class="r-text" id="reply-text-view-${r.id}">${linkify(r.content)}</div>
+        ${imgHtml}
+        ${actionBtns}
+      </div>
+      ${editWrap}
+    </div>
+  `;
+}
+
+async function submitReply(parentId, courseId) {
+  const textarea = document.getElementById(`reply-text-${parentId}`);
+  const content = textarea.value.trim();
+  if (!content && !(_replyImageUrls[parentId]?.length)) {
+    showToast('Escribí una respuesta antes de enviar.', true); return;
+  }
+
+  const payload = {
+    course_id:  courseId,
+    user_id:    currentUser.id,
+    parent_id:  parentId,
+    content:    content || '',
+  };
+  if (_replyImageUrls[parentId]?.length) payload.image_urls = [..._replyImageUrls[parentId]];
+
+  const { error } = await sb.from('forum_posts').insert(payload);
+
+  if (error) {
+    showToast('Error al enviar respuesta: ' + error.message, true);
+    return;
+  }
+
+  // Notificar al autor del post raíz (Sesión 58) — fire & forget, no bloquea UI
+  (async () => {
+    try {
+      const [{ data: post }, { data: course }] = await Promise.all([
+        sb.from('forum_posts').select('user_id').eq('id', parentId).maybeSingle(),
+        sb.from('courses').select('slug').eq('id', courseId).maybeSingle(),
+      ]);
+      if (post && post.user_id && post.user_id !== currentUser.id) {
+        await sb.from('notifications').insert({
+          user_id: post.user_id,
+          title:   '💬 Nueva respuesta del coach',
+          body:    (content || '').substring(0, 80),
+          link:    course?.slug ? `curso.html?slug=${course.slug}` : null,
+        });
+      }
+    } catch (e) { console.warn('notif insert (forum reply):', e); }
+  })();
+
+  textarea.value = '';
+  delete _replyImageUrls[parentId];
+  const previewEl = document.getElementById(`reply-img-preview-${parentId}`);
+  if (previewEl) { previewEl.style.display = 'none'; previewEl.innerHTML = ''; }
+  showToast('Respuesta enviada ✓');
+  loadForo();
+}
+
+async function eliminarPost(postId) {
+  if (!confirm('¿Eliminar esta pregunta? Se borrarán también sus respuestas.')) return;
+  const { error } = await sb.from('forum_posts').delete().eq('id', postId);
+  if (error) { showToast('Error al eliminar: ' + error.message, true); return; }
+  showToast('Post eliminado.');
+  loadForo();
+}
+
+/* ── Edición de respuestas (coach sobre sus propias respuestas) ── */
+function iniciarEdicionReply(replyId) {
+  const editWrap = document.getElementById(`reply-edit-${replyId}`);
+  const viewText = document.getElementById(`reply-text-view-${replyId}`);
+  if (!editWrap || !viewText) return;
+  editWrap.style.display = 'block';
+  viewText.style.display = 'none';
+  const ta = document.getElementById(`reply-edit-ta-${replyId}`);
+  if (ta) { ta.value = _replyData[replyId]?.content || ''; ta.focus(); }
+}
+
+function cancelarEdicionReply(replyId) {
+  const editWrap = document.getElementById(`reply-edit-${replyId}`);
+  const viewText = document.getElementById(`reply-text-view-${replyId}`);
+  if (editWrap) editWrap.style.display = 'none';
+  if (viewText) viewText.style.display = '';
+}
+
+async function guardarEdicionReply(replyId) {
+  const ta = document.getElementById(`reply-edit-ta-${replyId}`);
+  if (!ta) return;
+  const newContent = ta.value.trim();
+  if (!newContent) { showToast('La respuesta no puede estar vacía.', true); return; }
+
+  const { error } = await sb.from('forum_posts').update({ content: newContent }).eq('id', replyId);
+  if (error) { showToast('Error al guardar: ' + error.message, true); return; }
+
+  showToast('Respuesta actualizada ✓');
+  loadForo();
+}
+
+async function eliminarReply(replyId) {
+  if (!confirm('¿Eliminar esta respuesta?')) return;
+  const { error } = await sb.from('forum_posts').delete().eq('id', replyId);
+  if (error) { showToast('Error al eliminar: ' + error.message, true); return; }
+  showToast('Respuesta eliminada.');
+  loadForo();
+}
+
+/* ── Subir imágenes adjuntas a respuesta (max 3) ── */
+async function handleReplyImage(files, parentId) {
+  if (!files || !files.length) return;
+  if (!_replyImageUrls[parentId]) _replyImageUrls[parentId] = [];
+  const remaining = 3 - _replyImageUrls[parentId].length;
+  if (remaining <= 0) { showToast('Máximo 3 imágenes por respuesta.', true); return; }
+  const toUpload = Array.from(files).slice(0, remaining);
+  const statusEl = document.getElementById(`reply-img-status-${parentId}`);
+  if (statusEl) statusEl.style.display = '';
+
+  for (const file of toUpload) {
+    const ext  = file.name.split('.').pop();
+    const path = `forum/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: upErr } = await sb.storage.from('course-materials').upload(path, file, { upsert: false });
+    if (upErr) { showToast('Error al subir imagen: ' + upErr.message, true); continue; }
+    const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+    _replyImageUrls[parentId].push(urlData.publicUrl);
+  }
+
+  if (statusEl) statusEl.style.display = 'none';
+  renderReplyImgPreview(parentId);
+}
+
+function renderReplyImgPreview(parentId) {
+  const previewEl = document.getElementById(`reply-img-preview-${parentId}`);
+  if (!previewEl) return;
+  const urls = _replyImageUrls[parentId] || [];
+  if (!urls.length) { previewEl.style.display = 'none'; previewEl.innerHTML = ''; return; }
+  previewEl.style.display = '';
+  previewEl.innerHTML = urls.map((url, i) =>
+    `<div class="forum-img-preview-item">
+      <img src="${url}" alt="preview">
+      <span class="cancel-img-btn" onclick="cancelarReplyImageAt('${parentId}',${i})">✕</span>
+    </div>`
+  ).join('');
+}
+
+function cancelarReplyImageAt(parentId, index) {
+  if (_replyImageUrls[parentId]) _replyImageUrls[parentId].splice(index, 1);
+  renderReplyImgPreview(parentId);
+}
+
+/* ── Grilla de imágenes en posts del foro ── */
+function renderImgGrid(urls) {
+  if (!urls || !urls.length) return '';
+  return `<div class="forum-img-grid">${urls.map(u =>
+    `<img src="${u}" alt="imagen" onclick="window.open('${u}','_blank')">`
+  ).join('')}</div>`;
+}
+
+/* ── linkify: detecta URLs y las convierte en <a> clicables ── */
+function linkify(raw) {
+  if (!raw) return '';
+  const urlRegex = /https?:\/\/[^\s<>"']+/g;
+  let result = '';
+  let lastIndex = 0;
+  let match;
+  while ((match = urlRegex.exec(raw)) !== null) {
+    result += escapeHtml(raw.slice(lastIndex, match.index));
+    const url = match[0];
+    result += `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--lime);word-break:break-all;">${escapeHtml(url)}</a>`;
+    lastIndex = match.index + url.length;
+  }
+  result += escapeHtml(raw.slice(lastIndex));
+  return result;
+}
+
+/* ── Emoji picker ── */
+const EMOJIS = [
+  '😊','😂','🥰','😍','🤩','👍','🙌','💪','🔥','⚡',
+  '🎯','✅','❌','⚠️','💡','📌','🏋️','🤸','🚴','🏃',
+  '💬','❓','📣','🎉','🥇','💯','👏','😅','🤔','💪🏼',
+];
+let _emojiTargetId = null;
+const _emojiPicker = (() => {
+  const div = document.createElement('div');
+  div.className = 'emoji-picker-wrap';
+  EMOJIS.forEach(e => {
+    const span = document.createElement('span');
+    span.className = 'emoji-item';
+    span.textContent = e;
+    span.onclick = () => insertEmoji(e);
+    div.appendChild(span);
+  });
+  document.body.appendChild(div);
+  document.addEventListener('click', (ev) => {
+    if (!div.contains(ev.target) && !ev.target.classList.contains('emoji-picker-btn')) {
+      div.classList.remove('open');
+    }
+  });
+  return div;
+})();
+
+function toggleEmojiPicker(btn, taId) {
+  _emojiTargetId = taId;
+  const rect = btn.getBoundingClientRect();
+  const pickerW = 230;
+  let left = rect.left;
+  if (left + pickerW > window.innerWidth - 8) left = window.innerWidth - pickerW - 8;
+  _emojiPicker.style.left = left + 'px';
+  _emojiPicker.style.top  = (rect.bottom + 6) + 'px';
+  _emojiPicker.classList.toggle('open');
+}
+
+function insertEmoji(emoji) {
+  if (!_emojiTargetId) return;
+  const ta = document.getElementById(_emojiTargetId);
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + emoji.length;
+  ta.focus();
+  _emojiPicker.classList.remove('open');
+}
+
+/* ══════════════════════════════════════════════════
+   ─── SECCIÓN: MATERIALES ─────────────────────────
+══════════════════════════════════════════════════ */
+let editingMaterialId  = null;
+let editingMaterialUrl = ''; // URL actual al editar un PDF (para no re-subir si no cambia)
+
+function getMaterialType(url) {
+  if (!url) return 'link';
+  return url.includes('/storage/v1/object/public/course-materials/') ? 'pdf' : 'link';
+}
+function getMaterialIcon(url) {
+  return getMaterialType(url) === 'pdf' ? '📄' : '🔗';
+}
+function getMaterialLinkText(url) {
+  return getMaterialType(url) === 'pdf' ? 'Ver PDF' : 'Ver archivo';
+}
+
+function toggleMaterialTipo() {
+  const tipo = document.getElementById('mat-tipo').value;
+  document.getElementById('mat-link-field').style.display = tipo === 'link' ? '' : 'none';
+  document.getElementById('mat-pdf-field').style.display  = tipo === 'pdf'  ? '' : 'none';
+}
+
+async function loadMateriales(seq) {
+  const courseId = currentCourseId;
+  const wrap = document.getElementById('mat-content');
+  if (!wrap) return;
+
+  // Reset form
+  editingMaterialId = null;
+  clearMaterialForm();
+  const formTitle = document.querySelector('#mat-form-wrap h3');
+  if (formTitle) formTitle.textContent = '+ Agregar material';
+
+  // Etapa X.7: cuando cambia el curso, repoblar el selector de alcance y resetearlo a "general"
+  await loadLessonsForCourse(courseId);
+  if (seq !== undefined && seq !== _loadSeq) return;
+
+  // Cargar y renderizar la tabla con el scope actual del selector
+  await _renderMaterialesList(seq);
+}
+
+// Etapa X.7: pobla el selector #mat-lesson-select con módulos+lecciones del curso.
+// Lo deja reseteado en "" (general) cada vez que cambia el curso.
+async function loadLessonsForCourse(courseId) {
+  const sel = document.getElementById('mat-lesson-select');
+  if (!sel) return;
+
+  // Reset a la opción default
+  sel.innerHTML = '<option value="">— Material general del curso —</option>';
+  sel.value = '';
+  if (!courseId) return;
+
+  const { data: modules, error: errMods } = await sb
+    .from('course_modules').select('id, title, order_num')
+    .eq('course_id', courseId).order('order_num');
+  if (errMods) {
+    console.error('loadLessonsForCourse modules:', errMods);
+    return;
+  }
+  if (!modules || !modules.length) return; // sin módulos → solo la opción general
+
+  const modIds = modules.map(m => m.id);
+  const { data: lessons, error: errLes } = await sb
+    .from('course_lessons').select('id, module_id, title, order_num')
+    .in('module_id', modIds).order('order_num');
+  if (errLes) {
+    console.error('loadLessonsForCourse lessons:', errLes);
+    return;
+  }
+
+  const lessonsByMod = {};
+  (lessons || []).forEach(l => {
+    if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
+    lessonsByMod[l.module_id].push(l);
+  });
+
+  let html = '<option value="">— Material general del curso —</option>';
+  modules.forEach((m, mi) => {
+    const ls = lessonsByMod[m.id] || [];
+    if (!ls.length) return;
+    html += `<optgroup label="${escapeHtml(m.title || `Módulo ${mi + 1}`)}">`;
+    ls.forEach((l, li) => {
+      html += `<option value="${escapeHtml(l.id)}">${escapeHtml(l.title || `Lección ${li + 1}`)}</option>`;
+    });
+    html += `</optgroup>`;
+  });
+  sel.innerHTML = html;
+  sel.value = '';
+}
+
+// Etapa X.7: re-renderiza solo la tabla de materiales según el scope actual del selector.
+// Se llama desde loadMateriales(seq) y desde el onchange del selector.
+async function _renderMaterialesList(seq) {
+  const courseId = currentCourseId;
+  const wrap = document.getElementById('mat-content');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  const lessonSel = document.getElementById('mat-lesson-select');
+  const selectedLessonId = lessonSel ? lessonSel.value : '';
+
+  let q = sb.from('course_materials')
+    .select('id, title, description, drive_url, lesson_id, created_at')
+    .eq('course_id', courseId);
+  q = selectedLessonId ? q.eq('lesson_id', selectedLessonId) : q.is('lesson_id', null);
+  q = q.order('created_at', { ascending: false });
+
+  const { data: mats, error } = await q;
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow = document.getElementById('mat-content');
+  if (!wrapNow) return;
+
+  if (error) {
+    wrapNow.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Error al cargar materiales: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  if (!mats || mats.length === 0) {
+    const emptyMsg = selectedLessonId
+      ? 'Esta lección aún no tiene materiales cargados.'
+      : 'No hay materiales generales cargados para este curso.';
+    wrapNow.innerHTML = `<div class="empty-state"><span class="emoji">📁</span>${emptyMsg}</div>`;
+    return;
+  }
+
+  wrapNow.innerHTML = `
+    <div class="card">
+      <table class="materials-table">
+        <thead>
+          <tr>
+            <th>Material</th>
+            <th>Archivo / Link</th>
+            <th>Fecha</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${mats.map(m => `
+            <tr>
+              <td>
+                <div class="mat-title">${escapeHtml(m.title)}</div>
+                ${m.description ? `<div class="mat-desc">${escapeHtml(m.description)}</div>` : ''}
+              </td>
+              <td>
+                ${m.drive_url
+                  ? `<a href="${escapeHtml(m.drive_url)}" target="_blank" class="drive-link">${getMaterialIcon(m.drive_url)} ${getMaterialLinkText(m.drive_url)}</a>`
+                  : '<span style="color:var(--gray-text);font-size:0.8rem;">—</span>'}
+              </td>
+              <td style="color:var(--gray-text); font-size:0.8rem; white-space:nowrap;">
+                ${new Date(m.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' })}
+              </td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-sm" onclick="editMaterial('${m.id}', ${JSON.stringify(m).replace(/"/g,'&quot;')})">Editar</button>
+                <button class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="deleteMaterial('${m.id}')">Eliminar</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function editMaterial(id, mat) {
+  editingMaterialId  = id;
+  editingMaterialUrl = mat.drive_url || '';
+
+  document.getElementById('mat-titulo').value = mat.title || '';
+  document.getElementById('mat-desc').value   = mat.description || '';
+
+  const tipo = getMaterialType(mat.drive_url);
+  document.getElementById('mat-tipo').value = tipo;
+  toggleMaterialTipo();
+
+  if (tipo === 'link') {
+    document.getElementById('mat-link').value = mat.drive_url || '';
+  } else {
+    const cur = document.getElementById('mat-pdf-current');
+    if (cur && mat.drive_url) {
+      cur.style.display = 'flex';
+      cur.innerHTML = `📄 PDF actual: <a href="${escapeHtml(mat.drive_url)}" target="_blank" class="drive-link" style="margin-left:4px;">ver archivo</a> <span style="color:var(--gray-text);font-size:0.75rem;">(subí uno nuevo para reemplazarlo)</span>`;
+    }
+    document.getElementById('mat-pdf').value = '';
+  }
+
+  const formTitle = document.querySelector('#mat-form-wrap h3');
+  if (formTitle) formTitle.textContent = '✏️ Editando material';
+  const formWrap = document.getElementById('mat-form-wrap');
+  if (formWrap) formWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function clearMaterialForm() {
+  const t = document.getElementById('mat-titulo'); if (t) t.value = '';
+  const d = document.getElementById('mat-desc');   if (d) d.value = '';
+  const l = document.getElementById('mat-link');   if (l) l.value = '';
+  const tp = document.getElementById('mat-tipo');  if (tp) tp.value = 'link';
+  const p = document.getElementById('mat-pdf');    if (p) p.value = '';
+  const cur = document.getElementById('mat-pdf-current');
+  if (cur) { cur.style.display = 'none'; cur.innerHTML = ''; }
+  toggleMaterialTipo();
+  editingMaterialUrl = '';
+}
+
+async function saveMaterial() {
+  const courseId = currentCourseId;
+  if (!courseId) { showToast('Seleccioná un curso primero.', true); return; }
+
+  const title       = document.getElementById('mat-titulo').value.trim();
+  const description = document.getElementById('mat-desc').value.trim();
+  const tipo        = document.getElementById('mat-tipo').value;
+
+  if (!title) { showToast('El título es obligatorio.', true); return; }
+
+  // Etapa X.7: scope del material — leer del selector. "" → general (lesson_id NULL)
+  const lessonSel        = document.getElementById('mat-lesson-select');
+  const selectedLessonId = lessonSel ? (lessonSel.value || null) : null;
+
+  const btn = document.getElementById('btn-save-material');
+  btn.disabled = true;
+
+  // Etapa X.7: si es PDF + INSERT mode + múltiples archivos → loop separado.
+  // Edit mode y single-file siguen por el flujo original (preserva la lógica vieja).
+  if (!editingMaterialId && tipo === 'pdf') {
+    const _files = Array.from(document.getElementById('mat-pdf').files || []);
+    if (_files.length > 1) {
+      if (_files.length > 5) {
+        showToast('Máximo 5 archivos PDF por carga.', true);
+        btn.disabled = false; btn.textContent = 'Guardar material';
+        return;
+      }
+      try {
+        const _urls = [];
+        for (let i = 0; i < _files.length; i++) {
+          btn.textContent = `Subiendo ${i + 1} de ${_files.length}...`;
+          const _f = _files[i];
+          const _safe = title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+          const _path = `${courseId}/${Date.now()}-${_safe}-${i}-${Math.random().toString(36).slice(2,7)}.pdf`;
+          const { error: _upErr } = await sb.storage.from('course-materials')
+            .upload(_path, _f, { cacheControl: '3600', upsert: false });
+          if (_upErr) throw new Error('Subida PDF: ' + _upErr.message);
+          const { data: _ud } = sb.storage.from('course-materials').getPublicUrl(_path);
+          _urls.push(_ud.publicUrl);
+        }
+        btn.textContent = 'Guardando...';
+        const _rows = _urls.map((u, i) => ({
+          course_id:   courseId,
+          uploaded_by: currentUser.id,
+          lesson_id:   selectedLessonId,
+          title:       `${title} (${i + 1})`,
+          description,
+          drive_url:   u,
+        }));
+        const { error: _insErr } = await sb.from('course_materials').insert(_rows);
+        if (_insErr) throw new Error(_insErr.message);
+        showToast(`${_files.length} materiales agregados ✓`);
+        editingMaterialId = null;
+        clearMaterialForm();
+        const _ft = document.querySelector('#mat-form-wrap h3');
+        if (_ft) _ft.textContent = '+ Agregar material';
+        await _renderMaterialesList();
+      } catch (e) {
+        console.error('saveMaterial multi-PDF:', e);
+        showToast('Error: ' + (e.message || e), true);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar material';
+      }
+      return;  // multi-PDF flow done; skip the legacy single-file path below
+    }
+  }
+
+  let drive_url = '';
+
+  if (tipo === 'link') {
+    drive_url = document.getElementById('mat-link').value.trim();
+
+  } else {
+    const fileInput = document.getElementById('mat-pdf');
+    const file      = fileInput.files[0];
+
+    if (file) {
+      btn.textContent = 'Subiendo PDF...';
+      const safeName = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+      const path     = `${courseId}/${Date.now()}-${safeName}.pdf`;
+
+      const { error: uploadErr } = await sb.storage
+        .from('course-materials')
+        .upload(path, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadErr) {
+        showToast('Error al subir el PDF: ' + uploadErr.message, true);
+        btn.disabled = false; btn.textContent = 'Guardar material';
+        return;
+      }
+
+      const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+      drive_url = urlData.publicUrl;
+
+    } else if (editingMaterialId && editingMaterialUrl) {
+      drive_url = editingMaterialUrl;
+    } else {
+      showToast('Seleccioná un archivo PDF.', true);
+      btn.disabled = false; btn.textContent = 'Guardar material';
+      return;
+    }
+  }
+
+  btn.textContent = 'Guardando...';
+
+  let error;
+  if (editingMaterialId) {
+    // UPDATE no toca lesson_id — preserva el scope original del material editado.
+    ({ error } = await sb.from('course_materials')
+      .update({ title, description, drive_url })
+      .eq('id', editingMaterialId));
+  } else {
+    // Etapa X.7: INSERT incluye lesson_id (null si scope = general).
+    ({ error } = await sb.from('course_materials')
+      .insert({ course_id: courseId, uploaded_by: currentUser.id, lesson_id: selectedLessonId, title, description, drive_url }));
+  }
+
+  btn.disabled = false; btn.textContent = 'Guardar material';
+
+  if (error) { showToast('Error al guardar: ' + error.message, true); return; }
+
+  showToast(editingMaterialId ? 'Material actualizado ✓' : 'Material agregado ✓');
+  editingMaterialId = null;
+  clearMaterialForm();
+  const formTitle = document.querySelector('#mat-form-wrap h3');
+  if (formTitle) formTitle.textContent = '+ Agregar material';
+  // Etapa X.7: re-render preservando el scope actual del selector (no resetea)
+  await _renderMaterialesList();
+}
+
+async function deleteMaterial(id) {
+  if (!confirm('¿Eliminar este material? Esta acción no se puede deshacer.')) return;
+
+  const { error } = await sb.from('course_materials').delete().eq('id', id);
+  if (error) { showToast('Error al eliminar: ' + error.message, true); return; }
+
+  showToast('Material eliminado.');
+  // Etapa X.7: re-render preservando el scope actual (no resetea el selector)
+  await _renderMaterialesList();
+}
+
+/* ══════════════════════════════════════════════════
+   ─── SECCIÓN: PROGRESO ───────────────────────────
+══════════════════════════════════════════════════ */
+async function loadProgreso(courseId, seq) {
+  const wrap = document.getElementById('prog-content');
+  if (!wrap) return;
+  if (!courseId) return;
+
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  // RPC SECURITY DEFINER — bypasea RLS de profiles, user_courses y video_progress.
+  // Retorna una fila por alumno inscripto: { user_id, full_name, email, completed, total }
+  const { data, error } = await sb.rpc('get_course_progress', { p_course_id: courseId });
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow = document.getElementById('prog-content');
+  if (!wrapNow) return;
+
+  if (error) {
+    console.error('loadProgreso error:', error);
+    wrapNow.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Error al cargar el progreso: ${error.message}</div>`;
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    wrapNow.innerHTML = '<div class="empty-state"><span class="emoji">📊</span>No hay alumnos inscriptos en este curso.</div>';
+    return;
+  }
+
+  const rows = data.map(r => {
+    const name      = r.full_name || r.email || 'Alumno sin nombre';
+    const completed = r.completed || 0;
+    const total     = r.total > 0 ? r.total : 0;
+    const hasTotal  = total > 0;
+    const pct       = hasTotal ? Math.round((completed / total) * 100) : 0;
+    const fillClass = pct >= 80 ? '' : pct >= 40 ? 'mid' : 'low';
+    return { name, completed, total, hasTotal, pct, fillClass };
+  }).sort((a, b) => {
+    // Alumnos sin total configurado van al final
+    if (a.hasTotal && !b.hasTotal) return -1;
+    if (!a.hasTotal && b.hasTotal) return  1;
+    return b.pct - a.pct;
+  });
+
+  wrapNow.innerHTML = `
+    <div class="card">
+      <table class="progress-table">
+        <thead>
+          <tr>
+            <th>Alumno</th>
+            <th>Videos completados</th>
+            <th>Progreso</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td style="font-weight:500;">${escapeHtml(r.name)}</td>
+              <td style="color:var(--gray-text);">
+                ${r.hasTotal
+                  ? `${r.completed} / ${r.total}`
+                  : `${r.completed} video${r.completed !== 1 ? 's' : ''} completado${r.completed !== 1 ? 's' : ''}`
+                }
+              </td>
+              <td>
+                ${r.hasTotal
+                  ? `<div class="pct-bar-wrap">
+                      <div class="pct-bar">
+                        <div class="pct-fill ${r.fillClass}" style="width:${r.pct}%;"></div>
+                      </div>
+                      <span class="pct-label" style="color:${r.pct >= 80 ? 'var(--lime)' : r.pct >= 40 ? '#f6c90e' : 'var(--red)'};">${r.pct}%</span>
+                    </div>`
+                  : `<span class="badge-no-total">Total no configurado</span>`
+                }
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ══════════════════════════════════════════════════
+   ─── SECCIÓN: CLASE EN VIVO ──────────────────────
+══════════════════════════════════════════════════ */
+async function loadLiveSection(seq) {
+  const courseId = currentCourseId;
+  const wrap = document.getElementById('live-content');
+  if (!wrap) return;
+
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  const { data: course, error } = await sb
+    .from('courses')
+    .select('id, title, is_live, live_url, live_date, live_completed, recording_url, recordings')
+    .eq('id', courseId)
+    .single();
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow = document.getElementById('live-content');
+  if (!wrapNow) return;
+
+  if (error || !course) {
+    wrapNow.innerHTML = '<div class="empty-state">⚠️ Error al cargar los datos del curso.</div>';
+    return;
+  }
+
+  if (!course.is_live) {
+    wrapNow.innerHTML = `
+      <div class="card"><div class="card-body">
+        <p style="color:var(--gray-text);font-size:0.875rem;">Este curso no es una clase en vivo. No hay acciones disponibles.</p>
+      </div></div>`;
+    return;
+  }
+
+  if (course.live_completed) {
+    // Construir lista inicial: prioridad a course.recordings; fallback al recording_url legacy.
+    const initial = (Array.isArray(course.recordings) ? course.recordings : [])
+      .filter(r => r && (r.title || r.url))
+      .map(r => ({ title: r.title || '', url: r.url || '' }));
+    if (initial.length === 0 && course.recording_url) {
+      initial.push({ title: 'Clase 1', url: course.recording_url });
+    }
+
+    wrapNow.innerHTML = `
+      <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <p style="color:var(--green);font-weight:700;font-size:1rem;margin-bottom:6px;">✅ Clase finalizada</p>
+          <p style="color:var(--gray-text);font-size:0.875rem;">El certificado ya está habilitado para todos los alumnos inscriptos.</p>
+        </div>
+
+        <div>
+          <label style="display:block;font-size:0.77rem;color:var(--gray-text);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Grabaciones de la clase</label>
+          <div class="rec-list" id="rec-list"></div>
+          <button type="button" class="btn-add-rec" onclick="addRecRow()">+ Agregar clase</button>
+        </div>
+
+        <div id="rec-action-msg" style="display:none;font-size:0.85rem;padding:8px 12px;border-radius:8px;"></div>
+
+        <div>
+          <button class="btn btn-lime" id="btn-save-recs" onclick="saveRecordings()">Guardar grabaciones</button>
+        </div>
+      </div></div>`;
+
+    // Pre-poblar las filas (al menos una vacía si no hay nada cargado)
+    renderRecRows(initial.length > 0 ? initial : [{ title: '', url: '' }]);
+    return;
+  }
+
+  // is_live = true, live_completed = false → mostrar datos + botón finalizar
+  const dateStr = course.live_date
+    ? new Date(course.live_date).toLocaleString('es-AR', {
+        weekday: 'long', day: '2-digit', month: 'long',
+        year: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    : null;
+
+  wrapNow.innerHTML = `
+    <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+      <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--gray-text);">Clase en vivo activa</p>
+      ${dateStr ? `<p style="font-size:0.875rem;">📅 ${escapeHtml(dateStr)}</p>` : ''}
+      ${course.live_url
+        ? `<p><a href="${escapeHtml(course.live_url)}" target="_blank" rel="noopener noreferrer"
+               style="color:var(--lime);font-weight:600;font-size:0.88rem;word-break:break-all;">${escapeHtml(course.live_url)}</a></p>`
+        : ''}
+      <div id="live-action-msg" style="display:none;font-size:0.85rem;padding:8px 12px;border-radius:8px;"></div>
+      <div>
+        <button class="btn btn-lime" id="btn-finalizar-clase" onclick="finalizarClase('${escapeHtml(course.id)}')">
+          ✅ Finalizar clase y liberar certificado
+        </button>
+      </div>
+    </div></div>`;
+}
+
+async function finalizarClase(courseId) {
+  if (!confirm('¿Confirmar finalización de la clase?\nEsto habilitará el certificado para todos los alumnos inscriptos. Esta acción no se puede deshacer.')) return;
+
+  const btn   = document.getElementById('btn-finalizar-clase');
+  const msgEl = document.getElementById('live-action-msg');
+
+  btn.disabled    = true;
+  btn.textContent = 'Procesando...';
+
+  const { error } = await sb.rpc('set_live_completed', { p_course_id: courseId });
+
+  if (error) {
+    msgEl.style.display     = '';
+    msgEl.style.color       = 'var(--red)';
+    msgEl.style.background  = 'rgba(252,129,129,0.08)';
+    msgEl.style.border      = '1px solid rgba(252,129,129,0.25)';
+    msgEl.textContent       = '⚠️ Error: ' + error.message;
+    btn.disabled            = false;
+    btn.textContent         = '✅ Finalizar clase y liberar certificado';
+    return;
+  }
+
+  msgEl.style.display    = '';
+  msgEl.style.color      = 'var(--green)';
+  msgEl.style.background = 'rgba(104,211,145,0.08)';
+  msgEl.style.border     = '1px solid rgba(104,211,145,0.25)';
+  msgEl.textContent      = 'Certificado liberado para los alumnos.';
+
+  setTimeout(() => loadLiveSection(), 1400);
+}
+
+function toYoutubeEmbed(url) {
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+}
+
+// ── Helpers de la lista de grabaciones (post-live) ──
+function addRecRow(title = '', url = '') {
+  const list = document.getElementById('rec-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'rec-row';
+  row.innerHTML = `
+    <input class="field-input" type="text" placeholder="Título de la clase" value="${escapeHtml(title)}" />
+    <input class="field-input url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${escapeHtml(url)}" />
+    <button type="button" class="btn-icon-rec" title="Quitar" onclick="this.closest('.rec-row').remove()">×</button>
+  `;
+  list.appendChild(row);
+}
+
+function renderRecRows(recs) {
+  const list = document.getElementById('rec-list');
+  if (!list) return;
+  list.innerHTML = '';
+  (recs || []).forEach(r => addRecRow(r.title || '', r.url || ''));
+}
+
+async function saveRecordings() {
+  const btn   = document.getElementById('btn-save-recs');
+  const msgEl = document.getElementById('rec-action-msg');
+  if (!btn || !msgEl) return;
+
+  const showError = (text) => {
+    msgEl.style.display    = '';
+    msgEl.style.color      = 'var(--red)';
+    msgEl.style.background = 'rgba(252,129,129,0.08)';
+    msgEl.style.border     = '1px solid rgba(252,129,129,0.25)';
+    msgEl.textContent      = '⚠️ ' + text;
+    btn.disabled    = false;
+    btn.textContent = 'Guardar grabaciones';
+  };
+
+  // Recolectar filas, normalizar URLs (in-place) a formato embed, descartar vacías
+  const rows = document.querySelectorAll('#rec-list .rec-row');
+  const recs = [];
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    const title  = inputs[0].value.trim();
+    const rawUrl = inputs[1].value.trim();
+    const url    = rawUrl ? toYoutubeEmbed(rawUrl) : '';
+    inputs[1].value = url;          // refleja embed normalizado en el input
+    if (title || url) recs.push({ title, url });
+  });
+
+  btn.disabled    = true;
+  btn.textContent = 'Guardando...';
+
+  console.log('Guardando recordings:', recs, 'para curso:', currentCourseId);
+
+  // RPC SECURITY DEFINER — pasa el array como JSON serializado.
+  // sb.rpc NO admite .select() ni modificadores PostgREST encadenados.
+  const { error } = await sb.rpc('set_recordings', {
+    p_course_id:  currentCourseId,
+    p_recordings: JSON.stringify(recs),
+  });
+
+  if (error) {
+    console.error('Error RPC set_recordings:', error);
+    showError('Error al guardar: ' + error.message);
+    return;
+  }
+
+  console.log('RPC set_recordings OK. Filas:', recs.length);
+
+  msgEl.style.display    = '';
+  msgEl.style.color      = 'var(--green)';
+  msgEl.style.background = 'rgba(104,211,145,0.08)';
+  msgEl.style.border     = '1px solid rgba(104,211,145,0.25)';
+  msgEl.textContent      = recs.length > 0
+    ? `✅ ${recs.length} grabación${recs.length !== 1 ? 'es' : ''} guardada${recs.length !== 1 ? 's' : ''}.`
+    : 'Grabaciones eliminadas.';
+
+  btn.disabled    = false;
+  btn.textContent = 'Guardar grabaciones';
+}
+
+/* ══════════════════════════════════════════════════
+   ─── SECCIÓN: MÓDULOS (course_type='modules' — Sesión 48) ─
+══════════════════════════════════════════════════ */
+async function loadModulos(seq) {
+  const courseId = currentCourseId;
+  const wrap     = document.getElementById('modulos-content');
+  const section  = document.getElementById('modulos-section');
+  if (!wrap || !section) return;
+
+  // Detectar course_type del curso
+  const { data: course, error } = await sb
+    .from('courses').select('course_type').eq('id', courseId).single();
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow = document.getElementById('modulos-content');
+  if (!wrapNow) return;
+
+  if (error || !course || course.course_type !== 'modules') {
+    section.style.display = 'none';
+    // Etapa X.8: en modo NO-modules, asegurar que la sección Materiales muestre su header default y NO el toggle
+    _applyMatSectionMode(false);
+    return;
+  }
+  section.style.display = '';
+  // Etapa X.8: en modo modules, la sección Materiales generales se colapsa detrás del botón
+  _applyMatSectionMode(true);
+
+  // Cargar módulos+lecciones existentes
+  const modules = await loadCoachModulesForCourse(courseId);
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow2 = document.getElementById('modulos-content');
+  if (!wrapNow2) return;
+
+  wrapNow2.innerHTML = `
+    <p style="color:var(--gray-text);font-size:0.85rem;margin-bottom:14px;">
+      Gestioná los módulos y lecciones del curso. Los cambios se aplican al guardar.
+    </p>
+    <div class="mod-list" id="mod-list"></div>
+    <button type="button" class="cf-add-lesson-btn mod-add-lesson-btn" onclick="addCoachModuleRow()" style="border-style:dashed;">
+      + Agregar módulo
+    </button>
+    <div id="mod-action-msg" style="display:none;margin-top:12px;font-size:0.85rem;padding:8px 12px;border-radius:8px;"></div>
+    <div class="form-actions" style="margin-top:14px;">
+      <button class="btn btn-lime" id="btn-save-mods" onclick="saveCoachModules()">Guardar módulos</button>
+    </div>
+  `;
+
+  // Pre-poblar
+  (modules || []).forEach(m => addCoachModuleRow(m.id || '', m.title || '', m.lessons || []));
+  if (!modules.length) addCoachModuleRow();
+
+  // Etapa X.8: preload counts de materiales por lección → setea los badges del 📚
+  const allLessonIds = (modules || []).flatMap(m => (m.lessons || []).map(l => l.id).filter(Boolean));
+  if (allLessonIds.length) {
+    preloadLessonMatCounts(allLessonIds);  // fire-and-forget
+  }
+}
+
+// Etapa X.8: ajusta visibilidad del header/toggle/scope-selector de la sección Materiales
+// según si el curso es de módulos (true) o no (false). Ningún cambio de queries.
+function _applyMatSectionMode(isModules) {
+  const headDefault = document.getElementById('mat-section-head-default');
+  const btnToggle   = document.getElementById('btn-mat-toggle');
+  const body        = document.getElementById('mat-section-body');
+  const scopeWrap   = document.getElementById('mat-scope-wrap');
+  if (!headDefault || !btnToggle || !body) return;
+
+  if (isModules) {
+    // Modo modules: header oculto, toggle visible, body colapsado, scope selector oculto
+    headDefault.style.display = 'none';
+    btnToggle.style.display   = '';
+    btnToggle.classList.remove('open');
+    body.style.display        = 'none';
+    if (scopeWrap) scopeWrap.style.display = 'none';
+  } else {
+    // Modo no-modules: header visible, toggle oculto, body visible, scope selector oculto
+    // (el scope selector solo tiene sentido si hay lecciones; sin módulos no hace falta).
+    headDefault.style.display = '';
+    btnToggle.style.display   = 'none';
+    body.style.display        = '';
+    if (scopeWrap) scopeWrap.style.display = 'none';
+  }
+}
+
+async function loadCoachModulesForCourse(courseId) {
+  const { data: modules } = await sb
+    .from('course_modules').select('id, title, order_num').eq('course_id', courseId).order('order_num');
+  if (!modules?.length) return [];
+  const modIds = modules.map(m => m.id);
+  const { data: lessons } = await sb
+    .from('course_lessons').select('id, module_id, title, video_url, order_num').in('module_id', modIds).order('order_num');
+  const lessonsByMod = {};
+  (lessons || []).forEach(l => {
+    if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
+    lessonsByMod[l.module_id].push(l);
+  });
+  return modules.map(m => ({ ...m, lessons: lessonsByMod[m.id] || [] }));
+}
+
+function addCoachModuleRow(modId = '', title = '', lessons = []) {
+  const list = document.getElementById('mod-list');
+  if (!list) return;
+  const card = document.createElement('div');
+  card.className = 'mod-card';
+  if (modId) card.dataset.modId = modId;
+  card.innerHTML = `
+    <div class="mod-card-head">
+      <input class="field-input" type="text" placeholder="Título del módulo" value="${escapeHtml(title)}" />
+      <button type="button" class="btn-icon-rec" title="Eliminar módulo" onclick="this.closest('.mod-card').remove()">×</button>
+    </div>
+    <div class="mod-lessons-list"></div>
+    <button type="button" class="mod-add-lesson-btn" onclick="addCoachLessonRow(this.previousElementSibling)">+ Agregar lección</button>
+  `;
+  list.appendChild(card);
+  const lessonsList = card.querySelector('.mod-lessons-list');
+  (lessons || []).forEach(l => addCoachLessonRow(lessonsList, l.id || '', l.title || '', l.video_url || ''));
+}
+
+function addCoachLessonRow(listEl, lessonId = '', title = '', url = '') {
+  if (!listEl) return;
+  // Etapa X.8: cada lección queda envuelta en un .mod-lesson-block que también
+  // contiene el panel inline de materiales por lección. El selector
+  // .mod-lesson-row sigue funcionando para getCoachModulesFromForm/saveCoachModules
+  // (los inputs siguen estando ahí, intactos).
+  const block = document.createElement('div');
+  block.className = 'mod-lesson-block';
+  if (lessonId) block.dataset.lessonId = lessonId;
+
+  const matsBtn = lessonId
+    ? `<button type="button" class="btn-lesson-mats" title="Materiales de esta lección"
+               onclick="toggleLessonMats('${lessonId}')">
+         📚<span class="lmat-badge" id="lmat-badge-${lessonId}" style="display:none">0</span>
+       </button>`
+    : `<button type="button" class="btn-lesson-mats" title="Guardá los módulos para poder asignar materiales a esta lección"
+               disabled style="opacity:.4;cursor:not-allowed;">📚</button>`;
+
+  block.innerHTML = `
+    <div class="mod-lesson-row" ${lessonId ? `data-lesson-id="${escapeHtml(lessonId)}"` : ''}>
+      <input class="field-input" type="text" placeholder="Título de la lección" value="${escapeHtml(title)}" />
+      <input class="field-input url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${escapeHtml(url)}" />
+      ${matsBtn}
+      <button type="button" class="btn-icon-rec" title="Eliminar" onclick="this.closest('.mod-lesson-block').remove()">×</button>
+    </div>
+    ${lessonId
+      ? `<div class="mod-lesson-mats" id="lmat-panel-${escapeHtml(lessonId)}" style="display:none;"></div>`
+      : ''}
+  `;
+
+  // dataset.lessonId también en la fila (compatibilidad con código viejo)
+  if (lessonId) {
+    const innerRow = block.querySelector('.mod-lesson-row');
+    if (innerRow) innerRow.dataset.lessonId = lessonId;
+  }
+  listEl.appendChild(block);
+}
+
+/* ══════════════════════════════════════════════════
+   ─── MATERIALES POR LECCIÓN — UI inline (Etapa X.8) ─
+   Reusa la tabla course_materials con lesson_id apuntando a la lección.
+   El panel se monta on-demand al primer toggle.
+══════════════════════════════════════════════════ */
+async function toggleLessonMats(lessonId) {
+  const panel = document.getElementById(`lmat-panel-${lessonId}`);
+  if (!panel) return;
+  const isCollapsed = panel.style.display === 'none' || !panel.style.display;
+  if (isCollapsed) {
+    panel.style.display = 'block';
+    if (!panel.dataset.loaded) {
+      await loadLessonMaterialsCoach(lessonId);
+      panel.dataset.loaded = '1';
+    }
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function loadLessonMaterialsCoach(lessonId) {
+  const panel = document.getElementById(`lmat-panel-${lessonId}`);
+  if (!panel) return;
+  const { data, error } = await sb.from('course_materials')
+    .select('id, title, drive_url, lesson_id, created_at')
+    .eq('lesson_id', lessonId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    panel.innerHTML = `<div class="lmat-empty" style="color:var(--red);">Error: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  renderLessonMaterialsList(lessonId, data || []);
+  updateLessonMatsBadge(lessonId, (data || []).length);
+}
+
+function renderLessonMaterialsList(lessonId, mats) {
+  const panel = document.getElementById(`lmat-panel-${lessonId}`);
+  if (!panel) return;
+  const safeId = escapeHtml(lessonId);
+  const listHtml = mats.length
+    ? `<div class="lesson-mats-list">${mats.map(m => `
+        <div class="lesson-mat-row">
+          <span class="lesson-mat-icon">${getMaterialIcon(m.drive_url)}</span>
+          <span class="lesson-mat-title">${escapeHtml(m.title || '(sin título)')}</span>
+          <a href="${escapeHtml(m.drive_url || '#')}" target="_blank" rel="noopener noreferrer" class="drive-link" style="font-size:0.78rem;">Ver</a>
+          <button type="button" class="btn-icon-rec" title="Eliminar material"
+                  onclick="deleteLessonMaterial('${escapeHtml(m.id)}','${safeId}')">🗑</button>
+        </div>`).join('')}</div>`
+    : `<div class="lmat-empty">Esta lección aún no tiene materiales.</div>`;
+
+  panel.innerHTML = `
+    ${listHtml}
+    <button type="button" class="lesson-mats-add-btn" onclick="toggleLessonMatForm('${safeId}')">+ Agregar material</button>
+    <div class="lesson-mats-form" id="lmat-form-${safeId}" style="display:none;">
+      <input class="field-input" id="lmat-title-${safeId}" type="text" placeholder="Título del material" />
+      <select class="field-input" id="lmat-type-${safeId}" onchange="toggleLessonMatType('${safeId}')">
+        <option value="link">🔗 Link externo</option>
+        <option value="pdf">📄 Subir PDF</option>
+      </select>
+      <input class="field-input" id="lmat-url-${safeId}" type="url" placeholder="https://..." />
+      <input class="field-input" id="lmat-pdf-${safeId}" type="file" accept=".pdf,application/pdf" style="display:none;" />
+      <div class="lesson-mats-form-actions">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('lmat-form-${safeId}').style.display='none'">Cancelar</button>
+        <button type="button" class="btn btn-lime btn-sm" id="lmat-save-${safeId}" onclick="saveLessonMaterial('${safeId}')">Guardar</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleLessonMatForm(lessonId) {
+  const f = document.getElementById(`lmat-form-${lessonId}`);
+  if (!f) return;
+  f.style.display = (f.style.display === 'none' || !f.style.display) ? '' : 'none';
+}
+
+function toggleLessonMatType(lessonId) {
+  const tipo  = document.getElementById(`lmat-type-${lessonId}`).value;
+  const urlEl = document.getElementById(`lmat-url-${lessonId}`);
+  const pdfEl = document.getElementById(`lmat-pdf-${lessonId}`);
+  if (urlEl) urlEl.style.display = tipo === 'link' ? '' : 'none';
+  if (pdfEl) pdfEl.style.display = tipo === 'pdf'  ? '' : 'none';
+}
+
+async function saveLessonMaterial(lessonId) {
+  const titleEl = document.getElementById(`lmat-title-${lessonId}`);
+  const typeEl  = document.getElementById(`lmat-type-${lessonId}`);
+  const urlEl   = document.getElementById(`lmat-url-${lessonId}`);
+  const pdfEl   = document.getElementById(`lmat-pdf-${lessonId}`);
+  const saveBtn = document.getElementById(`lmat-save-${lessonId}`);
+
+  const title = (titleEl?.value || '').trim();
+  const tipo  = typeEl?.value || 'link';
+  if (!title)        { showToast('Título obligatorio.', true); return; }
+  if (!currentCourseId) return;
+
+  let drive_url = '';
+
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando…'; }
+
+  try {
+    if (tipo === 'link') {
+      drive_url = (urlEl?.value || '').trim();
+      if (!drive_url) throw new Error('Ingresá la URL.');
+    } else {
+      const file = pdfEl?.files?.[0];
+      if (!file) throw new Error('Elegí un archivo PDF.');
+      if (saveBtn) saveBtn.textContent = 'Subiendo PDF…';
+      const safeName = title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+      const path = `${currentCourseId}/${Date.now()}-${safeName}-${Math.random().toString(36).slice(2,7)}.pdf`;
+      const { error: upErr } = await sb.storage.from('course-materials')
+        .upload(path, file, { cacheControl: '3600', upsert: false });
+      if (upErr) throw new Error('Subida PDF: ' + upErr.message);
+      const { data: ud } = sb.storage.from('course-materials').getPublicUrl(path);
+      drive_url = ud.publicUrl;
+    }
+
+    if (saveBtn) saveBtn.textContent = 'Guardando…';
+    const { error } = await sb.from('course_materials').insert({
+      course_id:   currentCourseId,
+      uploaded_by: currentUser.id,
+      lesson_id:   lessonId,
+      title,
+      drive_url,
+    });
+    if (error) throw new Error(error.message);
+
+    showToast('Material agregado ✓');
+    if (titleEl) titleEl.value = '';
+    if (urlEl)   urlEl.value   = '';
+    if (pdfEl)   pdfEl.value   = '';
+    await loadLessonMaterialsCoach(lessonId);
+  } catch (e) {
+    console.error('saveLessonMaterial:', e);
+    showToast('Error: ' + (e.message || e), true);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
+  }
+}
+
+async function deleteLessonMaterial(matId, lessonId) {
+  if (!confirm('¿Eliminar este material?')) return;
+  const { error } = await sb.from('course_materials').delete().eq('id', matId);
+  if (error) { showToast('Error: ' + error.message, true); return; }
+  showToast('Material eliminado.');
+  await loadLessonMaterialsCoach(lessonId);
+}
+
+function updateLessonMatsBadge(lessonId, count) {
+  const badge = document.getElementById(`lmat-badge-${lessonId}`);
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = '';
+  } else {
+    badge.textContent = '';
+    badge.style.display = 'none';
+  }
+}
+
+// Pre-carga los counts de materiales por lección con UNA sola query (Etapa X.8).
+// Se invoca después de pintar todas las cards/lecciones del editor de módulos.
+async function preloadLessonMatCounts(lessonIds) {
+  if (!lessonIds.length) return;
+  const { data, error } = await sb.from('course_materials')
+    .select('lesson_id')
+    .in('lesson_id', lessonIds);
+  if (error) { console.error('preloadLessonMatCounts:', error); return; }
+  const counts = {};
+  (data || []).forEach(r => {
+    if (!r.lesson_id) return;
+    counts[r.lesson_id] = (counts[r.lesson_id] || 0) + 1;
+  });
+  Object.keys(counts).forEach(lid => updateLessonMatsBadge(lid, counts[lid]));
+}
+
+/* ══════════════════════════════════════════════════
+   ─── COLLAPSE/EXPAND DE LA SECCIÓN MATERIALES GENERALES (Etapa X.8) ─
+══════════════════════════════════════════════════ */
+function toggleMatSection() {
+  const btn  = document.getElementById('btn-mat-toggle');
+  const body = document.getElementById('mat-section-body');
+  if (!btn || !body) return;
+  const isOpen = btn.classList.contains('open');
+  if (isOpen) {
+    btn.classList.remove('open');
+    body.style.display = 'none';
+  } else {
+    btn.classList.add('open');
+    body.style.display = '';
+  }
+}
+
+function getCoachModulesFromForm() {
+  const cards = document.querySelectorAll('#mod-list .mod-card');
+  return Array.from(cards).map((card, i) => {
+    const titleInput = card.querySelector('.mod-card-head input');
+    const lessons = Array.from(card.querySelectorAll('.mod-lesson-row')).map((row, j) => {
+      const inputs = row.querySelectorAll('input');
+      const rawUrl = inputs[1].value.trim();
+      return {
+        id:        row.dataset.lessonId || null,
+        title:     inputs[0].value.trim(),
+        url:       rawUrl ? toYoutubeEmbed(rawUrl) : '',
+        order_num: j,
+      };
+    });
+    return {
+      id:        card.dataset.modId || null,
+      title:     titleInput.value.trim(),
+      order_num: i,
+      lessons,
+    };
+  });
+}
+
+async function saveCoachModules() {
+  const courseId = currentCourseId;
+  const btn   = document.getElementById('btn-save-mods');
+  const msgEl = document.getElementById('mod-action-msg');
+  if (!btn || !msgEl) return;
+
+  const showMsg = (text, isError) => {
+    msgEl.style.display    = '';
+    msgEl.style.color      = isError ? 'var(--red)' : 'var(--green)';
+    msgEl.style.background = isError ? 'rgba(252,129,129,0.08)' : 'rgba(104,211,145,0.08)';
+    msgEl.style.border     = '1px solid ' + (isError ? 'rgba(252,129,129,0.25)' : 'rgba(104,211,145,0.25)');
+    msgEl.textContent      = text;
+  };
+
+  // Helper: lanza con mensaje descriptivo + console.error con payload completo (espejo del patrón Sesión 49 de admin.html)
+  const fail = (label, err, extra) => {
+    console.error(`saveCoachModules · ${label}:`, err, extra || '');
+    throw new Error(`${label}: ${err.message || JSON.stringify(err)}`);
+  };
+
+  const formModules = getCoachModulesFromForm();
+  // Reflejar URLs normalizadas en los inputs (URL → embed)
+  document.querySelectorAll('#mod-list .mod-card').forEach((card, i) => {
+    card.querySelectorAll('.mod-lesson-row').forEach((row, j) => {
+      const urlInput = row.querySelectorAll('input')[1];
+      if (urlInput && formModules[i] && formModules[i].lessons[j]) {
+        urlInput.value = formModules[i].lessons[j].url;
+      }
+    });
+  });
+
+  btn.disabled    = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    if (!courseId) fail('saveCoachModules', new Error('courseId vacío'));
+
+    // 1. Diff sync de módulos: borrar los que estaban en BD pero ya no en form (CASCADE borra sus lecciones)
+    const { data: dbModules, error: errDbMods } = await sb
+      .from('course_modules').select('id').eq('course_id', courseId);
+    if (errDbMods) fail('SELECT course_modules', errDbMods);
+
+    const dbModIds   = new Set((dbModules || []).map(m => m.id));
+    const formModIds = new Set(formModules.filter(m => m.id).map(m => m.id));
+    const toDeleteMods = [...dbModIds].filter(id => !formModIds.has(id));
+    if (toDeleteMods.length) {
+      const { error: errDelMods } = await sb.from('course_modules').delete().in('id', toDeleteMods);
+      if (errDelMods) fail('DELETE course_modules', errDelMods, { ids: toDeleteMods });
+    }
+
+    // 2. UPSERT módulos + lecciones (cada step captura su propio error)
+    let totalLessons = 0;
+    for (const mod of formModules) {
+      let modId = mod.id;
+      const modPayload = {
+        course_id: courseId,
+        title:     mod.title || 'Módulo sin título',
+        order_num: mod.order_num,
+      };
+
+      if (modId) {
+        const { error: errUpdMod } = await sb.from('course_modules').update(modPayload).eq('id', modId);
+        if (errUpdMod) fail('UPDATE course_modules', errUpdMod, { modId, payload: modPayload });
+      } else {
+        // INSERT + .select().single() para obtener el UUID REAL retornado por la BD.
+        // Si RLS permite INSERT pero bloquea SELECT post-insert, data viene null
+        // y antes el bug pasaba: modId quedaba null y las lecciones nunca se insertaban.
+        const { data: insMod, error: errInsMod } = await sb
+          .from('course_modules').insert(modPayload).select().single();
+        if (errInsMod) fail('INSERT course_modules', errInsMod, { payload: modPayload });
+        if (!insMod || !insMod.id) {
+          fail('INSERT course_modules sin id retornado',
+               new Error('La fila insertada no devolvió id (¿RLS bloqueando SELECT?)'),
+               { payload: modPayload });
+        }
+        modId = insMod.id;
+      }
+
+      // En este punto modId es el UUID real de la BD — FK module_id de las lecciones
+      if (!modId) continue;
+
+      // 3. Lecciones del módulo: borrar las que ya no están en form + UPSERT el resto
+      const { data: dbLessons, error: errDbLes } = await sb
+        .from('course_lessons').select('id').eq('module_id', modId);
+      if (errDbLes) fail('SELECT course_lessons', errDbLes, { modId });
+
+      const dbLessonIds   = new Set((dbLessons || []).map(l => l.id));
+      const formLessonIds = new Set(mod.lessons.filter(l => l.id).map(l => l.id));
+      const toDeleteLessons = [...dbLessonIds].filter(id => !formLessonIds.has(id));
+      if (toDeleteLessons.length) {
+        const { error: errDelLes } = await sb.from('course_lessons').delete().in('id', toDeleteLessons);
+        if (errDelLes) fail('DELETE course_lessons', errDelLes, { ids: toDeleteLessons });
+      }
+
+      for (const l of mod.lessons) {
+        const lessonPayload = {
+          module_id: modId,
+          title:     l.title || 'Lección sin título',
+          video_url: l.url || '',  // columna real es video_url (NO url) — Sesión 50
+          order_num: l.order_num,
+        };
+        if (l.id) {
+          const { error: errUpdLes } = await sb.from('course_lessons').update(lessonPayload).eq('id', l.id);
+          if (errUpdLes) fail('UPDATE course_lessons', errUpdLes, { lessonId: l.id, payload: lessonPayload });
+        } else {
+          // INSERT con .select().single() para confirmar que la lección se persistió
+          // (antes era .insert() pelado y los errores se silenciaban — bug raíz reportado).
+          const { data: insLes, error: errInsLes } = await sb
+            .from('course_lessons').insert(lessonPayload).select().single();
+          if (errInsLes) fail('INSERT course_lessons', errInsLes, { payload: lessonPayload });
+          if (!insLes || !insLes.id) {
+            fail('INSERT course_lessons sin id retornado',
+                 new Error('La fila insertada no devolvió id (¿RLS bloqueando SELECT?)'),
+                 { payload: lessonPayload });
+          }
+        }
+        totalLessons++;
+      }
+    }
+
+    // 4. Actualizar total_videos del curso para que get_course_progress refleje el total real
+    const { error: errUpdTotal } = await sb.from('courses')
+      .update({ total_videos: totalLessons }).eq('id', courseId);
+    if (errUpdTotal) fail('UPDATE courses.total_videos', errUpdTotal, { courseId, totalLessons });
+
+    showMsg(`✅ ${formModules.length} módulo${formModules.length !== 1 ? 's' : ''} guardado${formModules.length !== 1 ? 's' : ''} (${totalLessons} lección${totalLessons !== 1 ? 'es' : ''}).`, false);
+
+    // 5. Re-cargar la sección desde la BD para reflejar los UUIDs reales en el form
+    // (los nuevos módulos ahora tienen id, así que las próximas ediciones van por UPDATE)
+    const refreshed = await loadCoachModulesForCourse(courseId);
+    document.getElementById('mod-list').innerHTML = '';
+    (refreshed || []).forEach(m => addCoachModuleRow(m.id || '', m.title || '', m.lessons || []));
+    if (!refreshed.length) addCoachModuleRow();
+
+  } catch (e) {
+    console.error('saveCoachModules error:', e);
+    showMsg('⚠️ Error al guardar: ' + (e.message || e), true);
+  }
+
+  btn.disabled    = false;
+  btn.textContent = 'Guardar módulos';
+}
+
+/* ══════════════════════════════════════════════════
+   ─── TAB GANANCIAS ───────────────────────────────
+══════════════════════════════════════════════════ */
+
+function initGananciasSelectors() {
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const selMes  = document.getElementById('gains-mes');
+  const selAnio = document.getElementById('gains-anio');
+  const now = new Date();
+
+  MESES.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = i + 1;
+    opt.textContent = m;
+    if (i + 1 === now.getMonth() + 1) opt.selected = true;
+    selMes.appendChild(opt);
+  });
+
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    selAnio.appendChild(opt);
+  }
+}
+
+async function loadGanancias() {
+  const mes  = parseInt(document.getElementById('gains-mes').value);
+  const anio = parseInt(document.getElementById('gains-anio').value);
+  const wrap = document.getElementById('gains-content');
+  const totalBox    = document.getElementById('gains-total-box');
+  const totalAmount = document.getElementById('gains-total-amount');
+  const totalDetail = document.getElementById('gains-total-detail');
+
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+  totalBox.style.display = 'none';
+
+  const startDate = new Date(anio, mes - 1, 1).toISOString();
+  const endDate   = new Date(anio, mes,     1).toISOString();
+
+  let coachCourseData = [];
+  if (currentRole === 'admin') {
+    const { data: allC } = await sb.from('courses')
+      .select('id, title, price_ars')
+      .eq('is_active', true)
+      .order('title');
+    coachCourseData = (allC || []).map(c => ({ course_id: c.id, commission_pct: 100, courses: c }));
+  } else {
+    const { data: cc, error } = await sb.from('coach_courses')
+      .select('course_id, commission_pct, courses(id, title, price_ars)')
+      .eq('coach_id', currentUser.id);
+    if (error || !cc?.length) {
+      wrap.innerHTML = '<div class="empty-state"><span class="emoji">💰</span>No tenés cursos asignados.</div>';
+      return;
+    }
+    coachCourseData = cc.filter(r => r.courses);
+  }
+
+  if (!coachCourseData.length) {
+    wrap.innerHTML = '<div class="empty-state"><span class="emoji">💰</span>No hay cursos disponibles.</div>';
+    return;
+  }
+
+  const courseIds = coachCourseData.map(c => c.course_id);
+  const { data: sales } = await sb.from('user_courses')
+    .select('course_id, amount_paid')
+    .in('course_id', courseIds)
+    .eq('payment_status', 'paid')
+    .gte('enrolled_at', startDate)
+    .lt('enrolled_at', endDate);
+
+  const salesByCourse = {};
+  (sales || []).forEach(s => {
+    if (!salesByCourse[s.course_id]) salesByCourse[s.course_id] = { count: 0, revenue: 0 };
+    salesByCourse[s.course_id].count++;
+    salesByCourse[s.course_id].revenue += Number(s.amount_paid || 0);
+  });
+
+  let grandTotal = 0;
+  let totalVentas = 0;
+  const rows = coachCourseData.map(cc => {
+    const courseTitle   = cc.courses?.title    || '—';
+    const priceArs      = Number(cc.courses?.price_ars || 0);
+    const commissionPct = Number(cc.commission_pct || 0);
+    const data          = salesByCourse[cc.course_id] || { count: 0, revenue: 0 };
+    const revenue       = data.revenue > 0 ? data.revenue : data.count * priceArs;
+    const commission    = revenue * commissionPct / 100;
+    grandTotal += commission;
+    totalVentas += data.count;
+    return { courseTitle, priceArs, commissionPct, count: data.count, revenue, commission };
+  });
+
+  totalBox.style.display = '';
+  totalAmount.textContent = fmtARS(grandTotal);
+  totalDetail.textContent = `${totalVentas} venta${totalVentas !== 1 ? 's' : ''} en ${mesNombre(mes)} ${anio}`;
+
+  wrap.innerHTML = `
+    <div class="card">
+      <table class="gains-table">
+        <thead>
+          <tr>
+            <th>Curso</th>
+            <th>Ventas del mes</th>
+            <th>Ingresos brutos</th>
+            <th>Comisión</th>
+            <th>Tu ganancia</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>
+                <div class="gains-course-title">${escapeHtml(r.courseTitle)}</div>
+                <div class="gains-commission-pct">${r.commissionPct}% comisión</div>
+              </td>
+              <td>${r.count > 0 ? r.count : '<span style="color:var(--gray-text)">—</span>'}</td>
+              <td>${r.revenue > 0 ? fmtARS(r.revenue) : '<span style="color:var(--gray-text)">$0</span>'}</td>
+              <td style="color:var(--violet-light)">${r.commissionPct}%</td>
+              <td class="${r.commission > 0 ? 'gains-amount' : 'gains-amount-zero'}">${fmtARS(r.commission)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function fmtARS(n) {
+  return '$' + Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function mesNombre(m) {
+  return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m - 1] || '';
+}
+
+/* ══════════════════════════════════════════════════
+   ─── QUIZ EDITOR (Etapa X — rediseño in-curso) ─
+   Estructura:
+     · Sección colapsable "📝 Configurar test" dentro del tab "Mi curso"
+     · Una scope-card por scope:
+         - 'course' (module_id = null) — quiz del curso completo
+         - <UUID>   (module_id = X)   — quiz por módulo (uno por módulo)
+     · Cada scope-card tiene 2 vistas (pills): ⚙ Configuración / ❓ Preguntas
+     · Modal global qz-question-modal para edición individual de preguntas
+═══════════════════════════════════════════════════ */
+let _quizCourseId    = '';        // courseId actualmente cargado
+let _quizModulesList = [];        // [{id, title, order_num}] del curso
+let _quizScopes      = {};        // { 'course' | moduleUUID: { quizId, moduleId, min_score, max_attempts, is_active, questions[] } }
+let _quizActiveView  = {};        // { [scopeKey]: 'config' | 'questions' }
+let _editingQuestion = null;      // { scopeKey, idx, draft } — modal state
+
+// ───────────────────────────────────────────────
+// ENTRY POINT — invocada desde loadCursoCompleto
+// ───────────────────────────────────────────────
+async function loadQuizSection(seq) {
+  const courseId = currentCourseId;
+  const wrap     = document.getElementById('quiz-section-wrap');
+  if (!wrap) return;
+
+  // Reset estado al cambiar de curso
+  _quizCourseId    = courseId;
+  _quizScopes      = {};
+  _quizModulesList = [];
+  _quizActiveView  = {};
+
+  // Solo se muestra si el curso tiene has_quiz=true (toggle del admin)
+  const { data: course, error } = await sb
+    .from('courses').select('has_quiz').eq('id', courseId).single();
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  if (error || !course || !course.has_quiz) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+
+  // Reset toggle a colapsado
+  const btn     = document.getElementById('btn-quiz-toggle');
+  const lbl     = document.getElementById('quiz-toggle-label');
+  const content = document.getElementById('quiz-section-content');
+  if (btn)     btn.classList.remove('open');
+  if (lbl)     lbl.textContent = 'Configurar test';
+  if (content) {
+    content.style.display = 'none';
+    content.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+  }
+}
+
+async function toggleQuizSection() {
+  const btn     = document.getElementById('btn-quiz-toggle');
+  const lbl     = document.getElementById('quiz-toggle-label');
+  const content = document.getElementById('quiz-section-content');
+  if (!btn || !content) return;
+
+  const isOpen = btn.classList.contains('open');
+  if (isOpen) {
+    btn.classList.remove('open');
+    if (lbl) lbl.textContent = 'Configurar test';
+    content.style.display = 'none';
+    return;
+  }
+
+  btn.classList.add('open');
+  if (lbl) lbl.textContent = 'Ocultar test';
+  content.style.display = '';
+
+  // Lazy load la primera vez que se abre para este courseId
+  if (!Object.keys(_quizScopes).length && _quizCourseId) {
+    content.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
+    await loadQuizDataForCourse(_quizCourseId);
+    renderQuizSection(_quizCourseId);
+  }
+}
+
+async function loadQuizDataForCourse(courseId) {
+  // 1. Módulos del curso (para "Tests por módulo")
+  const { data: modules } = await sb
+    .from('course_modules').select('id, title, order_num')
+    .eq('course_id', courseId).order('order_num');
+  _quizModulesList = modules || [];
+
+  // 2. Todos los course_quizzes del curso (incluye nivel curso + nivel módulo)
+  const { data: quizzes } = await sb
+    .from('course_quizzes')
+    .select('id, course_id, module_id, min_score, max_attempts, is_active, is_required')
+    .eq('course_id', courseId);
+
+  const quizzesArr = quizzes || [];
+
+  // 3. Preguntas de todos los quizzes en una sola query (IN)
+  let questionsByQuizId = {};
+  if (quizzesArr.length) {
+    const quizIds = quizzesArr.map(q => q.id);
+    const { data: qs } = await sb.from('quiz_questions')
+      .select('id, quiz_id, question, type, options, correct_idxs, image_urls, order_num')
+      .in('quiz_id', quizIds).order('order_num');
+    (qs || []).forEach(row => {
+      if (!questionsByQuizId[row.quiz_id]) questionsByQuizId[row.quiz_id] = [];
+      questionsByQuizId[row.quiz_id].push({
+        id:           row.id,
+        type:         row.type || 'single',
+        question:     row.question || '',
+        options:      Array.isArray(row.options) ? row.options : [],
+        correct_idxs: Array.isArray(row.correct_idxs) ? row.correct_idxs : [],
+        image_urls:   Array.isArray(row.image_urls) ? row.image_urls : [],
+        order_num:    row.order_num || 0,
+      });
+    });
+  }
+
+  // 4. Scope del curso completo (module_id IS NULL) — siempre presente, aunque no exista row aún
+  _quizScopes = {};
+  const courseQuiz = quizzesArr.find(q => q.module_id === null);
+  _quizScopes['course'] = courseQuiz
+    ? {
+        quizId:       courseQuiz.id,
+        moduleId:     null,
+        min_score:    courseQuiz.min_score ?? 70,
+        max_attempts: courseQuiz.max_attempts ?? 3,
+        is_active:    !!courseQuiz.is_active,
+        questions:    questionsByQuizId[courseQuiz.id] || [],
+      }
+    : { quizId: null, moduleId: null, min_score: 70, max_attempts: 3, is_active: true, questions: [] };
+
+  // 5. Scope por módulo (uno por cada course_module)
+  for (const m of _quizModulesList) {
+    const modQuiz = quizzesArr.find(q => q.module_id === m.id);
+    _quizScopes[m.id] = modQuiz
+      ? {
+          quizId:       modQuiz.id,
+          moduleId:     m.id,
+          min_score:    modQuiz.min_score ?? 70,
+          max_attempts: modQuiz.max_attempts ?? 3,
+          is_active:    !!modQuiz.is_active,
+          questions:    questionsByQuizId[modQuiz.id] || [],
+        }
+      : { quizId: null, moduleId: m.id, min_score: 70, max_attempts: 3, is_active: true, questions: [] };
+  }
+}
+
+function renderQuizSection(courseId) {
+  const content = document.getElementById('quiz-section-content');
+  if (!content) return;
+
+  // Quiz del curso completo
+  const courseCardHtml = renderQuizScopeCard(
+    'course',
+    'Quiz del curso completo',
+    'Evaluación final. El alumno la rinde al completar el 100% del progreso.'
+  );
+
+  // Tests por módulo
+  let perModuleHtml = `<div class="qz-subhead">Tests por módulo</div>`;
+  if (!_quizModulesList.length) {
+    perModuleHtml += `
+      <div class="qz-modules-notice">
+        Esta funcionalidad estará disponible cuando el curso tenga módulos configurados.
+      </div>`;
+  } else {
+    perModuleHtml += _quizModulesList.map((m, i) =>
+      renderQuizScopeCard(
+        m.id,
+        `Módulo ${i + 1} · ${escapeHtml(m.title || '(sin título)')}`,
+        'Evaluación opcional al final del módulo.'
+      )
+    ).join('');
+  }
+
+  // Resultados de alumnos (a nivel curso)
+  const resultsHtml = `
+    <div class="qz-subhead" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span>Resultados de alumnos</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadQuizResults('${escapeHtml(courseId)}')">🔄 Refrescar</button>
+    </div>
+    <div id="qz-results-wrap" class="card card-body">
+      <div class="empty-state"><span class="emoji">📊</span>Cargando resultados…</div>
+    </div>
+  `;
+
+  content.innerHTML = courseCardHtml + perModuleHtml + resultsHtml;
+
+  // Estado inicial de pills (default: config)
+  Object.keys(_quizScopes).forEach(scopeKey => {
+    setQuizPill(scopeKey, _quizActiveView[scopeKey] || 'config');
+  });
+
+  loadQuizResults(courseId);
+}
+
+function renderQuizScopeCard(scopeKey, title, subtitle) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return '';
+  const safeKey = escapeHtml(scopeKey);
+  const minScore    = s.min_score ?? 70;
+  const maxAttempts = s.max_attempts ?? 3;
+  const isActive    = !!s.is_active;
+
+  return `
+    <div class="qz-scope-card" id="qz-scope-${safeKey}">
+      <div class="qz-scope-head">
+        <div>
+          <div class="qz-scope-title">${title}</div>
+          <div class="qz-scope-sub">${subtitle}</div>
+        </div>
+        <div class="qz-pill-row">
+          <button class="qz-pill" id="qz-${safeKey}-pill-config"    onclick="setQuizPill('${safeKey}','config')">⚙ Configuración</button>
+          <button class="qz-pill" id="qz-${safeKey}-pill-questions" onclick="setQuizPill('${safeKey}','questions')">❓ Preguntas (${s.questions.length})</button>
+        </div>
+      </div>
+
+      <!-- Vista: Configuración -->
+      <div class="qz-view" id="qz-${safeKey}-view-config">
+        <div class="qz-config-grid">
+          <div class="field">
+            <label>% mínimo para aprobar</label>
+            <input type="number" id="qz-${safeKey}-min-score" min="0" max="100" value="${minScore}" />
+          </div>
+          <div class="field">
+            <label>Intentos máximos</label>
+            <input type="number" id="qz-${safeKey}-max-attempts" min="0" value="${maxAttempts}" />
+            <p style="font-size:0.74rem;color:var(--gray-text);margin-top:4px;">0 = ilimitado</p>
+          </div>
+        </div>
+        <label class="qz-toggle-row">
+          <input type="checkbox" id="qz-${safeKey}-is-active" ${isActive ? 'checked' : ''} />
+          <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+          <span class="qz-toggle-label">Quiz activo</span>
+        </label>
+        <div class="form-actions">
+          <button class="btn btn-lime" onclick="saveQuizScopeConfig('${safeKey}')">Guardar config</button>
+        </div>
+        <div id="qz-${safeKey}-config-msg" class="qz-action-msg"></div>
+      </div>
+
+      <!-- Vista: Preguntas -->
+      <div class="qz-view" id="qz-${safeKey}-view-questions">
+        <div class="qz-mini-list" id="qz-${safeKey}-mini-list"></div>
+        <div class="qz-add-q-row">
+          <button class="qz-add-q-btn" onclick="openQuestionModal('${safeKey}', -1)">
+            <span style="font-size:1.05rem;line-height:1;">+</span> Nueva pregunta
+          </button>
+        </div>
+        <div id="qz-${safeKey}-questions-msg" class="qz-action-msg"></div>
+      </div>
+    </div>
+  `;
+}
+
+function setQuizPill(scopeKey, view) {
+  _quizActiveView[scopeKey] = view;
+  const pillC = document.getElementById(`qz-${scopeKey}-pill-config`);
+  const pillQ = document.getElementById(`qz-${scopeKey}-pill-questions`);
+  const viewC = document.getElementById(`qz-${scopeKey}-view-config`);
+  const viewQ = document.getElementById(`qz-${scopeKey}-view-questions`);
+  if (pillC) pillC.classList.toggle('active', view === 'config');
+  if (pillQ) pillQ.classList.toggle('active', view === 'questions');
+  if (viewC) viewC.classList.toggle('active', view === 'config');
+  if (viewQ) viewQ.classList.toggle('active', view === 'questions');
+  if (view === 'questions') renderQuizScopeQuestionsList(scopeKey);
+}
+
+function renderQuizScopeQuestionsList(scopeKey) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return;
+  const list = document.getElementById(`qz-${scopeKey}-mini-list`);
+  if (!list) return;
+  if (!s.questions.length) {
+    list.innerHTML = '<div class="empty-state"><span class="emoji">❓</span>Aún no hay preguntas. Agregá la primera con el botón de abajo.</div>';
+    return;
+  }
+  list.innerHTML = s.questions.map((q, idx) => {
+    const stmt = (q.question || '').trim();
+    const truncated = stmt.length > 60 ? stmt.slice(0, 60) + '…' : stmt;
+    const typeLabel = { single: 'Opción única', multiple: 'Múltiple', text: 'Texto libre' }[q.type] || q.type;
+    const optsCount = (q.type === 'text') ? '' : `${(q.options || []).filter(o => o && o.trim()).length} opc.`;
+    const imgsCount = (q.image_urls || []).length ? `📎 ${q.image_urls.length}` : '';
+    return `
+      <div class="qz-mini-q-card">
+        <div class="qz-mini-q-info">
+          <div class="qz-mini-q-stmt">${escapeHtml(truncated || '(sin enunciado)')}</div>
+          <div class="qz-mini-q-meta">
+            <span class="qz-mini-q-type-badge">${typeLabel}</span>
+            ${optsCount ? `<span>${optsCount}</span>` : ''}
+            ${imgsCount ? `<span>${imgsCount}</span>` : ''}
+          </div>
+        </div>
+        <div class="qz-mini-q-actions">
+          <button class="btn-qz-mini-action" onclick="openQuestionModal('${escapeHtml(scopeKey)}', ${idx})">✏️ Editar</button>
+          <button class="btn-qz-mini-action danger" onclick="deleteQuestionFromList('${escapeHtml(scopeKey)}', ${idx})">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateQuizPillCount(scopeKey) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return;
+  const pillQ = document.getElementById(`qz-${scopeKey}-pill-questions`);
+  if (pillQ) pillQ.textContent = `❓ Preguntas (${s.questions.length})`;
+}
+
+// ───────────────────────────────────────────────
+// SAVE CONFIG (per scope)
+// ───────────────────────────────────────────────
+async function saveQuizScopeConfig(scopeKey) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return;
+  const courseId = _quizCourseId;
+  if (!courseId) return;
+
+  const msgEl         = document.getElementById(`qz-${scopeKey}-config-msg`);
+  const minScoreEl    = document.getElementById(`qz-${scopeKey}-min-score`);
+  const maxAttemptsEl = document.getElementById(`qz-${scopeKey}-max-attempts`);
+  const isActiveEl    = document.getElementById(`qz-${scopeKey}-is-active`);
+  if (!msgEl || !minScoreEl || !maxAttemptsEl || !isActiveEl) return;
+
+  const minScore    = Math.max(0, Math.min(100, parseInt(minScoreEl.value, 10) || 0));
+  const maxAttempts = Math.max(0, parseInt(maxAttemptsEl.value, 10) || 0);
+  const isActive    = !!isActiveEl.checked;
+
+  msgEl.className = 'qz-action-msg';
+  msgEl.textContent = 'Guardando…';
+
+  const payload = {
+    course_id:    courseId,
+    module_id:    s.moduleId,    // null para scope 'course', UUID para módulos
+    min_score:    minScore,
+    max_attempts: maxAttempts,
+    is_active:    isActive,
+  };
+
+  if (s.quizId) {
+    const { error } = await sb.from('course_quizzes').update(payload).eq('id', s.quizId);
+    if (error) {
+      console.error('saveQuizScopeConfig update:', error);
+      msgEl.className = 'qz-action-msg error';
+      msgEl.textContent = 'Error al guardar: ' + error.message;
+      return;
+    }
+  } else {
+    const { data, error } = await sb.from('course_quizzes')
+      .upsert(payload, { onConflict: 'course_id,module_id' })
+      .select('id').single();
+    if (error || !data) {
+      console.error('saveQuizScopeConfig upsert:', error);
+      msgEl.className = 'qz-action-msg error';
+      msgEl.textContent = 'Error al crear el quiz: ' + (error?.message || 'sin id');
+      return;
+    }
+    s.quizId = data.id;
+  }
+
+  s.min_score    = minScore;
+  s.max_attempts = maxAttempts;
+  s.is_active    = isActive;
+
+  msgEl.className = 'qz-action-msg success';
+  msgEl.textContent = '✅ Configuración guardada.';
+}
+
+// ───────────────────────────────────────────────
+// QUESTION MODAL — abrir / editar / cerrar
+// Cada save commit-ea una sola pregunta a la BD (INSERT/UPDATE individual).
+// Si el quiz aún no existe (s.quizId=null), se auto-crea con la config actual.
+// ───────────────────────────────────────────────
+function openQuestionModal(scopeKey, idx) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return;
+  const isNew = idx < 0;
+  const draft = isNew
+    ? {
+        id: null,
+        type: 'single',
+        question: '',
+        options: ['', ''],
+        correct_idxs: [],
+        image_urls: [],
+        order_num: s.questions.length,
+      }
+    : {
+        ...s.questions[idx],
+        options:      [...(s.questions[idx].options      || [])],
+        correct_idxs: [...(s.questions[idx].correct_idxs || [])],
+        image_urls:   [...(s.questions[idx].image_urls   || [])],
+      };
+  _editingQuestion = { scopeKey, idx, draft };
+
+  const overlay = document.getElementById('qz-question-modal');
+  const title   = document.getElementById('qz-question-modal-title');
+  const msg     = document.getElementById('qz-question-modal-msg');
+  if (title) title.textContent = isNew ? 'Nueva pregunta' : 'Editar pregunta';
+  if (msg)   { msg.className = 'qz-action-msg'; msg.textContent = ''; }
+  if (overlay) overlay.classList.add('open');
+  renderQuestionModalBody();
+}
+
+function closeQzQuestionModal() {
+  const overlay = document.getElementById('qz-question-modal');
+  if (overlay) overlay.classList.remove('open');
+  _editingQuestion = null;
+}
+
+function renderQuestionModalBody() {
+  if (!_editingQuestion) return;
+  const body = document.getElementById('qz-question-modal-body');
+  if (!body) return;
+  const q = _editingQuestion.draft;
+  const type = q.type || 'single';
+
+  const optionsBlock = (type === 'single' || type === 'multiple')
+    ? `
+      <div class="qz-options-list" id="qz-modal-opts">
+        ${q.options.map((opt, oi) => renderModalOptionRow(oi, opt, q.correct_idxs.includes(oi), type)).join('')}
+      </div>
+      <button class="qz-add-option-btn" onclick="addModalOption()">+ Opción</button>
+    `
+    : `
+      <div class="qz-text-note">Las respuestas de texto se guardan para revisión manual — no afectan el score automático.</div>
+    `;
+
+  const imagesBlock = `
+    <div class="qz-images-wrap">
+      <input type="file" id="qz-modal-img-input" accept="image/*" style="display:none" onchange="handleModalImageFile(this.files[0])" />
+      <button class="qz-img-add-btn" onclick="document.getElementById('qz-modal-img-input').click()">📎 Agregar imagen</button>
+      <div class="qz-images-list" id="qz-modal-imgs">
+        ${(q.image_urls || []).map((url, ii) => `
+          <div class="qz-img-thumb">
+            <img src="${escapeHtml(url)}" alt="img" />
+            <span class="qz-img-x" onclick="removeModalImage(${ii})">×</span>
+          </div>
+        `).join('')}
+      </div>
+      <p style="font-size:0.74rem;color:var(--gray-text);margin-top:6px;">Máximo 3 imágenes por pregunta.</p>
+    </div>
+  `;
+
+  body.innerHTML = `
+    <div class="qz-q-head" style="margin-bottom:10px;">
+      <select class="qz-q-type-select" id="qz-modal-type" onchange="changeModalType(this.value)">
+        <option value="single"   ${type === 'single'   ? 'selected' : ''}>Opción única (●)</option>
+        <option value="multiple" ${type === 'multiple' ? 'selected' : ''}>Opciones múltiples (☑)</option>
+        <option value="text"     ${type === 'text'     ? 'selected' : ''}>Texto libre (✍)</option>
+      </select>
+    </div>
+    <textarea class="qz-q-statement" placeholder="Escribí el enunciado de la pregunta…"
+              oninput="_editingQuestion.draft.question = this.value">${escapeHtml(q.question || '')}</textarea>
+    ${optionsBlock}
+    ${imagesBlock}
+  `;
+}
+
+function renderModalOptionRow(optIdx, optText, isCorrect, type) {
+  const inputType = type === 'multiple' ? 'checkbox' : 'radio';
+  return `
+    <div class="qz-option-row" data-opt-idx="${optIdx}">
+      <input type="text" placeholder="Texto de la opción" value="${escapeHtml(optText || '')}"
+             oninput="_editingQuestion.draft.options[${optIdx}] = this.value" />
+      <label class="qz-correct-control">
+        <input type="${inputType}" name="qz-modal-correct" ${isCorrect ? 'checked' : ''}
+               onchange="toggleModalCorrect(${optIdx}, this.checked)" />
+        Correcta
+      </label>
+      <button class="btn btn-danger btn-sm" onclick="removeModalOption(${optIdx})">×</button>
+    </div>
+  `;
+}
+
+function changeModalType(newType) {
+  if (!_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  q.type = newType;
+  if (newType === 'text') {
+    q.options = [];
+    q.correct_idxs = [];
+  } else {
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      q.options = ['', ''];
+      q.correct_idxs = [];
+    }
+    if (newType === 'single' && q.correct_idxs.length > 1) {
+      q.correct_idxs = q.correct_idxs.slice(0, 1);
+    }
+  }
+  renderQuestionModalBody();
+}
+
+function addModalOption() {
+  if (!_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  if (q.options.length >= 6) {
+    showToast('Máximo 6 opciones por pregunta.', true);
+    return;
+  }
+  q.options.push('');
+  renderQuestionModalBody();
+}
+
+function removeModalOption(optIdx) {
+  if (!_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  if (q.options.length <= 2) {
+    showToast('Mínimo 2 opciones por pregunta.', true);
+    return;
+  }
+  q.options.splice(optIdx, 1);
+  q.correct_idxs = q.correct_idxs.filter(i => i !== optIdx).map(i => i > optIdx ? i - 1 : i);
+  renderQuestionModalBody();
+}
+
+function toggleModalCorrect(optIdx, isChecked) {
+  if (!_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  if (q.type === 'single') {
+    q.correct_idxs = isChecked ? [optIdx] : [];
+  } else if (q.type === 'multiple') {
+    if (isChecked) {
+      if (!q.correct_idxs.includes(optIdx)) q.correct_idxs.push(optIdx);
+    } else {
+      q.correct_idxs = q.correct_idxs.filter(i => i !== optIdx);
+    }
+  }
+}
+
+async function handleModalImageFile(file) {
+  if (!file || !_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  if ((q.image_urls || []).length >= 3) {
+    showToast('Máximo 3 imágenes por pregunta.', true);
+    return;
+  }
+  const ext        = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const scopeKey   = _editingQuestion.scopeKey;
+  const quizFolder = _quizScopes[scopeKey]?.quizId || 'tmp';
+  const path       = `quiz-images/${quizFolder}/${Date.now()}.${ext}`;
+  const { error: upErr } = await sb.storage.from('course-materials').upload(path, file, { upsert: false });
+  if (upErr) {
+    console.error('handleModalImageFile upload:', upErr);
+    showToast('Error al subir imagen: ' + upErr.message, true);
+    return;
+  }
+  const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+  if (!urlData?.publicUrl) {
+    showToast('No se pudo obtener la URL pública.', true);
+    return;
+  }
+  q.image_urls = [...(q.image_urls || []), urlData.publicUrl];
+  renderQuestionModalBody();
+}
+
+function removeModalImage(imgIdx) {
+  if (!_editingQuestion) return;
+  const q = _editingQuestion.draft;
+  q.image_urls = (q.image_urls || []).filter((_, i) => i !== imgIdx);
+  renderQuestionModalBody();
+}
+
+async function saveQuestionFromModal() {
+  if (!_editingQuestion) return;
+  const { scopeKey, idx, draft } = _editingQuestion;
+  const s = _quizScopes[scopeKey];
+  const courseId = _quizCourseId;
+  if (!s || !courseId) return;
+
+  const msgEl  = document.getElementById('qz-question-modal-msg');
+  const setMsg = (text, isError) => {
+    if (!msgEl) return;
+    msgEl.className = 'qz-action-msg' + (isError ? ' error' : ' success');
+    msgEl.textContent = text;
+  };
+
+  // Validación
+  if (!draft.question || !draft.question.trim()) {
+    setMsg('La pregunta no tiene enunciado.', true);
+    return;
+  }
+  if (draft.type === 'single' || draft.type === 'multiple') {
+    if ((draft.options || []).filter(o => o && o.trim()).length < 2) {
+      setMsg('Necesitás al menos 2 opciones con texto.', true);
+      return;
+    }
+    if ((draft.correct_idxs || []).length === 0) {
+      setMsg('Marcá al menos una opción correcta.', true);
+      return;
+    }
+  }
+
+  const btn = document.getElementById('btn-qz-question-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  try {
+    // Auto-crear el course_quizzes row si todavía no existe (primer save de pregunta sin haber tocado config)
+    if (!s.quizId) {
+      const cfgPayload = {
+        course_id:    courseId,
+        module_id:    s.moduleId,
+        min_score:    s.min_score,
+        max_attempts: s.max_attempts,
+        is_active:    s.is_active,
+      };
+      const { data: ins, error: errIns } = await sb.from('course_quizzes')
+        .upsert(cfgPayload, { onConflict: 'course_id,module_id' })
+        .select('id').single();
+      if (errIns || !ins) throw new Error('No se pudo crear el quiz: ' + (errIns?.message || 'sin id'));
+      s.quizId = ins.id;
+    }
+
+    const rowPayload = {
+      quiz_id:      s.quizId,
+      question:     draft.question.trim(),
+      type:         draft.type,
+      options:      (draft.type === 'text') ? [] : draft.options.map(o => (o || '').trim()),
+      correct_idxs: (draft.type === 'text') ? [] : draft.correct_idxs,
+      image_urls:   draft.image_urls || [],
+      order_num:    (idx >= 0) ? draft.order_num : s.questions.length,
+    };
+
+    if (draft.id) {
+      const { error } = await sb.from('quiz_questions').update(rowPayload).eq('id', draft.id);
+      if (error) throw new Error('UPDATE quiz_questions: ' + error.message);
+      s.questions[idx] = { ...rowPayload, id: draft.id };
+    } else {
+      const { data: ins, error } = await sb.from('quiz_questions').insert(rowPayload).select('id').single();
+      if (error || !ins) throw new Error('INSERT quiz_questions: ' + (error?.message || 'sin id'));
+      const newQ = { ...rowPayload, id: ins.id };
+      if (idx >= 0) s.questions[idx] = newQ;
+      else          s.questions.push(newQ);
+    }
+
+    renderQuizScopeQuestionsList(scopeKey);
+    updateQuizPillCount(scopeKey);
+    closeQzQuestionModal();
+    showToast(draft.id ? 'Pregunta actualizada.' : 'Pregunta agregada.');
+  } catch (e) {
+    console.error('saveQuestionFromModal error:', e);
+    setMsg('⚠️ ' + (e.message || e), true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar pregunta'; }
+  }
+}
+
+async function deleteQuestionFromList(scopeKey, idx) {
+  const s = _quizScopes[scopeKey];
+  if (!s) return;
+  const q = s.questions[idx];
+  if (!q) return;
+  const preview = (q.question || '').slice(0, 50);
+  if (!confirm(`¿Eliminar la pregunta "${preview}${preview.length === 50 ? '…' : ''}"?`)) return;
+
+  if (q.id) {
+    const { error } = await sb.from('quiz_questions').delete().eq('id', q.id);
+    if (error) {
+      console.error('deleteQuestionFromList:', error);
+      showToast('Error al eliminar: ' + error.message, true);
+      return;
+    }
+  }
+  s.questions.splice(idx, 1);
+  renderQuizScopeQuestionsList(scopeKey);
+  updateQuizPillCount(scopeKey);
+  showToast('Pregunta eliminada.');
+}
+
+async function loadQuizResults(courseId) {
+  const wrap = document.getElementById('qz-results-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="empty-state"><span class="emoji">⏳</span>Cargando resultados…</div>';
+
+  const { data: attempts, error } = await sb.from('quiz_attempts')
+    .select('id, user_id, quiz_id, course_id, score, passed, answers, attempted_at')
+    .eq('course_id', courseId)
+    .order('attempted_at', { ascending: false });
+  if (error) {
+    console.error('loadQuizResults:', error);
+    wrap.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Error: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (!attempts || !attempts.length) {
+    wrap.innerHTML = '<div class="empty-state"><span class="emoji">📊</span>Aún no hay intentos registrados para este curso.</div>';
+    return;
+  }
+
+  // Agrupar por user_id: tomar último intento + count + flag de aprobado
+  const byUser = {};
+  attempts.forEach(a => {
+    if (!byUser[a.user_id]) byUser[a.user_id] = { user_id: a.user_id, attempts: [], passedAny: false };
+    byUser[a.user_id].attempts.push(a);
+    if (a.passed) byUser[a.user_id].passedAny = true;
+  });
+
+  const userIds = Object.keys(byUser);
+  let nameMap = {};
+  if (userIds.length) {
+    const { data: profs } = await sb.from('profiles').select('id, full_name').in('id', userIds);
+    (profs || []).forEach(p => { nameMap[p.id] = p.full_name || '(sin nombre)'; });
+  }
+
+  // Detectar si hay preguntas de texto (para mostrar botón "Ver respuestas")
+  // Etapa X: ahora se lee del scope 'course' del nuevo state map
+  const courseQuestions = (_quizScopes && _quizScopes['course'] && _quizScopes['course'].questions) || [];
+  const hasTextQs = courseQuestions.some(q => q.type === 'text');
+
+  const rows = userIds.map(uid => {
+    const data = byUser[uid];
+    const last = data.attempts[0]; // ya viene desc
+    const fecha = last.attempted_at ? new Date(last.attempted_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const passed = data.passedAny;
+    const score  = last.score ?? 0;
+    const safeId = escapeHtml(last.id);
+    return `
+      <tr>
+        <td>${escapeHtml(nameMap[uid] || '(usuario)')}</td>
+        <td><strong>${score}%</strong></td>
+        <td class="${passed ? 'qz-pass-yes' : 'qz-pass-no'}">${passed ? '✅' : '❌'}</td>
+        <td>${data.attempts.length}</td>
+        <td>${fecha}</td>
+        <td>${hasTextQs ? `<button class="btn btn-ghost btn-sm" onclick="openQzTextModal('${safeId}')">Ver respuestas</button>` : ''}</td>
+      </tr>
+    `;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table class="qz-results-table">
+      <thead>
+        <tr>
+          <th>Alumno</th>
+          <th>Score último intento</th>
+          <th>Aprobó</th>
+          <th>Intentos</th>
+          <th>Último intento</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function openQzTextModal(attemptId) {
+  const overlay = document.getElementById('qz-text-modal');
+  const body    = document.getElementById('qz-text-modal-body');
+  if (!overlay || !body) return;
+
+  body.innerHTML = '<div class="empty-state"><span class="emoji">⏳</span>Cargando…</div>';
+  overlay.classList.add('open');
+
+  const { data: att, error } = await sb.from('quiz_attempts')
+    .select('answers')
+    .eq('id', attemptId)
+    .single();
+  if (error || !att) {
+    body.innerHTML = `<p style="color:var(--red)">Error al cargar respuestas.</p>`;
+    return;
+  }
+
+  const ans = Array.isArray(att.answers) ? att.answers : [];
+  // Cruzar con las preguntas del scope 'course' para mostrar el enunciado.
+  // Si en el futuro hay quizzes por módulo, cruzar también con todos los scopes.
+  const qById = {};
+  Object.values(_quizScopes || {}).forEach(scope => {
+    (scope.questions || []).forEach(q => { if (q.id) qById[q.id] = q; });
+  });
+
+  const textAns = ans.filter(a => {
+    const q = qById[a.question_id];
+    return q && q.type === 'text';
+  });
+
+  if (!textAns.length) {
+    body.innerHTML = '<p style="color:var(--gray-text);font-size:0.88rem;">Este intento no tiene respuestas de texto.</p>';
+    return;
+  }
+
+  body.innerHTML = textAns.map(a => {
+    const q = qById[a.question_id];
+    return `
+      <div class="qz-modal-q">
+        <div class="qz-modal-q-stmt">${escapeHtml(q?.question || '(pregunta)')}</div>
+        <div class="qz-modal-q-ans">${escapeHtml(a.text_answer || '(sin respuesta)')}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function closeQzTextModal() {
+  const overlay = document.getElementById('qz-text-modal');
+  if (overlay) overlay.classList.remove('open');
+}
+
+/* ══════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

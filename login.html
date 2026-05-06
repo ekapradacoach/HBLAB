@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ingresar | HB Lab</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47) ─── -->
+  <meta name="description" content="Iniciá sesión en HB Lab para acceder a tus cursos." />
+  <meta name="robots" content="noindex" />
+  <link rel="canonical" href="https://hblab.com/login.html" />
+
+  <meta property="og:title" content="Ingresar | HB Lab" />
+  <meta property="og:description" content="Iniciá sesión en HB Lab para acceder a tus cursos." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/login.html" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ingresar | HB Lab" />
+  <meta name="twitter:description" content="Iniciá sesión en HB Lab para acceder a tus cursos." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,400;1,600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+      --error:        #FC8181;
+      --success:      #68D391;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Navbar ──────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(30, 42, 58, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(200, 230, 0, 0.12);
+      padding: 14px 0;
+    }
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .nav-inner  { display: flex; align-items: center; justify-content: space-between; }
+
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg  { width: 44px; height: 44px; flex-shrink: 0; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+    .logo-text .hb  { font-weight: 800; font-size: 1.25rem; color: var(--white); letter-spacing: 0.02em; }
+    .logo-text .lab { font-family: 'Playfair Display', serif; font-style: italic; font-size: 0.78rem; color: var(--lime); letter-spacing: 0.12em; }
+
+    .nav-back {
+      color: var(--gray-text);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--lime); }
+
+    /* ── Page layout ─────────────────────────────── */
+    .page-wrap {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 100px 24px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .page-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(200,230,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,230,0,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+    }
+    .blob-1 { width: 420px; height: 420px; background: rgba(123,79,190,0.15); top: -80px; right: -100px; }
+    .blob-2 { width: 300px; height: 300px; background: rgba(200,230,0,0.08); bottom: 0; left: -80px; }
+
+    /* ── Card ────────────────────────────────────── */
+    .auth-card {
+      position: relative;
+      z-index: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 48px 44px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+    }
+    .auth-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--lime), var(--violet));
+      border-radius: 20px 20px 0 0;
+    }
+
+    /* ── Panel transitions ───────────────────────── */
+    .panel { display: none; }
+    .panel.active {
+      display: block;
+      animation: panelIn 0.22s ease both;
+    }
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    /* fade-out class added by JS during switch */
+    .panel.exiting {
+      animation: panelOut 0.15s ease both;
+    }
+    @keyframes panelOut {
+      from { opacity: 1; transform: translateY(0);    }
+      to   { opacity: 0; transform: translateY(-8px); }
+    }
+
+    /* ── Card header ─────────────────────────────── */
+    .card-header { text-align: center; margin-bottom: 32px; }
+    .card-header h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .card-header p  { font-size: 0.875rem; color: var(--gray-text); }
+
+    /* ── Form elements ───────────────────────────── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--gray-text);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .form-group input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--card-border);
+      color: var(--white);
+      padding: 12px 15px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      transition: border-color 0.2s, background 0.2s;
+      outline: none;
+    }
+    .form-group input::placeholder { color: rgba(148,163,184,0.45); }
+    .form-group input:focus {
+      border-color: var(--lime);
+      background: rgba(200,230,0,0.04);
+    }
+    .form-group input.invalid { border-color: var(--error); }
+
+    .field-hint {
+      font-size: 0.75rem;
+      color: var(--gray-text);
+      margin-top: 5px;
+    }
+    .field-hint.error-hint { color: var(--error); }
+
+    .forgot-link {
+      display: block;
+      text-align: right;
+      font-size: 0.8rem;
+      color: var(--violet-light);
+      text-decoration: none;
+      margin-top: 7px;
+      transition: color 0.2s;
+    }
+    .forgot-link:hover { color: var(--lime); }
+
+    /* ── Feedback messages ───────────────────────── */
+    .msg {
+      display: none;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .msg.error   { display: block; background: rgba(252,129,129,0.1); border: 1px solid rgba(252,129,129,0.3); color: var(--error); }
+    .msg.success { display: block; background: rgba(104,211,145,0.1); border: 1px solid rgba(104,211,145,0.3); color: var(--success); }
+    .msg.hidden  { display: none !important; }
+
+    /* ── Submit button ───────────────────────────── */
+    .btn-submit {
+      width: 100%;
+      background: var(--lime);
+      color: var(--navy);
+      border: none;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      margin-top: 6px;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(200,230,0,0.3);
+    }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .btn-spinner {
+      display: none;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(30,42,58,0.3);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-submit.loading .btn-spinner  { display: block; }
+    .btn-submit.loading .btn-label    { display: none; }
+
+    /* ── Mode toggle link ────────────────────────── */
+    .mode-switch {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 0.84rem;
+      color: var(--gray-text);
+    }
+    .mode-switch a {
+      color: var(--violet-light);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s;
+      cursor: pointer;
+    }
+    .mode-switch a:hover { color: var(--lime); }
+
+    /* ── Back button (forgot panel) ──────────────── */
+    .btn-back {
+      background: none;
+      border: none;
+      color: var(--violet-light);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+    .btn-back:hover { color: var(--lime); }
+
+    /* ── Password strength indicator ─────────────── */
+    .pw-strength {
+      display: flex;
+      gap: 4px;
+      margin-top: 7px;
+    }
+    .pw-bar {
+      height: 3px;
+      flex: 1;
+      border-radius: 2px;
+      background: var(--card-border);
+      transition: background 0.3s;
+    }
+    .pw-bar.weak   { background: var(--error); }
+    .pw-bar.medium { background: #F6E05E; }
+    .pw-bar.strong { background: var(--success); }
+
+    /* ── Responsive ──────────────────────────────── */
+    @media (max-width: 500px) {
+      .auth-card { padding: 36px 22px; }
+      .form-row  { grid-template-columns: 1fr; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navbar ──────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="container nav-inner">
+      <a href="index.html" class="logo-wrap" aria-label="HB Lab">
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+          <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38" stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38" stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="16" x2="28" y2="16" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="24" x2="28" y2="24" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="32" x2="28" y2="32" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <a href="index.html" class="nav-back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver al inicio
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── Main ────────────────────────────────────── -->
+  <main class="page-wrap">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="auth-card">
+
+      <!-- ════════════════════════════════════════
+           PANEL 1 — LOGIN
+      ════════════════════════════════════════ -->
+      <div id="panel-login" class="panel active">
+
+        <div class="card-header">
+          <h1>Bienvenido de vuelta</h1>
+          <p>Ingresá con tu cuenta de HB Lab</p>
+        </div>
+
+        <div id="msg-login" class="msg hidden"></div>
+
+        <form id="form-login" novalidate>
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="tucorreo@email.com" autocomplete="email" required />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Contraseña</label>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required />
+            <a href="#" class="forgot-link" id="link-forgot">¿Olvidaste tu contraseña?</a>
+          </div>
+
+          <button type="submit" class="btn-submit" id="btn-login">
+            <span class="btn-label">Ingresar</span>
+            <span class="btn-spinner"></span>
+          </button>
+        </form>
+
+        <p class="mode-switch">
+          ¿No tenés cuenta?
+          <a id="link-to-register">Crear cuenta →</a>
+        </p>
+
+      </div><!-- /#panel-login -->
+
+
+      <!-- ════════════════════════════════════════
+           PANEL 2 — REGISTRO
+      ════════════════════════════════════════ -->
+      <div id="panel-register" class="panel">
+
+        <div class="card-header">
+          <h1>Crear cuenta</h1>
+          <p>Completá los datos para registrarte en HB Lab</p>
+        </div>
+
+        <div id="msg-register" class="msg hidden"></div>
+
+        <form id="form-register" novalidate>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-nombre">Nombre</label>
+              <input type="text" id="reg-nombre" placeholder="Juan" autocomplete="given-name" required />
+            </div>
+            <div class="form-group">
+              <label for="reg-apellido">Apellido</label>
+              <input type="text" id="reg-apellido" placeholder="García" autocomplete="family-name" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" placeholder="tucorreo@email.com" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password">Contraseña</label>
+            <input type="password" id="reg-password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required />
+            <div class="pw-strength" id="pw-strength" aria-hidden="true">
+              <div class="pw-bar" id="pw-bar-1"></div>
+              <div class="pw-bar" id="pw-bar-2"></div>
+              <div class="pw-bar" id="pw-bar-3"></div>
+              <div class="pw-bar" id="pw-bar-4"></div>
+            </div>
+            <p class="field-hint" id="pw-hint">Mínimo 8 caracteres</p>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-confirm">Confirmar contraseña</label>
+            <input type="password" id="reg-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password" required />
+            <p class="field-hint hidden" id="confirm-hint"></p>
+          </div>
+
+          <button type="submit" class="btn-submit" id="btn-register">
+            <span class="btn-label">Crear cuenta</span>
+            <span class="btn-spinner"></span>
+          </button>
+        </form>
+
+        <p class="mode-switch">
+          ¿Ya tenés cuenta?
+          <a id="link-to-login">Ingresar →</a>
+        </p>
+
+      </div><!-- /#panel-register -->
+
+
+      <!-- ════════════════════════════════════════
+           PANEL 3 — RECUPERAR CONTRASEÑA
+      ════════════════════════════════════════ -->
+      <div id="panel-forgot" class="panel">
+
+        <button class="btn-back" id="btn-back-forgot">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Volver al login
+        </button>
+
+        <div class="card-header" style="text-align:left; margin-bottom:22px">
+          <h1 style="font-size:1.4rem">Recuperar contraseña</h1>
+          <p>Te enviamos un link a tu email para crear una nueva contraseña.</p>
+        </div>
+
+        <div id="msg-forgot" class="msg hidden"></div>
+
+        <form id="form-forgot" novalidate>
+          <div class="form-group">
+            <label for="forgot-email">Email</label>
+            <input type="email" id="forgot-email" placeholder="tucorreo@email.com" autocomplete="email" required />
+          </div>
+          <button type="submit" class="btn-submit" id="btn-forgot">
+            <span class="btn-label">Enviar link</span>
+            <span class="btn-spinner"></span>
+          </button>
+        </form>
+
+      </div><!-- /#panel-forgot -->
+
+    </div><!-- /.auth-card -->
+  </main>
+
+  <!-- ── Scripts ──────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+
+    // ════════════════════════════════════════════════
+    //  REDIRECT si ya hay sesión activa
+    // ════════════════════════════════════════════════
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) window.location.replace('dashboard.html');
+    })();
+
+
+    // ════════════════════════════════════════════════
+    //  PANEL SWITCHER — transición suave entre modos
+    // ════════════════════════════════════════════════
+    let _currentPanel = document.getElementById('panel-login');
+
+    function switchPanel(targetId) {
+      const target = document.getElementById(targetId);
+      if (!target || target === _currentPanel) return;
+
+      const leaving = _currentPanel;
+
+      // 1. Fade-out del panel actual
+      leaving.classList.add('exiting');
+
+      setTimeout(() => {
+        leaving.classList.remove('active', 'exiting');
+        // 2. Fade-in del panel nuevo
+        target.classList.add('active');
+        _currentPanel = target;
+        // 3. Scroll suave al top de la card en mobile
+        target.closest('.auth-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 150);
+    }
+
+    // Navegación entre paneles
+    document.getElementById('link-to-register').addEventListener('click', e => {
+      e.preventDefault();
+      clearMsg('msg-login');
+      switchPanel('panel-register');
+    });
+
+    document.getElementById('link-to-login').addEventListener('click', e => {
+      e.preventDefault();
+      clearMsg('msg-register');
+      switchPanel('panel-login');
+    });
+
+    document.getElementById('link-forgot').addEventListener('click', e => {
+      e.preventDefault();
+      clearMsg('msg-login');
+      // Pre-fill email en forgot si ya lo ingresaron
+      const email = document.getElementById('login-email').value.trim();
+      if (email) document.getElementById('forgot-email').value = email;
+      switchPanel('panel-forgot');
+    });
+
+    document.getElementById('btn-back-forgot').addEventListener('click', () => {
+      clearMsg('msg-forgot');
+      switchPanel('panel-login');
+    });
+
+
+    // ════════════════════════════════════════════════
+    //  HELPERS
+    // ════════════════════════════════════════════════
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `msg ${type}`;
+    }
+    function clearMsg(id) {
+      const el = document.getElementById(id);
+      el.className = 'msg hidden';
+      el.textContent = '';
+    }
+    function setLoading(btnId, loading) {
+      const btn = document.getElementById(btnId);
+      btn.disabled = loading;
+      btn.classList.toggle('loading', loading);
+    }
+    function markInvalid(inputEl, invalid) {
+      inputEl.classList.toggle('invalid', invalid);
+    }
+
+    // Mensajes de error de Supabase → español
+    const AUTH_ERRORS = {
+      'Invalid login credentials':  'Email o contraseña incorrectos.',
+      'Email not confirmed':         'Todavía no confirmaste tu email. Revisá tu bandeja de entrada.',
+      'Too many requests':           'Demasiados intentos. Esperá unos minutos e intentá de nuevo.',
+      'User already registered':     'Ya existe una cuenta con ese email. ¿Querés ingresar?',
+      'Password should be at least 6 characters': 'La contraseña debe tener al menos 8 caracteres.',
+    };
+    function translateError(msg) {
+      return AUTH_ERRORS[msg] || 'Ocurrió un error inesperado. Intentá de nuevo.';
+    }
+
+
+    // ════════════════════════════════════════════════
+    //  INDICADOR DE FORTALEZA DE CONTRASEÑA
+    // ════════════════════════════════════════════════
+    const pwInput  = document.getElementById('reg-password');
+    const pwHint   = document.getElementById('pw-hint');
+    const pwBars   = [1,2,3,4].map(i => document.getElementById(`pw-bar-${i}`));
+
+    function getStrength(pw) {
+      let score = 0;
+      if (pw.length >= 8)  score++;
+      if (pw.length >= 12) score++;
+      if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+      if (/\d/.test(pw) || /[^A-Za-z0-9]/.test(pw)) score++;
+      return score; // 0–4
+    }
+
+    pwInput.addEventListener('input', () => {
+      const pw    = pwInput.value;
+      const score = getStrength(pw);
+      const level = score <= 1 ? 'weak' : score <= 2 ? 'medium' : 'strong';
+      const labels = ['', 'Débil', 'Débil', 'Buena', 'Fuerte'];
+
+      pwBars.forEach((bar, i) => {
+        bar.className = 'pw-bar';
+        if (i < score) bar.classList.add(level);
+      });
+
+      if (pw.length === 0) {
+        pwHint.textContent = 'Mínimo 8 caracteres';
+        pwHint.className = 'field-hint';
+      } else if (pw.length < 8) {
+        pwHint.textContent = `Faltan ${8 - pw.length} caracteres`;
+        pwHint.className = 'field-hint error-hint';
+      } else {
+        pwHint.textContent = labels[score] || 'Fuerte';
+        pwHint.className = `field-hint ${level === 'weak' ? 'error-hint' : ''}`;
+      }
+
+      // Actualizar indicador de confirmación en tiempo real
+      checkConfirm();
+    });
+
+    const confirmInput = document.getElementById('reg-confirm');
+    const confirmHint  = document.getElementById('confirm-hint');
+
+    function checkConfirm() {
+      const pw      = pwInput.value;
+      const confirm = confirmInput.value;
+      if (!confirm) {
+        confirmHint.className = 'field-hint hidden';
+        markInvalid(confirmInput, false);
+        return;
+      }
+      if (pw === confirm) {
+        confirmHint.textContent = '✓ Las contraseñas coinciden';
+        confirmHint.className = 'field-hint';
+        markInvalid(confirmInput, false);
+      } else {
+        confirmHint.textContent = 'Las contraseñas no coinciden';
+        confirmHint.className = 'field-hint error-hint';
+        markInvalid(confirmInput, true);
+      }
+    }
+    confirmInput.addEventListener('input', checkConfirm);
+
+
+    // ════════════════════════════════════════════════
+    //  FORMULARIO LOGIN
+    // ════════════════════════════════════════════════
+    document.getElementById('form-login').addEventListener('submit', async e => {
+      e.preventDefault();
+      clearMsg('msg-login');
+
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      if (!email || !password) {
+        showMsg('msg-login', 'Completá email y contraseña para continuar.', 'error');
+        return;
+      }
+
+      setLoading('btn-login', true);
+
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        showMsg('msg-login', translateError(error.message), 'error');
+        setLoading('btn-login', false);
+        return;
+      }
+
+      window.location.replace('dashboard.html');
+    });
+
+
+    // ════════════════════════════════════════════════
+    //  FORMULARIO REGISTRO
+    // ════════════════════════════════════════════════
+    document.getElementById('form-register').addEventListener('submit', async e => {
+      e.preventDefault();
+      clearMsg('msg-register');
+
+      const nombre   = document.getElementById('reg-nombre').value.trim();
+      const apellido = document.getElementById('reg-apellido').value.trim();
+      const email    = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const confirm  = document.getElementById('reg-confirm').value;
+
+      // Validaciones
+      if (!nombre || !apellido) {
+        showMsg('msg-register', 'Ingresá tu nombre y apellido para continuar.', 'error');
+        return;
+      }
+      if (!email) {
+        showMsg('msg-register', 'Ingresá tu email para continuar.', 'error');
+        return;
+      }
+      if (password.length < 8) {
+        showMsg('msg-register', 'La contraseña debe tener al menos 8 caracteres.', 'error');
+        markInvalid(document.getElementById('reg-password'), true);
+        return;
+      }
+      if (password !== confirm) {
+        showMsg('msg-register', 'Las contraseñas no coinciden. Verificalas e intentá de nuevo.', 'error');
+        markInvalid(confirmInput, true);
+        return;
+      }
+
+      setLoading('btn-register', true);
+
+      const fullName = `${nombre} ${apellido}`.trim();
+
+      // signUp — pasamos full_name en options.data.name
+      // El trigger handle_new_user lee raw_user_meta_data->>'name'
+      // y lo guarda en public.profiles.full_name automáticamente
+      const { error } = await sb.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name: fullName },
+        },
+      });
+
+      setLoading('btn-register', false);
+
+      if (error) {
+        showMsg('msg-register', translateError(error.message), 'error');
+        return;
+      }
+
+      // Éxito — mostrar confirmación (Supabase envía email de confirmación)
+      document.getElementById('form-register').reset();
+      pwBars.forEach(b => b.className = 'pw-bar');
+      pwHint.textContent = 'Mínimo 8 caracteres';
+      pwHint.className   = 'field-hint';
+      confirmHint.className = 'field-hint hidden';
+
+      showMsg(
+        'msg-register',
+        `¡Cuenta creada, ${nombre}! Revisá tu email para confirmar tu cuenta antes de ingresar.`,
+        'success'
+      );
+    });
+
+
+    // ════════════════════════════════════════════════
+    //  FORMULARIO RECUPERAR CONTRASEÑA
+    // ════════════════════════════════════════════════
+    document.getElementById('form-forgot').addEventListener('submit', async e => {
+      e.preventDefault();
+      clearMsg('msg-forgot');
+
+      const email = document.getElementById('forgot-email').value.trim();
+      if (!email) {
+        showMsg('msg-forgot', 'Ingresá tu email para continuar.', 'error');
+        return;
+      }
+
+      setLoading('btn-forgot', true);
+
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/dashboard.html',
+      });
+
+      setLoading('btn-forgot', false);
+
+      if (error) {
+        showMsg('msg-forgot', 'No pudimos enviar el email. Verificá la dirección e intentá de nuevo.', 'error');
+        return;
+      }
+
+      showMsg('msg-forgot', '✓ Link enviado. Revisá tu email y también la carpeta de spam.', 'success');
+      document.getElementById('form-forgot').reset();
+    });
+
+  </script>
+
+</body>
+</html>

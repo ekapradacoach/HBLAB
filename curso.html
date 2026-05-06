@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Curso — HB Lab</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47) ─── -->
+  <meta name="description" content="Curso HB Lab — contenido protegido para alumnos." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://hblab.com/curso.html" />
+
+  <meta property="og:title" content="Curso — HB Lab" />
+  <meta property="og:description" content="Curso HB Lab — contenido protegido para alumnos." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/curso.html" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Curso — HB Lab" />
+  <meta name="twitter:description" content="Curso HB Lab — contenido protegido para alumnos." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+      --red:          #FC8181;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Loading overlay ─────────────────────────── */
+    #loading-screen {
+      position: fixed; inset: 0;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 300; transition: opacity 0.35s ease;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(200,230,0,0.15);
+      border-top-color: var(--lime);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Navbar ──────────────────────────────────── */
+    #navbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(30,42,58,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(200,230,0,0.12);
+      padding: 14px 0;
+      transition: box-shadow 0.3s;
+    }
+    #navbar.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg  { width: 44px; height: 44px; flex-shrink: 0; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+    .logo-text .hb  { font-weight: 800; font-size: 1.25rem; color: var(--white); letter-spacing: 0.02em; }
+    .logo-text .lab { font-family: 'Georgia', serif; font-style: italic; font-size: 0.78rem; color: var(--lime); letter-spacing: 0.12em; }
+
+    .nav-right { display: flex; align-items: center; gap: 14px; }
+    #nav-email { font-size: 0.82rem; color: var(--gray-text); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .btn-nav-panel {
+      background: transparent; border: 1.5px solid var(--lime); color: var(--lime);
+      padding: 8px 18px; border-radius: 6px; font-family: 'Inter', sans-serif;
+      font-weight: 600; font-size: 0.82rem; cursor: pointer; text-decoration: none;
+      transition: background 0.2s, color 0.2s; white-space: nowrap; display: inline-block;
+    }
+    .btn-nav-panel:hover { background: var(--lime); color: var(--navy); }
+
+    /* ── Page ────────────────────────────────────── */
+    #page { padding-top: 72px; }
+
+    /* ── Hero del curso ──────────────────────────── */
+    .course-hero {
+      background: var(--navy-light);
+      border-bottom: 1px solid var(--card-border);
+      padding: 52px 0 48px;
+      position: relative; overflow: hidden;
+    }
+    .course-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(200,230,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,230,0,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+    }
+    @keyframes gridMove { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+
+    .hero-blob {
+      position: absolute; width: 420px; height: 420px;
+      background: rgba(123,79,190,0.13); border-radius: 50%;
+      filter: blur(90px); top: -140px; right: -80px; pointer-events: none;
+    }
+    .hero-inner { position: relative; z-index: 1; }
+
+    .breadcrumb {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-bottom: 24px; text-decoration: none; color: var(--gray-text);
+      font-size: 0.875rem; font-weight: 500; transition: color 0.2s;
+    }
+    .breadcrumb:hover { color: var(--lime); }
+    .breadcrumb:hover svg { transform: translateX(-3px); }
+    .breadcrumb svg { transition: transform 0.2s; }
+
+    .course-badge {
+      display: inline-flex; align-items: center;
+      background: var(--lime); color: var(--navy);
+      border-radius: 100px; padding: 5px 14px;
+      font-size: 0.7rem; font-weight: 800;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px;
+    }
+
+    .course-title {
+      font-size: clamp(1.9rem, 4vw, 2.8rem); font-weight: 900;
+      line-height: 1.1; letter-spacing: -0.03em;
+    }
+
+    .course-desc-hero {
+      margin-top: 12px; font-size: 0.95rem; color: var(--gray-text);
+      line-height: 1.65; max-width: 560px;
+    }
+
+    /* ── Clase en vivo ───────────────────────────── */
+    .live-section {
+      background: var(--navy); padding: 44px 0 60px;
+    }
+    .live-card {
+      background: linear-gradient(135deg, rgba(123,79,190,0.15) 0%, rgba(200,230,0,0.06) 100%);
+      border: 1px solid rgba(200,230,0,0.25);
+      border-radius: 18px; padding: 40px 36px; text-align: center;
+    }
+    .live-icon { font-size: 2.6rem; margin-bottom: 16px; display: block; }
+    .live-title { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .live-date-str {
+      display: inline-block; font-size: 0.9rem; color: var(--lime);
+      font-weight: 600; margin-bottom: 18px;
+    }
+    .live-desc { font-size: 0.9rem; color: var(--gray-text); line-height: 1.6; max-width: 400px; margin: 0 auto 28px; }
+    .btn-join {
+      display: inline-flex; align-items: center; gap: 9px;
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 14px 34px; border-radius: 9px; font-family: 'Inter', sans-serif;
+      font-weight: 700; font-size: 1rem; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-join:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(200,230,0,0.35); }
+
+    .recording-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 16px; overflow: hidden; margin-top: 8px;
+    }
+    .recording-card-header { padding: 20px 24px 16px; }
+    .recording-title { font-size: 1rem; font-weight: 700; }
+    .video-wrapper {
+      position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background: #0f1823;
+    }
+    .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+
+    /* ── Barra de progreso ───────────────────────── */
+    .progress-section {
+      background: var(--navy); border-bottom: 1px solid var(--card-border); padding: 28px 0;
+    }
+    .progress-inner { display: flex; flex-direction: column; gap: 12px; }
+    .progress-label { font-size: 0.88rem; font-weight: 600; color: var(--gray-text); }
+    .progress-label.completed { color: var(--lime); }
+    .progress-bar-track { width: 100%; height: 8px; background: var(--card-border); border-radius: 100px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--lime); border-radius: 100px; width: 0%; transition: width 0.5s ease; }
+
+    /* ── Videos section ──────────────────────────── */
+    .videos-section { background: var(--navy); padding: 44px 0 80px; }
+    .videos-section-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 28px; }
+
+    /* ── Video card ──────────────────────────────── */
+    .video-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 16px; overflow: hidden; margin-bottom: 24px; transition: border-color 0.2s;
+    }
+    .video-card:last-child { margin-bottom: 0; }
+    .video-card-header { padding: 20px 24px 16px; display: flex; align-items: center; gap: 14px; }
+    .video-num {
+      font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em; color: var(--lime);
+      background: rgba(200,230,0,0.08); border: 1px solid rgba(200,230,0,0.2);
+      border-radius: 6px; padding: 4px 10px; flex-shrink: 0;
+    }
+    .video-title { font-size: 1rem; font-weight: 700; line-height: 1.35; }
+    .video-card-footer { padding: 16px 24px 20px; border-top: 1px solid var(--card-border); }
+
+    .btn-video {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--card-bg); border: 1.5px solid var(--card-border); color: var(--white);
+      padding: 10px 20px; border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-size: 0.875rem; font-weight: 600; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .btn-video:hover:not(:disabled) { border-color: var(--lime); color: var(--lime); }
+    .btn-video:disabled { cursor: default; }
+    .btn-video.completed {
+      background: rgba(104,211,145,0.10); border-color: rgba(104,211,145,0.45);
+      color: #68D391; cursor: default;
+    }
+
+    /* ── Sin videos ──────────────────────────────── */
+    .no-videos-msg {
+      text-align: center; padding: 48px 20px; color: var(--gray-text); font-size: 0.9rem;
+      border: 1px dashed var(--card-border); border-radius: 14px;
+    }
+
+    /* ── Certificado ─────────────────────────────── */
+    #cert-section {
+      display: none; opacity: 0; transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease; margin-top: 40px;
+    }
+    #cert-section.visible { display: block; }
+    #cert-section.animated { opacity: 1; transform: translateY(0); }
+
+    .cert-box {
+      background: linear-gradient(135deg, rgba(123,79,190,0.18) 0%, rgba(200,230,0,0.07) 100%);
+      border: 1px solid rgba(200,230,0,0.3); border-radius: 18px; padding: 44px 40px; text-align: center;
+    }
+    .cert-icon { font-size: 3rem; margin-bottom: 18px; display: block; }
+    .cert-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .cert-desc { font-size: 0.9rem; color: var(--gray-text); line-height: 1.65; max-width: 440px; margin: 0 auto 28px; }
+
+    .btn-cert {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 13px 30px; border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-weight: 700; font-size: 0.95rem; cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-cert:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(200,230,0,0.35); }
+
+    /* ── Materiales ──────────────────────────────── */
+    .materiales-section {
+      margin-top: 48px; padding-top: 40px;
+      border-top: 1px solid var(--card-border);
+    }
+    .materiales-section-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 16px; }
+    .materiales-list { display: flex; flex-direction: column; gap: 10px; }
+    .material-row {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
+      padding: 14px 18px; display: flex; align-items: center; gap: 14px;
+    }
+    .material-icon { font-size: 1.4rem; flex-shrink: 0; line-height: 1; }
+    .material-info { flex: 1; min-width: 0; }
+    .material-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .material-desc { font-size: 0.78rem; color: var(--gray-text); line-height: 1.4; margin: 0; }
+    .btn-material-open {
+      flex-shrink: 0; background: transparent; border: 1px solid var(--card-border);
+      border-radius: 8px; color: var(--lime); font-size: 0.8rem; font-weight: 600;
+      padding: 7px 14px; cursor: pointer; text-decoration: none; display: inline-block;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-material-open:hover { background: rgba(200,230,0,0.08); border-color: var(--lime); }
+    .materiales-empty { font-size: 0.85rem; color: var(--gray-text); padding: 8px 0; margin: 0; }
+
+    /* ── Foro ────────────────────────────────────── */
+    .forum-section {
+      margin-top: 48px; padding-top: 40px;
+      border-top: 1px solid var(--card-border); padding-bottom: 8px;
+    }
+    .forum-section-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 24px; }
+    .forum-ask { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 28px; }
+    .forum-ask-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-text); display: block; margin-bottom: 8px; }
+    .forum-ask-textarea { width: 100%; background: rgba(0,0,0,0.2); border: 1.5px solid var(--card-border); color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.875rem; padding: 10px 14px; border-radius: 8px; resize: vertical; min-height: 80px; transition: border-color 0.2s; }
+    .forum-ask-textarea:focus { outline: none; border-color: var(--lime); }
+    .forum-ask-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .btn-forum-send { display: inline-flex; align-items: center; gap: 7px; background: var(--lime); color: var(--navy); border: none; padding: 9px 20px; border-radius: 7px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: transform 0.15s, opacity 0.2s; }
+    .btn-forum-send:hover { transform: translateY(-1px); opacity: 0.9; }
+    .btn-forum-send:disabled { opacity: 0.6; cursor: default; transform: none; }
+    .forum-thread { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    .forum-thread-head { padding: 15px 20px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .forum-thread-head:hover { background: rgba(255,255,255,0.02); }
+    .forum-q-meta { font-size: 0.77rem; color: var(--gray-text); margin-bottom: 4px; }
+    .forum-q-text { font-size: 0.9rem; font-weight: 500; line-height: 1.45; }
+    .forum-replies-toggle { font-size: 0.72rem; color: var(--gray-text); white-space: nowrap; flex-shrink: 0; padding: 3px 8px; border-radius: 6px; background: rgba(47,62,82,0.6); margin-top: 2px; }
+    .forum-thread-head.has-replies .forum-replies-toggle { color: var(--lime); }
+    .forum-replies-wrap { display: none; border-top: 1px solid var(--card-border); }
+    .forum-replies-wrap.open { display: block; }
+    .forum-reply-item { padding: 12px 20px 12px 36px; border-bottom: 1px solid rgba(47,62,82,0.4); }
+    .forum-reply-item:last-child { border-bottom: none; }
+    .forum-reply-meta { font-size: 0.76rem; color: var(--gray-text); margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+    .forum-reply-text { font-size: 0.875rem; line-height: 1.55; }
+    .badge-coach-sm { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 100px; background: rgba(200,230,0,0.12); border: 1px solid rgba(200,230,0,0.3); color: var(--lime); }
+    .forum-empty { text-align: center; padding: 28px 20px; color: var(--gray-text); font-size: 0.875rem; }
+    .forum-loading { text-align: center; padding: 24px; }
+    .forum-anon-row { margin: 8px 0 2px; }
+    .forum-anon-label { display: inline-flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--gray-text); cursor: pointer; user-select: none; }
+    .forum-anon-label input[type="checkbox"] { accent-color: var(--violet); width: 14px; height: 14px; cursor: pointer; }
+    .forum-post-actions { padding: 4px 20px 10px; display: flex; gap: 8px; }
+    .btn-forum-action { background: none; border: none; color: var(--gray-text); font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 8px; border-radius: 5px; transition: color 0.2s, background 0.2s; }
+    .btn-forum-action:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+    .btn-forum-action.danger:hover { color: var(--red); background: rgba(252,129,129,0.08); }
+    .forum-anon-tag { font-size: 0.68rem; color: var(--gray-text); font-style: italic; }
+    .forum-edit-wrap { padding: 12px 20px; border-top: 1px solid var(--card-border); background: rgba(123,79,190,0.05); }
+    .forum-edit-textarea { width: 100%; background: var(--navy); border: 1.5px solid var(--card-border); color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.875rem; padding: 10px 14px; border-radius: 8px; resize: vertical; min-height: 72px; transition: border-color 0.2s; }
+    .forum-edit-textarea:focus { outline: none; border-color: var(--violet); }
+    .forum-edit-row { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+    .emoji-picker-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 2px 5px; border-radius: 6px; color: var(--gray-text); line-height: 1; transition: background 0.15s; }
+    .emoji-picker-btn:hover { background: rgba(255,255,255,0.08); }
+    .emoji-picker-wrap { display: none; position: fixed; z-index: 9999; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; width: 230px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .emoji-picker-wrap.open { display: flex; flex-wrap: wrap; gap: 4px; }
+    .emoji-item { font-size: 1.3rem; cursor: pointer; padding: 4px 5px; border-radius: 6px; line-height: 1; transition: background 0.12s; }
+    .emoji-item:hover { background: rgba(255,255,255,0.1); }
+    .forum-img-attach-btn { background: none; border: none; cursor: pointer; font-size: 1.05rem; padding: 2px 5px; border-radius: 6px; color: var(--gray-text); line-height: 1; transition: background 0.15s; }
+    .forum-img-attach-btn:hover { background: rgba(255,255,255,0.08); }
+    .forum-img-uploading { font-size: 0.75rem; color: var(--gray-text); font-style: italic; margin-top: 4px; }
+    .forum-img-preview { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .forum-img-preview-item { position: relative; }
+    .forum-img-preview-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--card-border); display: block; }
+    .forum-img-preview-item .cancel-img-btn { position: absolute; top: -5px; right: -5px; background: rgba(0,0,0,0.75); color: #fff; border-radius: 50%; width: 17px; height: 17px; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .forum-img-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .forum-img-grid img { flex: 1 1 calc(33.33% - 6px); max-width: calc(33.33% - 4px); max-height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer; }
+    .btn  { display: inline-flex; align-items: center; gap: 6px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.82rem; border: none; cursor: pointer; padding: 8px 16px; border-radius: 7px; transition: opacity 0.2s, transform 0.1s; }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-sm   { padding: 5px 11px; font-size: 0.76rem; }
+    .btn-lime { background: var(--lime); color: var(--navy); }
+    .btn-ghost { background: transparent; border: 1.5px solid var(--card-border); color: var(--gray-text); }
+
+    /* ── Responsive ──────────────────────────────── */
+    @media (max-width: 768px) {
+      .course-hero { padding: 40px 0 36px; }
+      .videos-section { padding: 32px 0 60px; }
+      .video-card-header { padding: 16px 18px 12px; }
+      .video-card-footer { padding: 14px 18px 16px; }
+      .cert-box { padding: 32px 24px; }
+      .live-card { padding: 28px 20px; }
+    }
+
+    @media (max-width: 480px) {
+      .course-title { font-size: 1.7rem; }
+      .video-title  { font-size: 0.9rem; }
+      #nav-email    { display: none; }
+      .progress-section { padding: 22px 0; }
+    }
+
+    /* ─── Vista de módulos (course_type='modules' — Sesión 48) ─── */
+    .modules-layout {
+      display: grid; grid-template-columns: 290px 1fr; gap: 24px; align-items: start;
+    }
+    .modules-sidebar {
+      background: var(--card-bg, #243042); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 10px; max-height: 76vh; overflow-y: auto;
+      position: sticky; top: 100px;
+    }
+    .modules-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .modules-mod + .modules-mod { margin-top: 4px; }
+    .modules-mod-head {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; background: transparent; border: none; cursor: pointer;
+      padding: 9px 12px; border-radius: 8px; color: var(--white);
+      font-family: inherit; font-weight: 700; font-size: 0.86rem; text-align: left;
+      transition: background 0.15s;
+    }
+    .modules-mod-head:hover { background: rgba(255,255,255,0.04); }
+    .modules-mod-arrow { font-size: 0.85rem; color: var(--gray-text); transition: transform 0.2s; }
+    .modules-mod.collapsed .modules-mod-arrow { transform: rotate(-90deg); }
+    .modules-mod.collapsed .modules-lessons { display: none; }
+    .modules-lessons {
+      display: flex; flex-direction: column; gap: 1px;
+      padding-left: 6px; padding-bottom: 6px;
+    }
+    .modules-lesson {
+      display: flex; align-items: center; gap: 9px;
+      background: transparent; border: none; border-left: 2px solid transparent;
+      cursor: pointer; padding: 7px 10px; border-radius: 0 6px 6px 0;
+      color: var(--gray-text); font-family: inherit; font-size: 0.82rem;
+      text-align: left; transition: background 0.15s, color 0.15s;
+    }
+    .modules-lesson:hover { background: rgba(255,255,255,0.04); color: var(--white); }
+    .modules-lesson.active {
+      background: rgba(123,79,190,0.18); color: var(--white);
+      border-left-color: var(--violet, #7B4FBE);
+    }
+    .modules-lesson-check {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); font-size: 0.7rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .modules-lesson.active .modules-lesson-check { background: var(--violet, #7B4FBE); color: #fff; }
+    .modules-lesson-check.done { background: var(--lime, #C8E600); color: #1E2A3A; }
+    .modules-lesson-title { flex: 1; min-width: 0; word-break: break-word; }
+    .modules-active-title {
+      font-size: 1rem; font-weight: 700; color: var(--white); margin-bottom: 4px;
+    }
+    .modules-active-actions { display: flex; justify-content: flex-start; }
+    /* Etapa X.7: materiales específicos por lección, debajo del video activo */
+    .lesson-materials-wrap { margin-top: 24px; }
+    .lesson-materials-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: var(--white); }
+    @media (max-width: 880px) {
+      .modules-layout { grid-template-columns: 1fr; }
+      .modules-sidebar { position: static; max-height: none; }
+    }
+
+    /* ── Quiz section (Etapa U) ─────────────────────── */
+    #quiz-section, #quiz-attempts-exhausted {
+      display: none;
+      margin-top: 40px;
+    }
+    #quiz-section.visible, #quiz-attempts-exhausted.visible { display: block; }
+    .quiz-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 28px;
+    }
+    .quiz-header { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--card-border); }
+    .quiz-title  { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 8px; }
+    .quiz-meta-badges { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .quiz-attempts-badge {
+      display: inline-block; font-size: 0.78rem; font-weight: 700;
+      padding: 4px 12px; border-radius: 100px;
+      background: rgba(123,79,190,0.15); border: 1px solid rgba(123,79,190,0.35); color: var(--violet-light, #9B6FDE);
+    }
+    .quiz-hint { font-size: 0.82rem; color: var(--gray-text); }
+    .quiz-q-list { display: flex; flex-direction: column; }
+    .quiz-q-item {
+      padding: 22px 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .quiz-q-item:last-child { border-bottom: none; }
+    .quiz-q-num {
+      display: inline-block; font-size: 0.74rem; font-weight: 700;
+      color: var(--gray-text); text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .quiz-q-stmt {
+      font-size: 0.96rem; font-weight: 600; line-height: 1.5;
+      margin-bottom: 14px; color: var(--white);
+    }
+    .quiz-options-list { display: flex; flex-direction: column; gap: 8px; }
+    .quiz-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 16px;
+      background: rgba(0,0,0,0.18);
+      border: 1.5px solid var(--card-border); border-radius: 9px;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    }
+    .quiz-option:hover { border-color: var(--lime); }
+    .quiz-option.selected {
+      border-color: var(--lime);
+      background: rgba(200,230,0,0.08);
+    }
+    .quiz-option input { accent-color: var(--lime); flex-shrink: 0; }
+    .quiz-option-text { font-size: 0.88rem; line-height: 1.4; }
+    .quiz-text-answer {
+      width: 100%; box-sizing: border-box;
+      background: rgba(0,0,0,0.2); border: 1.5px solid var(--card-border); color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; padding: 11px 14px;
+      border-radius: 8px; resize: vertical; min-height: 86px;
+      transition: border-color 0.2s;
+    }
+    .quiz-text-answer:focus { outline: none; border-color: var(--lime); }
+    .quiz-q-images {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+    .quiz-q-images img {
+      flex: 1 1 calc(33.33% - 6px); max-width: calc(33.33% - 4px);
+      max-height: 180px; object-fit: cover;
+      border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer;
+    }
+    .quiz-footer {
+      display: flex; justify-content: flex-end; margin-top: 22px;
+      padding-top: 22px; border-top: 1px solid var(--card-border);
+    }
+    .btn-quiz-submit {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--lime); color: var(--navy); border: none;
+      padding: 12px 28px; border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      transition: transform 0.15s, opacity 0.2s;
+    }
+    .btn-quiz-submit:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.92; }
+    .btn-quiz-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-quiz-retry {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--violet, #7B4FBE); color: var(--white); border: none;
+      padding: 10px 22px; border-radius: 7px; font-family: 'Inter', sans-serif;
+      font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-quiz-retry:hover { opacity: 0.88; }
+
+    /* Resultado del quiz */
+    #quiz-result-panel {
+      margin-top: 22px; padding: 20px 24px;
+      border-radius: 12px; display: none;
+    }
+    #quiz-result-panel.visible { display: block; }
+    #quiz-result-panel.success {
+      background: rgba(200,230,0,0.1); border: 1px solid rgba(200,230,0,0.4);
+    }
+    #quiz-result-panel.failure {
+      background: rgba(252,129,129,0.08); border: 1px solid rgba(252,129,129,0.35);
+    }
+    .quiz-result-title { font-size: 1rem; font-weight: 800; margin-bottom: 6px; }
+    .quiz-result-desc  { font-size: 0.86rem; color: var(--gray-text); line-height: 1.5; margin-bottom: 12px; }
+
+    /* Sección "agotados" */
+    .quiz-exhausted-card {
+      background: rgba(252,129,129,0.06); border: 1px solid rgba(252,129,129,0.3);
+      border-radius: 14px; padding: 28px; text-align: center;
+    }
+    .quiz-exhausted-icon { font-size: 2.4rem; display: block; margin-bottom: 12px; }
+    .quiz-exhausted-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 8px; }
+    .quiz-exhausted-desc  { font-size: 0.88rem; color: var(--gray-text); line-height: 1.5; max-width: 480px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Loading overlay ────────────────────────── -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ── Navbar ─────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="logo-wrap" aria-label="HB Lab">
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+          <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38"
+                stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38"
+                stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="16" x2="28" y2="16" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="24" x2="28" y2="24" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="32" x2="28" y2="32" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <div class="nav-right">
+        <span id="nav-email"></span>
+        <a href="dashboard.html" class="btn-nav-panel">Mi panel</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Page ───────────────────────────────────── -->
+  <div id="page">
+
+    <!-- Hero del curso -->
+    <section class="course-hero">
+      <div class="hero-blob"></div>
+      <div class="container hero-inner">
+        <a href="dashboard.html" class="breadcrumb">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Mi panel
+        </a>
+        <div class="course-badge" id="course-badge">Curso · Online</div>
+        <h1 class="course-title" id="course-title-el">Cargando...</h1>
+        <p class="course-desc-hero" id="course-desc-el" style="display:none"></p>
+      </div>
+    </section>
+
+    <!-- Barra de progreso (oculta para cursos en vivo sin videos) -->
+    <div class="progress-section" id="progress-section">
+      <div class="container">
+        <div class="progress-inner">
+          <span class="progress-label" id="progress-label">Cargando progreso...</span>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenido principal: videos o clase en vivo -->
+    <section class="videos-section" id="main-section">
+      <div class="container">
+        <p class="videos-section-title" id="content-title">Contenido del curso</p>
+        <div id="videos-container"></div>
+
+        <!-- Sección Quiz (Etapa U) — oculta hasta completar 100% si el curso tiene quiz activo -->
+        <div id="quiz-section">
+          <div class="quiz-card">
+            <div class="quiz-header">
+              <div class="quiz-meta-badges">
+                <h2 class="quiz-title" style="margin:0">Evaluación final</h2>
+                <span id="quiz-attempts-badge" class="quiz-attempts-badge" style="display:none"></span>
+              </div>
+              <p class="quiz-hint" id="quiz-hint"></p>
+            </div>
+            <div class="quiz-q-list" id="quiz-q-list"></div>
+            <div class="quiz-footer">
+              <button class="btn-quiz-submit" id="btn-quiz-submit" onclick="submitQuiz()" disabled>
+                Enviar respuestas
+              </button>
+            </div>
+            <div id="quiz-result-panel"></div>
+          </div>
+        </div>
+
+        <!-- Sección "intentos agotados" (Etapa U) -->
+        <div id="quiz-attempts-exhausted">
+          <div class="quiz-exhausted-card">
+            <span class="quiz-exhausted-icon">⛔</span>
+            <h2 class="quiz-exhausted-title">Intentos agotados</h2>
+            <p class="quiz-exhausted-desc" id="quiz-exhausted-desc">Agotaste los intentos disponibles. No es posible obtener el certificado para este curso.</p>
+          </div>
+        </div>
+
+        <!-- Certificado (oculto hasta completar) -->
+        <div id="cert-section">
+          <div class="cert-box">
+            <span class="cert-icon">🎓</span>
+            <h2 class="cert-title">¡Felicitaciones! Completaste el curso.</h2>
+            <p class="cert-desc">Descargá tu certificado de participación en formato PDF.</p>
+            <button class="btn-cert" id="btn-cert" onclick="generarCertificado()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Descargar certificado
+            </button>
+          </div>
+        </div>
+
+        <!-- Materiales del curso -->
+        <div class="materiales-section">
+          <p class="materiales-section-title">📚 Materiales</p>
+          <div id="materiales-list" class="materiales-list">
+            <p class="materiales-empty">Cargando materiales…</p>
+          </div>
+        </div>
+
+        <!-- Foro -->
+        <div id="forum-section" class="forum-section">
+          <p class="forum-section-title">💬 Consultas</p>
+          <div class="forum-ask">
+            <label class="forum-ask-label" for="forum-ask-input">Enviá tu pregunta al coach</label>
+            <textarea class="forum-ask-textarea" id="forum-ask-input" placeholder="¿Tenés alguna duda sobre el contenido del curso?"></textarea>
+            <div class="forum-anon-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <label class="forum-anon-label">
+                <input type="checkbox" id="forum-anon-check" />
+                <span>Publicar como anónimo</span>
+              </label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button class="emoji-picker-btn" onclick="toggleEmojiPicker(this,'forum-ask-input')" title="Insertar emoji">😊</button>
+                <label class="forum-img-attach-btn" title="Adjuntar imagen">
+                  📎<input type="file" accept="image/*" multiple style="display:none" onchange="handleAskImage(this.files)">
+                </label>
+              </div>
+            </div>
+            <div class="forum-img-uploading" id="ask-img-status" style="display:none">Subiendo imagen…</div>
+            <div class="forum-img-preview" id="ask-img-preview" style="display:none"></div>
+            <div class="forum-ask-footer">
+              <button class="btn-forum-send" id="btn-forum-send" onclick="submitPregunta()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Enviar pregunta
+              </button>
+            </div>
+            <div id="forum-send-error" style="display:none; margin-top:10px; font-size:0.82rem; color:var(--red); background:rgba(252,129,129,0.08); border:1px solid rgba(252,129,129,0.25); border-radius:7px; padding:8px 12px;"></div>
+          </div>
+          <div id="forum-list"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </div><!-- /#page -->
+
+  <!-- ── Scripts ────────────────────────────────── -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    /* ── Estado global ─────────────────────────────── */
+    let currentUser     = null;
+    let currentCourseId = null;
+    let currentSlug     = null;
+    let currentCertUrl  = null;   // URL del PNG base del certificado (courses.certificate_url)
+    let VIDEOS          = [];     // [{ index, title, src }] — poblado desde DB
+    let TOTAL_VIDEOS    = 0;
+    const completedSet  = new Set();
+
+    // Modo módulos (course_type='modules' — Sesión 48)
+    let isModulesMode = false;
+    let MODULES       = [];   // [{id, title, order_num, lessons:[{id, title, url, order_num}]}]
+    let LESSONS_FLAT  = [];   // flat de lecciones para indexar/buscar
+    let LESSON_IDX_BY_ID = {}; // Etapa X.3: lesson UUID → índice numérico en LESSONS_FLAT (clave para video_progress.video_index INT)
+    let activeLessonId = null;
+
+    /* ── Tags visuales por slug (herencia de páginas legacy) ── */
+    const SLUG_TAG = {
+      'webinar-hipertrofia':   'Webinar · Online',
+      'carrera-hibrida':       'Capacitación · Online',
+      'entrenamiento-hibrido': 'Masterclass · Online',
+    };
+
+    /* ── Helpers ───────────────────────────────────── */
+    function hideLoading() {
+      const el = document.getElementById('loading-screen');
+      el.classList.add('fade-out');
+      setTimeout(() => el.remove(), 380);
+    }
+
+    function zeroPad(n) { return String(n + 1).padStart(2, '0'); }
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Normaliza cualquier URL de YouTube a formato embed (Sesión 51).
+    // Acepta: youtu.be/ID · youtube.com/watch?v=ID · youtube.com/embed/ID
+    // Si no matchea (URL no-YouTube o vacía), devuelve la entrada sin tocar.
+    function toYoutubeEmbed(url) {
+      if (!url) return '';
+      const match = String(url).match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+      return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+    }
+
+    function linkify(raw) {
+      if (!raw) return '';
+      const urlRegex = /https?:\/\/[^\s<>"']+/g;
+      let result = '', lastIndex = 0, match;
+      while ((match = urlRegex.exec(raw)) !== null) {
+        result += escHtml(raw.slice(lastIndex, match.index));
+        const url = match[0];
+        result += `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--lime);word-break:break-all;">${escHtml(url)}</a>`;
+        lastIndex = match.index + url.length;
+      }
+      result += escHtml(raw.slice(lastIndex));
+      return result;
+    }
+
+    /* ── Render: clase en vivo ─────────────────────── */
+    function renderLiveSection(course) {
+      document.getElementById('content-title').textContent = 'Clase en vivo';
+
+      const container = document.getElementById('videos-container');
+
+      if (course.live_completed) {
+        // Solo se llega acá cuando live_completed = true && NO hay recording_url.
+        // Si hubiera grabación, init() entra en treatAsRecorded y se renderiza con
+        // renderVideos() (botón "Marcar como completado", barra de progreso, certificado).
+        // Sin grabación: mensaje pasivo, sin progreso, sin certificado (spec Sesión 37).
+        container.innerHTML = `
+          <div class="no-videos-msg">
+            ✅ La clase ya se realizó. La grabación estará disponible pronto.
+          </div>`;
+        return;
+      }
+
+      // Clase próxima / activa
+      const liveDate = course.live_date ? new Date(course.live_date) : null;
+      const dateStr  = liveDate
+        ? liveDate.toLocaleString('es-AR', { weekday:'long', day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' })
+        : null;
+
+      container.innerHTML = `
+        <div class="live-card">
+          <span class="live-icon">🎥</span>
+          <h2 class="live-title">Clase en vivo</h2>
+          ${dateStr ? `<span class="live-date-str">📅 ${escHtml(dateStr)}</span>` : ''}
+          <p class="live-desc">Accedé a la clase en vivo a través del siguiente enlace. Asegurate de estar conectado a tiempo.</p>
+          <a href="${escHtml(course.live_url || '#')}" target="_blank" rel="noopener noreferrer" class="btn-join">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
+            Unirse a la clase
+          </a>
+        </div>`;
+    }
+
+    /* ── Render: videos pregrabados ────────────────── */
+    function renderVideos() {
+      const container = document.getElementById('videos-container');
+
+      if (!VIDEOS.length) {
+        container.innerHTML = `<div class="no-videos-msg">📋 Este curso no tiene videos cargados todavía.</div>`;
+        return;
+      }
+
+      container.innerHTML = VIDEOS.map(video => {
+        const done = completedSet.has(video.index);
+        return `
+          <div class="video-card" id="card-video-${video.index}">
+            <div class="video-card-header">
+              <span class="video-num">#${zeroPad(video.index)}</span>
+              <span class="video-title">${escHtml(video.title)}</span>
+            </div>
+            <div class="video-wrapper">
+              <iframe src="${escHtml(video.src)}"
+                frameborder="0" allowfullscreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+              </iframe>
+            </div>
+            <div class="video-card-footer">
+              ${done
+                ? `<button class="btn-video completed" id="btn-video-${video.index}" disabled>
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                     Completado
+                   </button>`
+                : `<button class="btn-video" id="btn-video-${video.index}" onclick="markComplete(${video.index})">
+                     Marcar como completado
+                   </button>`
+              }
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    /* ── Barra de progreso ─────────────────────────── */
+    function updateProgress() {
+      if (!TOTAL_VIDEOS) return;
+      const count = completedSet.size;
+      const pct   = Math.round(count / TOTAL_VIDEOS * 100);
+      const label = document.getElementById('progress-label');
+      const fill  = document.getElementById('progress-fill');
+
+      fill.style.width = pct + '%';
+
+      if (pct >= 100) {
+        label.textContent = '¡Curso completado! 🎉';
+        label.classList.add('completed');
+        // Etapa U: si el curso tiene quiz activo, gateamos el certificado detrás del quiz.
+        // checkQuizGateAndShowCert() consulta course_quizzes + intentos y decide qué mostrar.
+        checkQuizGateAndShowCert();
+      } else {
+        const noun = isModulesMode
+          ? `lección${TOTAL_VIDEOS !== 1 ? 'es' : ''} completada${count !== 1 ? 's' : ''}`
+          : `video${TOTAL_VIDEOS !== 1 ? 's' : ''} completado${count !== 1 ? 's' : ''}`;
+        label.textContent = `${count} de ${TOTAL_VIDEOS} ${noun}`;
+        label.classList.remove('completed');
+      }
+    }
+
+    /* ── Mostrar sección certificado ───────────────── */
+    function showCertSection() {
+      const section = document.getElementById('cert-section');
+      section.classList.add('visible');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        section.classList.add('animated');
+        // Scroll al cert para que el alumno lo vea (Etapa X.2 — fix flujo post-último-video)
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+    }
+
+    /* ── Marcar video como completado ──────────────── */
+    async function markComplete(videoIndex) {
+      const btn = document.getElementById(`btn-video-${videoIndex}`);
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      const { error } = await sb.from('video_progress').upsert({
+        user_id:      currentUser.id,
+        course_id:    currentCourseId,
+        video_index:  videoIndex,
+        completed:    true,
+        completed_at: new Date().toISOString()
+      }, { onConflict: 'user_id,course_id,video_index' });
+
+      if (error) {
+        console.error('Error guardando progreso:', error.message);
+        btn.disabled = false;
+        btn.textContent = 'Marcar como completado';
+        return;
+      }
+
+      completedSet.add(videoIndex);
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Completado`;
+      btn.className = 'btn-video completed';
+      btn.disabled = true;
+      updateProgress();   // ← si pct >= 100, dispara checkQuizGateAndShowCert()
+
+      // Auto-scroll al siguiente video si hay y todavía no completamos el curso (Etapa X.2 — fix avance).
+      // Si era el último, updateProgress() arriba ya disparó checkQuizGateAndShowCert(),
+      // que se encarga de scroll a #quiz-section / #cert-section.
+      const nextCard = document.getElementById(`card-video-${videoIndex + 1}`);
+      if (nextCard && completedSet.size < TOTAL_VIDEOS) {
+        setTimeout(() => nextCard.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+      }
+    }
+
+    /* ── Vista de módulos (Sesión 48) ─────────────── */
+    async function loadStudentModules(courseId) {
+      const { data: modules } = await sb
+        .from('course_modules').select('id, title, order_num').eq('course_id', courseId).order('order_num');
+      if (!modules?.length) return [];
+      const modIds = modules.map(m => m.id);
+      const { data: lessons } = await sb
+        .from('course_lessons').select('id, module_id, title, video_url, order_num').in('module_id', modIds).order('order_num');
+      const lessonsByMod = {};
+      (lessons || []).forEach(l => {
+        if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
+        lessonsByMod[l.module_id].push(l);
+      });
+      return modules.map(m => ({ ...m, lessons: lessonsByMod[m.id] || [] }));
+    }
+
+    function renderModulesView() {
+      const container = document.getElementById('videos-container');
+      if (!container) return;
+
+      if (!LESSONS_FLAT.length) {
+        container.innerHTML = `<div class="no-videos-msg">📚 Este curso aún no tiene módulos cargados.</div>`;
+        return;
+      }
+
+      // Default: primera lección activa si no hay una seleccionada
+      if (!activeLessonId || !LESSONS_FLAT.find(l => l.id === activeLessonId)) {
+        activeLessonId = LESSONS_FLAT[0].id;
+      }
+
+      // Sidebar: módulos plegables con lecciones
+      const sidebarHtml = MODULES.map((m, mi) => {
+        const lessonsHtml = (m.lessons || []).map((l, li) => {
+          // Etapa X.3: completedSet guarda flat-index (número), no UUID.
+          const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
+          const active = l.id === activeLessonId;
+          const checkContent = done ? '✓' : (li + 1);
+          return `
+            <button class="modules-lesson ${active ? 'active' : ''}" onclick="selectLesson('${escHtml(l.id)}')">
+              <span class="modules-lesson-check ${done ? 'done' : ''}">${checkContent}</span>
+              <span class="modules-lesson-title">${escHtml(l.title || `Lección ${li + 1}`)}</span>
+            </button>`;
+        }).join('');
+        return `
+          <div class="modules-mod" id="modules-mod-${mi}">
+            <button class="modules-mod-head" onclick="toggleModule(${mi})">
+              <span class="modules-mod-title">${escHtml(m.title || `Módulo ${mi + 1}`)}</span>
+              <span class="modules-mod-arrow">▾</span>
+            </button>
+            <div class="modules-lessons">${lessonsHtml}</div>
+          </div>`;
+      }).join('');
+
+      // Main: lección activa con iframe
+      const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
+      const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
+      const mainHtml = active ? `
+        <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
+        <div class="video-wrapper">
+          <iframe src="${escHtml(toYoutubeEmbed(active.video_url || ''))}" frameborder="0" allowfullscreen
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+        </div>
+        <div class="modules-active-actions">
+          ${isDone
+            ? `<button class="btn-video completed" disabled>
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                 Completado
+               </button>`
+            : `<button class="btn-video" id="btn-lesson-mark" onclick="markLessonComplete('${escHtml(active.id)}')">
+                 Marcar como completado
+               </button>`}
+        </div>
+        <!-- Etapa X.7: materiales específicos de esta lección — se popula async tras el render. Si no hay, queda vacío (silencioso). -->
+        <div id="lesson-materials-${escHtml(active.id)}" class="lesson-materials-wrap"></div>`
+        : '<div class="no-videos-msg">Seleccioná una lección.</div>';
+
+      container.innerHTML = `
+        <div class="modules-layout">
+          <aside class="modules-sidebar">${sidebarHtml}</aside>
+          <main class="modules-main">${mainHtml}</main>
+        </div>`;
+
+      // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
+      if (active) loadLessonMaterials(active.id);
+    }
+
+    /* ─── Materiales por lección (Etapa X.7) ─────────
+       Renderiza una sub-sección "📎 Materiales de esta lección" debajo del video.
+       Silencioso: si la lección no tiene materiales asignados, no muestra nada.
+    ──────────────────────────────────────────────── */
+    async function loadLessonMaterials(lessonId) {
+      const wrap = document.getElementById(`lesson-materials-${lessonId}`);
+      if (!wrap) return;
+      const { data, error } = await sb.from('course_materials')
+        .select('id, title, description, drive_url')
+        .eq('lesson_id', lessonId)
+        .order('created_at');
+      if (error) {
+        console.error('loadLessonMaterials:', error);
+        return;  // silencioso ante errores también
+      }
+      if (!data || !data.length) return;  // silencioso si no hay materiales
+
+      wrap.innerHTML = `
+        <p class="lesson-materials-title">📎 Materiales de esta lección</p>
+        <div class="materiales-list">
+          ${data.map(m => {
+            const isPdf = (m.drive_url || '').includes('/storage/v1/object/public/course-materials/');
+            const icon  = isPdf ? '📄' : '🔗';
+            const desc  = m.description ? `<p class="material-desc">${escHtml(m.description)}</p>` : '';
+            return `
+              <div class="material-row">
+                <span class="material-icon">${icon}</span>
+                <div class="material-info">
+                  <p class="material-title">${escHtml(m.title)}</p>
+                  ${desc}
+                </div>
+                <a href="${escHtml(m.drive_url || '#')}" target="_blank" rel="noopener noreferrer"
+                   class="btn-material-open">Abrir</a>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function selectLesson(lessonId) {
+      activeLessonId = lessonId;
+      renderModulesView();
+    }
+
+    function toggleModule(idx) {
+      const mod = document.getElementById(`modules-mod-${idx}`);
+      if (mod) mod.classList.toggle('collapsed');
+    }
+
+    async function markLessonComplete(lessonId) {
+      const btn = document.getElementById('btn-lesson-mark');
+      if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+      // Etapa X.3: video_progress.video_index es INT.
+      // Mapeamos UUID de la lección → posición flat (entero) usando el mapa precomputado.
+      const flatIdx = LESSON_IDX_BY_ID[lessonId];
+      if (typeof flatIdx !== 'number' || flatIdx < 0) {
+        console.error('markLessonComplete: lesson sin flat-index en LESSON_IDX_BY_ID', lessonId);
+        if (btn) { btn.disabled = false; btn.textContent = 'Marcar como completado'; }
+        return;
+      }
+
+      const { error } = await sb.from('video_progress').upsert({
+        user_id:      currentUser.id,
+        course_id:    currentCourseId,
+        video_index:  flatIdx,           // INT — índice de la lección en LESSONS_FLAT
+        completed:    true,
+        completed_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,course_id,video_index' });
+
+      if (error) {
+        console.error('Error guardando progreso (lesson):', error.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Marcar como completado'; }
+        return;
+      }
+
+      // Recalcular completedSet con el índice numérico (no el UUID)
+      completedSet.add(flatIdx);
+
+      // Detectar siguiente lección por flat-index (Etapa X.2 — fix avance)
+      const next = (flatIdx < LESSONS_FLAT.length - 1)
+        ? LESSONS_FLAT[flatIdx + 1]
+        : null;
+
+      // Render inmediato para dar feedback visual ("Completado") antes de avanzar
+      renderModulesView();
+      updateProgress();   // ← si pct >= 100, dispara checkQuizGateAndShowCert()
+
+      if (next) {
+        // Avanzar automáticamente con un breve delay para que el alumno vea el feedback
+        setTimeout(() => {
+          activeLessonId = next.id;
+          renderModulesView();
+          const main = document.querySelector('.modules-main');
+          if (main) main.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 600);
+      }
+      // Si no hay siguiente, era la última lección: updateProgress() ya disparó
+      // checkQuizGateAndShowCert() que muestra y hace scroll al quiz o certificado.
+    }
+
+    /* ── Certificado con jsPDF ─────────────────────── */
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload  = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo cargar la imagen del certificado'));
+        img.src = src;
+      });
+    }
+
+    async function generarCertificado() {
+      const btn = document.getElementById('btn-cert');
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = 'Generando certificado...';
+
+      try {
+        const { data: profile } = await sb
+          .from('profiles').select('full_name').eq('id', currentUser.id).single();
+
+        const fullName = profile?.full_name
+          || currentUser.user_metadata?.full_name
+          || currentUser.user_metadata?.name
+          || currentUser.email.split('@')[0];
+
+        if (!currentCertUrl) throw new Error('No hay certificado configurado para este curso.');
+        const img = await loadImage(currentCertUrl);
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        doc.addImage(img, 'PNG', 0, 0, 297, 210);
+
+        const now = new Date();
+        const dateStr = [
+          String(now.getDate()).padStart(2, '0'),
+          String(now.getMonth() + 1).padStart(2, '0'),
+          now.getFullYear(),
+        ].join('/');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(16);
+        doc.setTextColor(45, 27, 107);
+        doc.text(dateStr, 148.5, 72, { align: 'center' });
+
+        doc.setFont('helvetica', 'bolditalic');
+        doc.setFontSize(32);
+        doc.setTextColor(45, 27, 107);
+        doc.text(fullName, 148.5, 108, { align: 'center' });
+
+        const safeName = fullName
+          .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+        doc.save(`certificado-${currentSlug}-${safeName}.pdf`);
+
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar certificado`;
+      } catch (err) {
+        console.error('Error generando certificado:', err);
+        btn.disabled = false;
+        btn.textContent = '⚠ Error al generar — intentar de nuevo';
+      }
+    }
+
+    /* ── Init principal ────────────────────────────── */
+    async function init() {
+      // 1. Verificar sesión
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { window.location.replace('login.html'); return; }
+      currentUser = session.user;
+
+      // 2. Leer ?slug= de la URL
+      const slug = new URLSearchParams(window.location.search).get('slug');
+      if (!slug) { window.location.replace('dashboard.html'); return; }
+      currentSlug = slug;
+
+      // 3. Cargar datos del curso desde Supabase
+      const { data: course, error: courseErr } = await sb
+        .from('courses')
+        .select('id, slug, title, description, videos, total_videos, is_live, live_url, live_date, recording_url, recordings, live_completed, certificate_url, course_type')
+        .eq('slug', slug)
+        .single();
+
+      if (courseErr || !course) {
+        console.error('Curso no encontrado:', courseErr?.message);
+        window.location.replace('dashboard.html');
+        return;
+      }
+      currentCourseId = course.id;
+      currentCertUrl  = course.certificate_url || null;
+
+      // 4. Verificar acceso (pago activo)
+      const { data: access } = await sb
+        .from('user_courses')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('course_id', course.id)
+        .eq('payment_status', 'paid')
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (!access) {
+        console.warn('Sin acceso al curso');
+        window.location.replace('dashboard.html');
+        return;
+      }
+
+      // 5. Poblar head y hero
+      document.title = `${course.title} — HB Lab`;
+      document.getElementById('nav-email').textContent   = currentUser.email;
+      document.getElementById('course-title-el').textContent = course.title;
+      document.getElementById('course-badge').textContent   = SLUG_TAG[slug] || 'Curso · Online';
+      if (course.description) {
+        const descEl = document.getElementById('course-desc-el');
+        descEl.textContent   = course.description;
+        descEl.style.display = '';
+      }
+
+      // 6. Preparar contenido — branch por course_type (Sesión 48)
+      isModulesMode = course.course_type === 'modules';
+
+      if (isModulesMode) {
+        // Modo módulos: cargar course_modules + course_lessons.
+        // Etapa X.3: video_progress.video_index es INT — guardamos el ÍNDICE NUMÉRICO
+        // de la lección en el array aplanado (no el UUID). Usamos LESSON_IDX_BY_ID
+        // para cruzar UUID → índice cuando interactuamos con la BD.
+        MODULES = await loadStudentModules(course.id);
+        LESSONS_FLAT = MODULES.flatMap(m => m.lessons.map(l => ({
+          ...l, moduleId: m.id, moduleTitle: m.title
+        })));
+        TOTAL_VIDEOS = LESSONS_FLAT.length;
+
+        // Construir el mapa lesson.id → flat-index (orden: módulos por order_num, lecciones por order_num)
+        LESSON_IDX_BY_ID = {};
+        LESSONS_FLAT.forEach((l, i) => { LESSON_IDX_BY_ID[l.id] = i; });
+
+        if (LESSONS_FLAT.length) {
+          // Filtramos solo por curso + completado: video_progress es INT y los registros válidos
+          // de este curso son índices 0..N-1 en el array aplanado.
+          const { data: progressData } = await sb
+            .from('video_progress')
+            .select('video_index')
+            .eq('user_id', currentUser.id)
+            .eq('course_id', course.id)
+            .eq('completed', true);
+          (progressData || []).forEach(r => {
+            if (typeof r.video_index === 'number' && r.video_index >= 0 && r.video_index < LESSONS_FLAT.length) {
+              completedSet.add(r.video_index);
+            }
+          });
+        }
+      } else {
+        // Modo videos / live (lógica preexistente)
+        // Caso especial: curso live ya finalizado con grabaciones → tratar como curso pregrabado.
+        // Prioridad: course.recordings (JSONB array). Fallback legacy: course.recording_url como 1 ítem.
+        var liveRecordings = (() => {
+          if (!course.is_live || !course.live_completed) return [];
+          let recs = course.recordings;
+          if (typeof recs === 'string') {
+            try { recs = JSON.parse(recs); }
+            catch (e) { console.error('Error parseando course.recordings:', e); recs = []; }
+          }
+          if (!Array.isArray(recs)) recs = [];
+          const valid = recs.filter(r => r && r.url);
+          if (valid.length > 0) return valid;
+          if (course.recording_url) {
+            return [{ title: 'Grabación de la clase', url: course.recording_url }];
+          }
+          return [];
+        })();
+
+        var showRecordingsAsVideos = course.is_live && course.live_completed && liveRecordings.length > 0;
+        var treatAsRecorded        = !course.is_live || showRecordingsAsVideos;
+
+        if (treatAsRecorded) {
+          if (showRecordingsAsVideos) {
+            VIDEOS = liveRecordings.map((r, i) => ({
+              index: i,
+              title: r.title || `Grabación ${i + 1}`,
+              src:   r.url   || ''
+            }));
+          } else {
+            const rawVideos = Array.isArray(course.videos) ? course.videos : [];
+            VIDEOS = rawVideos.map((v, i) => ({ index: i, title: v.title || `Video ${i + 1}`, src: v.url || '' }));
+          }
+          TOTAL_VIDEOS = VIDEOS.length;
+
+          // Cargar progreso
+          const { data: progressData } = await sb
+            .from('video_progress')
+            .select('video_index')
+            .eq('user_id', currentUser.id)
+            .eq('course_id', course.id)
+            .eq('completed', true);
+          (progressData || []).forEach(r => completedSet.add(r.video_index));
+        } else {
+          // Cursos en vivo sin grabación (próximos / sin URL aún): ocultar barra de progreso
+          document.getElementById('progress-section').style.display = 'none';
+        }
+      }
+
+      // 7. Renderizar y cargar foro + materiales
+      hideLoading();
+
+      if (isModulesMode) {
+        renderModulesView();
+        updateProgress();
+      } else if (treatAsRecorded) {
+        renderVideos();
+        updateProgress();
+      } else {
+        renderLiveSection(course);
+      }
+
+      loadMateriales();
+      loadForo();
+    }
+
+    /* ═══════════════════════════════════════════════════
+       MATERIALES
+    ═══════════════════════════════════════════════════ */
+    async function loadMateriales() {
+      const wrap = document.getElementById('materiales-list');
+      // Etapa X.7: la sección global muestra solo materiales SIN lesson_id (generales del curso).
+      // Los materiales de cada lección se renderean dentro de la lección activa en modo módulos.
+      const { data, error } = await sb
+        .from('course_materials')
+        .select('id, title, description, drive_url')
+        .eq('course_id', currentCourseId)
+        .is('lesson_id', null)
+        .order('created_at');
+
+      if (error || !data?.length) {
+        wrap.innerHTML = '<p class="materiales-empty">El coach aún no cargó materiales para este curso.</p>';
+        return;
+      }
+
+      wrap.innerHTML = data.map(m => {
+        const isPdf = (m.drive_url || '').includes('/storage/v1/object/public/course-materials/');
+        const icon  = isPdf ? '📄' : '🔗';
+        const desc  = m.description
+          ? `<p class="material-desc">${escHtml(m.description)}</p>`
+          : '';
+        return `
+          <div class="material-row">
+            <span class="material-icon">${icon}</span>
+            <div class="material-info">
+              <p class="material-title">${escHtml(m.title)}</p>
+              ${desc}
+            </div>
+            <a href="${escHtml(m.drive_url || '#')}" target="_blank" rel="noopener noreferrer"
+               class="btn-material-open">Abrir</a>
+          </div>`;
+      }).join('');
+    }
+
+    /* ═══════════════════════════════════════════════════
+       FORO
+    ═══════════════════════════════════════════════════ */
+    let _forumPostData    = {};
+    let _pendingImageUrls = [];
+
+    async function loadForo() {
+      const wrap = document.getElementById('forum-list');
+      wrap.innerHTML = '<div class="forum-loading"><div class="spinner" style="margin:0 auto;width:28px;height:28px;border-width:2px;"></div></div>';
+
+      const { data, error } = await sb.rpc('get_forum_posts', { p_course_id: currentCourseId });
+
+      if (error || !data) {
+        console.error('loadForo error:', error);
+        wrap.innerHTML = `<div class="forum-empty">⚠️ No se pudieron cargar las consultas${error ? ': ' + error.message : ''}.</div>`;
+        return;
+      }
+
+      const posts   = data.filter(r => r.parent_id === null);
+      const replies = data.filter(r => r.parent_id !== null);
+
+      if (!posts.length) {
+        wrap.innerHTML = '<div class="forum-empty">Aún no hay consultas. ¡Sé el primero en preguntar!</div>';
+        return;
+      }
+
+      const repliesByParent = {};
+      replies.forEach(r => {
+        if (!repliesByParent[r.parent_id]) repliesByParent[r.parent_id] = [];
+        repliesByParent[r.parent_id].push(r);
+      });
+
+      _forumPostData = {};
+      wrap.innerHTML = '';
+      posts.forEach(post => {
+        _forumPostData[post.id] = post;
+        const isOwn      = post.user_id === currentUser.id;
+        const authorName = post.full_name || 'Alumno';
+        const anonTag    = post.is_anonymous ? ' · <span class="forum-anon-tag">🎭 anónimo</span>' : '';
+        const dateStr    = new Date(post.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+        const postReplies = repliesByParent[post.id] || [];
+        const hasReplies  = postReplies.length > 0;
+        const postImgHtml = renderImgGrid(post.image_urls);
+
+        const thread = document.createElement('div');
+        thread.className = 'forum-thread';
+        thread.innerHTML = `
+          <div class="forum-thread-head${hasReplies ? ' has-replies' : ''}" onclick="toggleForumReplies('${post.id}')">
+            <div style="flex:1;min-width:0;">
+              <div class="forum-q-meta">${escHtml(authorName)}${anonTag} · ${dateStr}</div>
+              <div class="forum-q-text">${linkify(post.content)}</div>
+              ${postImgHtml}
+            </div>
+            <span class="forum-replies-toggle">
+              ${hasReplies ? `${postReplies.length} resp. ▾` : 'Sin respuestas'}
+            </span>
+          </div>
+          ${isOwn ? `
+          <div class="forum-post-actions">
+            <button class="btn-forum-action" onclick="iniciarEdicion('${post.id}')">✏️ Editar</button>
+            <button class="btn-forum-action danger" onclick="eliminarPost('${post.id}')">🗑 Eliminar</button>
+          </div>
+          <div class="forum-edit-wrap" id="post-edit-${post.id}" style="display:none;">
+            <textarea class="forum-edit-textarea" id="post-edit-text-${post.id}"></textarea>
+            <div class="forum-edit-row">
+              <button class="btn btn-ghost btn-sm" onclick="cancelarEdicion('${post.id}')">Cancelar</button>
+              <button class="btn btn-lime btn-sm" onclick="guardarEdicion('${post.id}')">Guardar cambios</button>
+            </div>
+          </div>` : ''}
+          <div class="forum-replies-wrap" id="forum-replies-${post.id}">
+            ${postReplies.map(r => {
+              const rName   = r.full_name || 'Usuario';
+              const rDate   = new Date(r.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+              const isCoach = r.role === 'coach' || r.role === 'admin';
+              const rImgHtml = renderImgGrid(r.image_urls);
+              return `<div class="forum-reply-item">
+                <div class="forum-reply-meta">
+                  ${escHtml(rName)}
+                  ${isCoach ? '<span class="badge-coach-sm">Coach 🎓</span>' : ''}
+                  <span>· ${rDate}</span>
+                </div>
+                <div class="forum-reply-text">${linkify(r.content)}</div>
+                ${rImgHtml}
+              </div>`;
+            }).join('')}
+          </div>`;
+        wrap.appendChild(thread);
+      });
+
+      // Scroll automático al foro si la URL trae #forum-section (Sesión 63 + fix 64 + delay 65)
+      // setTimeout 800ms — da tiempo a que el DOM del foro y el iframe del video
+      // (que afectan la altura del documento) terminen de renderizar/cargar antes
+      // de medir la posición de #forum-section. Sin el delay, scrollIntoView
+      // dispara contra una posición que aún no es la final y queda desplazado.
+      if (window.location.hash === '#forum-section') {
+        setTimeout(() => {
+          document.getElementById('forum-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 800);
+      }
+    }
+
+    function toggleForumReplies(postId) {
+      const wrap = document.getElementById('forum-replies-' + postId);
+      if (wrap) wrap.classList.toggle('open');
+    }
+
+    async function submitPregunta() {
+      const textarea = document.getElementById('forum-ask-input');
+      const btn      = document.getElementById('btn-forum-send');
+      const errorDiv = document.getElementById('forum-send-error');
+      const content  = textarea.value.trim();
+      if (!content && !_pendingImageUrls.length) return;
+
+      btn.disabled = true; btn.textContent = 'Enviando...';
+      if (errorDiv) errorDiv.style.display = 'none';
+
+      const isAnon = document.getElementById('forum-anon-check')?.checked || false;
+      const payload = { course_id: currentCourseId, user_id: currentUser.id, parent_id: null, content: content || '', is_anonymous: isAnon };
+      if (_pendingImageUrls.length) payload.image_urls = [..._pendingImageUrls];
+
+      const { data: inserted, error } = await sb.from('forum_posts').insert(payload).select();
+
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar pregunta';
+
+      if (error || !inserted?.length) {
+        const msg = error?.message || 'RLS bloqueó el envío';
+        if (errorDiv) { errorDiv.textContent = '⚠️ No se pudo enviar: ' + msg; errorDiv.style.display = 'block'; }
+        return;
+      }
+
+      // [NOTIF DEBUG] Sesión 61 — sondeo de variables de scope antes del INSERT
+      console.log('[NOTIF DEBUG]', {
+        courseId:        typeof courseId        !== 'undefined' ? courseId        : 'UNDEFINED',
+        currentSlug:     typeof currentSlug     !== 'undefined' ? currentSlug     : 'UNDEFINED',
+        slug:            typeof slug            !== 'undefined' ? slug            : 'UNDEFINED',
+        currentCourseId: typeof currentCourseId !== 'undefined' ? currentCourseId : 'UNDEFINED'
+      });
+
+      // Notificar a los coaches del curso vía RPC SECURITY DEFINER (Sesión 62)
+      // La RPC bypasea RLS y resuelve internamente coach_courses → INSERT batch.
+      (async () => {
+        try {
+          const { error: notifErr } = await sb.rpc('notify_coaches', {
+            p_course_id: currentCourseId,
+            p_title:     '❓ Nueva pregunta en el foro',
+            p_body:      (content || '').substring(0, 80),
+            p_link:      currentSlug ? `coach.html?course=${currentSlug}#foro` : null,
+          });
+          if (notifErr) { console.error('notif: RPC notify_coaches error →', notifErr); return; }
+          console.log('notif: RPC notify_coaches OK');
+        } catch (e) { console.error('notif: excepción en RPC notify_coaches →', e); }
+      })();
+
+      textarea.value = '';
+      _pendingImageUrls = [];
+      const prev = document.getElementById('ask-img-preview');
+      if (prev) { prev.style.display = 'none'; prev.innerHTML = ''; }
+      const anonCheck = document.getElementById('forum-anon-check');
+      if (anonCheck) anonCheck.checked = false;
+      loadForo();
+    }
+
+    function showForumNotif(msg, isError = false) {
+      const n = document.createElement('div');
+      n.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:500;background:${isError?'rgba(252,129,129,0.15)':'rgba(36,48,66,0.97)'};border:1px solid ${isError?'#FC8181':'var(--card-border)'};border-left:4px solid ${isError?'#FC8181':'var(--lime)'};color:var(--white);padding:12px 18px;border-radius:8px;font-size:0.875rem;max-width:320px;box-shadow:0 6px 24px rgba(0,0,0,0.4);`;
+      n.textContent = msg;
+      document.body.appendChild(n);
+      setTimeout(() => n.remove(), 3200);
+    }
+
+    async function eliminarPost(postId) {
+      if (!confirm('¿Eliminar esta pregunta?')) return;
+      const { error } = await sb.from('forum_posts').delete().eq('id', postId);
+      if (error) { showForumNotif('Error al eliminar: ' + error.message, true); return; }
+      showForumNotif('Pregunta eliminada.');
+      loadForo();
+    }
+
+    function iniciarEdicion(postId) {
+      const post = _forumPostData[postId];
+      if (!post) return;
+      const wrap = document.getElementById('post-edit-' + postId);
+      const ta   = document.getElementById('post-edit-text-' + postId);
+      if (ta) ta.value = post.content;
+      if (wrap) wrap.style.display = '';
+    }
+
+    function cancelarEdicion(postId) {
+      const wrap = document.getElementById('post-edit-' + postId);
+      if (wrap) wrap.style.display = 'none';
+    }
+
+    async function guardarEdicion(postId) {
+      const ta = document.getElementById('post-edit-text-' + postId);
+      if (!ta) return;
+      const newContent = ta.value.trim();
+      if (!newContent) return;
+      const { error } = await sb.from('forum_posts').update({ content: newContent }).eq('id', postId);
+      if (error) { showForumNotif('Error al guardar: ' + error.message, true); return; }
+      loadForo();
+    }
+
+    /* ── Imágenes adjuntas ─────────────────────────── */
+    async function handleAskImage(files) {
+      if (!files || !files.length) return;
+      const remaining = 3 - _pendingImageUrls.length;
+      if (remaining <= 0) { showForumNotif('Máximo 3 imágenes por post.', true); return; }
+      const toUpload = Array.from(files).slice(0, remaining);
+      const statusEl = document.getElementById('ask-img-status');
+      if (statusEl) statusEl.style.display = '';
+      for (const file of toUpload) {
+        const ext  = file.name.split('.').pop();
+        const path = `forum/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await sb.storage.from('course-materials').upload(path, file, { upsert: false });
+        if (upErr) { showForumNotif('Error al subir imagen: ' + upErr.message, true); continue; }
+        const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+        _pendingImageUrls.push(urlData.publicUrl);
+      }
+      if (statusEl) statusEl.style.display = 'none';
+      renderAskImgPreview();
+    }
+
+    function renderAskImgPreview() {
+      const el = document.getElementById('ask-img-preview');
+      if (!el) return;
+      if (!_pendingImageUrls.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      el.style.display = '';
+      el.innerHTML = _pendingImageUrls.map((url, i) =>
+        `<div class="forum-img-preview-item">
+           <img src="${url}" alt="preview">
+           <span class="cancel-img-btn" onclick="cancelAskImageAt(${i})">✕</span>
+         </div>`
+      ).join('');
+    }
+
+    function cancelAskImageAt(index) { _pendingImageUrls.splice(index, 1); renderAskImgPreview(); }
+
+    function renderImgGrid(urls) {
+      if (!urls || !urls.length) return '';
+      return `<div class="forum-img-grid">${urls.map(u =>
+        `<img src="${u}" alt="imagen" onclick="window.open('${u}','_blank')">`
+      ).join('')}</div>`;
+    }
+
+    /* ── Emoji picker ──────────────────────────────── */
+    const EMOJIS = [
+      '😊','😂','🥰','😍','🤩','👍','🙌','💪','🔥','⚡',
+      '🎯','✅','❌','⚠️','💡','📌','🏋️','🤸','🚴','🏃',
+      '💬','❓','📣','🎉','🥇','💯','👏','😅','🤔','💪🏼',
+    ];
+    let _emojiTargetId = null;
+    const _emojiPicker = (() => {
+      const div = document.createElement('div');
+      div.className = 'emoji-picker-wrap';
+      EMOJIS.forEach(e => {
+        const span = document.createElement('span');
+        span.className = 'emoji-item';
+        span.textContent = e;
+        span.onclick = () => insertEmoji(e);
+        div.appendChild(span);
+      });
+      document.body.appendChild(div);
+      document.addEventListener('click', ev => {
+        if (!div.contains(ev.target) && !ev.target.classList.contains('emoji-picker-btn'))
+          div.classList.remove('open');
+      });
+      return div;
+    })();
+
+    function toggleEmojiPicker(btn, taId) {
+      _emojiTargetId = taId;
+      const rect = btn.getBoundingClientRect();
+      const pickerW = 230;
+      let left = rect.left;
+      if (left + pickerW > window.innerWidth - 8) left = window.innerWidth - pickerW - 8;
+      _emojiPicker.style.left = left + 'px';
+      _emojiPicker.style.top  = (rect.bottom + 6) + 'px';
+      _emojiPicker.classList.toggle('open');
+    }
+
+    function insertEmoji(emoji) {
+      if (!_emojiTargetId) return;
+      const ta = document.getElementById(_emojiTargetId);
+      if (!ta) return;
+      const start = ta.selectionStart, end = ta.selectionEnd;
+      ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+      ta.selectionStart = ta.selectionEnd = start + emoji.length;
+      ta.focus();
+      _emojiPicker.classList.remove('open');
+    }
+
+    /* ═══════════════════════════════════════════════════
+       QUIZ FLOW (Etapa U)
+       Al llegar al 100% del progreso, en lugar de mostrar el certificado
+       directo, consultamos course_quizzes para ver si hay evaluación activa.
+       Si el alumno aún no aprobó y tiene intentos disponibles → mostramos el
+       quiz. Si ya aprobó o no hay quiz → certificado directo.
+    ═══════════════════════════════════════════════════ */
+    let _quizState = {
+      quiz:       null,    // { id, course_id, min_score, max_attempts, is_active, ... }
+      questions:  [],      // array de { id, question, type, options, correct_idxs, image_urls, order_num }
+      attemptsUsed: 0,
+      passed:     false,
+      answers:    {},      // { questionId: { selected_idxs: [...], text_answer: '' } }
+    };
+
+    async function checkQuizGateAndShowCert() {
+      // Por defecto, si algo falla → comportamiento legacy (cert directo)
+      const fallbackToCert = () => { if (currentCertUrl) showCertSection(); };
+
+      try {
+        const { data: quiz, error: quizErr } = await sb
+          .from('course_quizzes')
+          .select('id, course_id, module_id, min_score, max_attempts, is_active, is_required')
+          .eq('course_id', currentCourseId)
+          .is('module_id', null)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (quizErr) {
+          console.error('checkQuizGate quiz fetch:', quizErr);
+          fallbackToCert();
+          return;
+        }
+        if (!quiz) {
+          // No hay quiz activo → comportamiento original
+          fallbackToCert();
+          return;
+        }
+
+        // Contar intentos del usuario
+        const { data: attempts, error: attErr } = await sb
+          .from('quiz_attempts')
+          .select('id, passed')
+          .eq('user_id', currentUser.id)
+          .eq('quiz_id', quiz.id);
+
+        if (attErr) {
+          console.error('checkQuizGate attempts fetch:', attErr);
+          fallbackToCert();
+          return;
+        }
+
+        const attemptsUsed = (attempts || []).length;
+        const alreadyPassed = (attempts || []).some(a => a.passed);
+
+        if (alreadyPassed) {
+          // Ya aprobó antes → cert directo
+          fallbackToCert();
+          return;
+        }
+
+        if (quiz.max_attempts && quiz.max_attempts > 0 && attemptsUsed >= quiz.max_attempts) {
+          // Sin más intentos
+          showQuizExhausted(quiz, attemptsUsed);
+          return;
+        }
+
+        // Cargar preguntas y mostrar quiz
+        const { data: questions, error: qErr } = await sb
+          .from('quiz_questions')
+          .select('id, question, type, options, correct_idxs, image_urls, order_num')
+          .eq('quiz_id', quiz.id)
+          .order('order_num');
+
+        if (qErr) {
+          console.error('checkQuizGate questions fetch:', qErr);
+          fallbackToCert();
+          return;
+        }
+
+        if (!questions || !questions.length) {
+          // Quiz activo pero sin preguntas todavía → cert directo (graceful)
+          fallbackToCert();
+          return;
+        }
+
+        showQuizSection(quiz, questions, attemptsUsed);
+
+      } catch (e) {
+        console.error('checkQuizGateAndShowCert error:', e);
+        fallbackToCert();
+      }
+    }
+
+    function showQuizExhausted(quiz, attemptsUsed) {
+      const wrap = document.getElementById('quiz-attempts-exhausted');
+      const desc = document.getElementById('quiz-exhausted-desc');
+      if (desc) {
+        const total = quiz.max_attempts;
+        desc.textContent = `Agotaste los ${total} intento${total !== 1 ? 's' : ''} disponible${total !== 1 ? 's' : ''}. No es posible obtener el certificado para este curso.`;
+      }
+      wrap.classList.add('visible');
+      // Asegurar que el cert legacy quede oculto
+      document.getElementById('cert-section').classList.remove('visible', 'animated');
+      // Scroll para que el alumno vea el aviso (Etapa X.2 — fix flujo post-último-video)
+      setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+
+    function showQuizSection(quiz, questions, attemptsUsed) {
+      _quizState.quiz         = quiz;
+      _quizState.questions    = questions.map(q => ({
+        ...q,
+        options:      Array.isArray(q.options) ? q.options : [],
+        correct_idxs: Array.isArray(q.correct_idxs) ? q.correct_idxs : [],
+        image_urls:   Array.isArray(q.image_urls) ? q.image_urls : [],
+      }));
+      _quizState.attemptsUsed = attemptsUsed;
+      _quizState.passed       = false;
+      _quizState.answers      = {};
+
+      const section = document.getElementById('quiz-section');
+      section.classList.add('visible');
+      // Esconder cert mientras tanto
+      document.getElementById('cert-section').classList.remove('visible', 'animated');
+
+      // Header
+      const badge = document.getElementById('quiz-attempts-badge');
+      const hint  = document.getElementById('quiz-hint');
+      if (quiz.max_attempts && quiz.max_attempts > 0) {
+        badge.style.display = '';
+        badge.textContent   = `Intento ${attemptsUsed + 1} de ${quiz.max_attempts}`;
+        hint.textContent    = `Necesitás el ${quiz.min_score}% para aprobar · Tenés ${quiz.max_attempts} intentos en total para obtener el certificado.`;
+      } else {
+        badge.style.display = 'none';
+        hint.textContent    = `Necesitás el ${quiz.min_score}% para aprobar · Intentos ilimitados.`;
+      }
+
+      // Reset panel de resultado
+      const result = document.getElementById('quiz-result-panel');
+      result.className = '';
+      result.innerHTML = '';
+
+      // Reset botón
+      const btn = document.getElementById('btn-quiz-submit');
+      btn.disabled    = true;
+      btn.textContent = 'Enviar respuestas';
+
+      renderQuizQuestions();
+
+      // Scroll para que el alumno vea el quiz (Etapa X.2 — fix flujo post-último-video)
+      setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+
+    function renderQuizQuestions() {
+      const list = document.getElementById('quiz-q-list');
+      list.innerHTML = _quizState.questions.map((q, i) => renderQuizQuestionItem(q, i)).join('');
+      updateQuizSubmitState();
+    }
+
+    function renderQuizQuestionItem(q, idx) {
+      const imagesBlock = (q.image_urls && q.image_urls.length)
+        ? `<div class="quiz-q-images">${q.image_urls.map(u => `<img src="${escHtml(u)}" alt="img" onclick="window.open('${escHtml(u)}','_blank')" />`).join('')}</div>`
+        : '';
+
+      let answerBlock = '';
+      if (q.type === 'single') {
+        answerBlock = `
+          <div class="quiz-options-list">
+            ${q.options.map((opt, oi) => `
+              <label class="quiz-option" data-q="${escHtml(q.id)}" data-opt="${oi}" onclick="selectQuizOption('${escHtml(q.id)}', ${oi}, 'single', this)">
+                <input type="radio" name="qz-${escHtml(q.id)}" value="${oi}" />
+                <span class="quiz-option-text">${escHtml(opt || '')}</span>
+              </label>
+            `).join('')}
+          </div>`;
+      } else if (q.type === 'multiple') {
+        answerBlock = `
+          <div class="quiz-options-list">
+            ${q.options.map((opt, oi) => `
+              <label class="quiz-option" data-q="${escHtml(q.id)}" data-opt="${oi}" onclick="selectQuizOption('${escHtml(q.id)}', ${oi}, 'multiple', this)">
+                <input type="checkbox" value="${oi}" />
+                <span class="quiz-option-text">${escHtml(opt || '')}</span>
+              </label>
+            `).join('')}
+          </div>`;
+      } else { // text
+        answerBlock = `
+          <textarea class="quiz-text-answer" placeholder="Escribí tu respuesta…"
+                    oninput="setQuizTextAnswer('${escHtml(q.id)}', this.value)"></textarea>`;
+      }
+
+      return `
+        <div class="quiz-q-item" data-q="${escHtml(q.id)}">
+          <span class="quiz-q-num">Pregunta ${idx + 1} de ${_quizState.questions.length}</span>
+          <p class="quiz-q-stmt">${escHtml(q.question || '')}</p>
+          ${imagesBlock}
+          ${answerBlock}
+        </div>
+      `;
+    }
+
+    function selectQuizOption(qId, optIdx, type, labelEl) {
+      // Defer hasta el próximo tick para que el evento del input se procese primero
+      setTimeout(() => {
+        const item = document.querySelector(`.quiz-q-item[data-q="${qId}"]`);
+        if (!item) return;
+        if (type === 'single') {
+          item.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('selected'));
+          labelEl.classList.add('selected');
+          _quizState.answers[qId] = { selected_idxs: [optIdx], text_answer: '' };
+        } else if (type === 'multiple') {
+          // Toggle visual + state según el checkbox real
+          const cb = labelEl.querySelector('input[type="checkbox"]');
+          if (cb && cb.checked) {
+            labelEl.classList.add('selected');
+          } else {
+            labelEl.classList.remove('selected');
+          }
+          // Recalcular del DOM (más simple y confiable)
+          const checked = Array.from(item.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(c => parseInt(c.value, 10));
+          _quizState.answers[qId] = { selected_idxs: checked, text_answer: '' };
+        }
+        updateQuizSubmitState();
+      }, 0);
+    }
+
+    function setQuizTextAnswer(qId, value) {
+      _quizState.answers[qId] = { selected_idxs: [], text_answer: value };
+      updateQuizSubmitState();
+    }
+
+    function updateQuizSubmitState() {
+      // Habilitamos el botón cuando todas las preguntas single y multiple tienen al menos
+      // una opción marcada. Las de texto son opcionales.
+      const btn = document.getElementById('btn-quiz-submit');
+      if (!btn) return;
+      let ok = true;
+      for (const q of _quizState.questions) {
+        if (q.type === 'single' || q.type === 'multiple') {
+          const a = _quizState.answers[q.id];
+          if (!a || !a.selected_idxs || !a.selected_idxs.length) { ok = false; break; }
+        }
+      }
+      btn.disabled = !ok;
+    }
+
+    async function submitQuiz() {
+      const btn = document.getElementById('btn-quiz-submit');
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+
+      const quiz = _quizState.quiz;
+      if (!quiz) return;
+
+      // Validar respuestas (single/multiple obligatorias; text opcional)
+      for (const q of _quizState.questions) {
+        if (q.type === 'single' || q.type === 'multiple') {
+          const a = _quizState.answers[q.id];
+          if (!a || !a.selected_idxs || !a.selected_idxs.length) {
+            btn.disabled = false;
+            btn.textContent = 'Enviar respuestas';
+            alert('Faltan respuestas en preguntas obligatorias.');
+            return;
+          }
+        }
+      }
+
+      // Calcular score: solo single + multiple
+      let evaluable = 0, correct = 0;
+      for (const q of _quizState.questions) {
+        if (q.type !== 'single' && q.type !== 'multiple') continue;
+        evaluable++;
+        const a = _quizState.answers[q.id] || { selected_idxs: [] };
+        const selected = (a.selected_idxs || []).slice().sort((x, y) => x - y);
+        const expected = (q.correct_idxs || []).slice().sort((x, y) => x - y);
+        const isCorrect = selected.length === expected.length && selected.every((v, i) => v === expected[i]);
+        if (isCorrect) correct++;
+      }
+      const score  = evaluable === 0 ? 100 : Math.round((correct / evaluable) * 100);
+      const passed = score >= (quiz.min_score || 0);
+
+      // Construir array de respuestas para guardar
+      const answersPayload = _quizState.questions.map(q => ({
+        question_id:    q.id,
+        selected_idxs:  (_quizState.answers[q.id]?.selected_idxs) || [],
+        text_answer:    _quizState.answers[q.id]?.text_answer || '',
+      }));
+
+      const { error } = await sb.from('quiz_attempts').insert({
+        user_id:   currentUser.id,
+        quiz_id:   quiz.id,
+        course_id: currentCourseId,
+        score:     score,
+        passed:    passed,
+        answers:   answersPayload,
+      });
+
+      if (error) {
+        console.error('submitQuiz insert:', error);
+        btn.disabled = false;
+        btn.textContent = 'Enviar respuestas';
+        alert('Error al guardar el intento: ' + error.message);
+        return;
+      }
+
+      _quizState.attemptsUsed += 1;
+      _quizState.passed       = passed;
+      showQuizResult(score, passed);
+    }
+
+    function showQuizResult(score, passed) {
+      const panel = document.getElementById('quiz-result-panel');
+      const quiz  = _quizState.quiz;
+      const minScore = quiz?.min_score || 0;
+      const maxAttempts = quiz?.max_attempts || 0;
+      const used  = _quizState.attemptsUsed;
+      const remaining = maxAttempts > 0 ? Math.max(0, maxAttempts - used) : Infinity;
+
+      panel.className = ''; // reset
+      panel.classList.add('visible');
+
+      if (passed) {
+        panel.classList.add('success');
+        panel.innerHTML = `
+          <div class="quiz-result-title" style="color:var(--lime)">✅ ¡Aprobaste! Obtuviste el ${score}%</div>
+          <div class="quiz-result-desc">Ya podés descargar tu certificado.</div>
+        `;
+        // Esconder el botón de envío y mostrar el cert
+        const btn = document.getElementById('btn-quiz-submit');
+        btn.style.display = 'none';
+        if (currentCertUrl) showCertSection();
+      } else if (remaining > 0 && remaining !== Infinity) {
+        panel.classList.add('failure');
+        panel.innerHTML = `
+          <div class="quiz-result-title" style="color:var(--red)">❌ Obtuviste ${score}% — necesitabas ${minScore}%</div>
+          <div class="quiz-result-desc">Te queda${remaining !== 1 ? 'n' : ''} ${remaining} intento${remaining !== 1 ? 's' : ''}.</div>
+          <button class="btn-quiz-retry" onclick="retryQuiz()">Reintentar</button>
+        `;
+        // Mantener el botón de envío oculto hasta que reintenten
+        const btn = document.getElementById('btn-quiz-submit');
+        btn.style.display = 'none';
+      } else if (remaining === Infinity) {
+        panel.classList.add('failure');
+        panel.innerHTML = `
+          <div class="quiz-result-title" style="color:var(--red)">❌ Obtuviste ${score}% — necesitabas ${minScore}%</div>
+          <div class="quiz-result-desc">Podés volver a intentarlo.</div>
+          <button class="btn-quiz-retry" onclick="retryQuiz()">Reintentar</button>
+        `;
+        const btn = document.getElementById('btn-quiz-submit');
+        btn.style.display = 'none';
+      } else {
+        // Sin más intentos
+        panel.classList.add('failure');
+        panel.innerHTML = `
+          <div class="quiz-result-title" style="color:var(--red)">❌ Obtuviste ${score}%</div>
+          <div class="quiz-result-desc">Agotaste los ${maxAttempts} intento${maxAttempts !== 1 ? 's' : ''} disponible${maxAttempts !== 1 ? 's' : ''}.</div>
+        `;
+        const btn = document.getElementById('btn-quiz-submit');
+        btn.style.display = 'none';
+      }
+    }
+
+    function retryQuiz() {
+      // Limpiar respuestas y re-renderizar
+      _quizState.answers = {};
+      const panel = document.getElementById('quiz-result-panel');
+      panel.className = '';
+      panel.innerHTML = '';
+      const btn = document.getElementById('btn-quiz-submit');
+      btn.style.display = '';
+      btn.disabled    = true;
+      btn.textContent = 'Enviar respuestas';
+
+      // Actualizar badge de intentos
+      const badge = document.getElementById('quiz-attempts-badge');
+      const quiz  = _quizState.quiz;
+      if (quiz && quiz.max_attempts && quiz.max_attempts > 0) {
+        badge.textContent = `Intento ${_quizState.attemptsUsed + 1} de ${quiz.max_attempts}`;
+      }
+
+      renderQuizQuestions();
+      // Scroll al inicio del quiz
+      document.getElementById('quiz-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ── Auth & scroll ─────────────────────────────── */
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) window.location.replace('login.html');
+    });
+
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    /* ── Arrancar ──────────────────────────────────── */
+    init();
+  </script>
+
+</body>
+</html>

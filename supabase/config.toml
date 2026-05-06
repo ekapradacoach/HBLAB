@@ -1,0 +1,49 @@
+# Configuración local del proyecto Supabase HBLAB.
+# Solo se usa cuando alguien decida correr `supabase` CLI localmente.
+# La fuente de verdad sigue siendo el proyecto remoto en supabase.com.
+
+project_id = "hblab"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://hblab.com"]
+jwt_expiry = 3600
+enable_signup = true
+enable_confirmations = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+# ── Edge Functions ───────────────────────────────────────
+# Las funciones definidas en supabase/functions/<name>/index.ts
+# se despliegan con `supabase functions deploy <name>` (cuando se use el CLI).
+# Cada función lee secrets desde Deno.env (configurados con `supabase secrets set`).
+
+[functions.invite-coach]
+verify_jwt = true   # exige JWT válido en el header Authorization (admin token)
+
+[functions.process-payment]
+verify_jwt = false  # webhook público de MP/PayPal — la firma se valida adentro

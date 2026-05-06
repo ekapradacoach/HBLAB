@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi panel — HB Lab</title>
+
+  <!-- ─── SEO meta + Open Graph + Twitter (Sesión 47) ─── -->
+  <meta name="description" content="Panel del alumno HB Lab — accedé a tus cursos comprados." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://hblab.com/dashboard.html" />
+
+  <meta property="og:title" content="Mi panel — HB Lab" />
+  <meta property="og:description" content="Panel del alumno HB Lab — accedé a tus cursos comprados." />
+  <meta property="og:image" content="https://hblab.com/og-cover.jpg" />
+  <meta property="og:url" content="https://hblab.com/dashboard.html" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Mi panel — HB Lab" />
+  <meta name="twitter:description" content="Panel del alumno HB Lab — accedé a tus cursos comprados." />
+  <meta name="twitter:image" content="https://hblab.com/og-cover.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Loading overlay ─────────────────────────── */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      transition: opacity 0.3s ease;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(200,230,0,0.15);
+      border-top-color: var(--lime);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Navbar ──────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(30,42,58,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(200,230,0,0.12);
+      padding: 14px 0;
+      transition: box-shadow 0.3s;
+    }
+    #navbar.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg  { width: 44px; height: 44px; flex-shrink: 0; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+    .logo-text .hb  { font-weight: 800; font-size: 1.25rem; color: var(--white); letter-spacing: 0.02em; }
+    .logo-text .lab {
+      font-family: 'Georgia', serif;
+      font-style: italic;
+      font-size: 0.78rem;
+      color: var(--lime);
+      letter-spacing: 0.12em;
+    }
+
+    .nav-right { display: flex; align-items: center; gap: 14px; }
+    .nav-email {
+      font-size: 0.82rem;
+      color: var(--gray-text);
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .btn-logout {
+      background: transparent;
+      border: 1.5px solid rgba(252,129,129,0.35);
+      color: #FC8181;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .btn-logout:hover { background: rgba(252,129,129,0.1); border-color: #FC8181; }
+
+    /* ── Page body ───────────────────────────────── */
+    #page { padding-top: 72px; }
+
+    /* ── Greeting hero ───────────────────────────── */
+    .dash-hero {
+      background: var(--navy-light);
+      border-bottom: 1px solid var(--card-border);
+      padding: 44px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .dash-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(200,230,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,230,0,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    .dash-hero-blob {
+      position: absolute;
+      width: 360px; height: 360px;
+      background: rgba(123,79,190,0.12);
+      border-radius: 50%;
+      filter: blur(80px);
+      top: -120px; right: -60px;
+      pointer-events: none;
+    }
+    .hero-inner { position: relative; z-index: 1; }
+
+    .greeting-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--lime);
+      margin-bottom: 10px;
+    }
+    .greeting-title {
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .greeting-sub { color: var(--gray-text); font-size: 0.9rem; }
+
+    /* ── Section ─────────────────────────────────── */
+    .dash-section { padding: 44px 0 80px; }
+
+    .section-header { margin-bottom: 28px; }
+    .section-title  { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .section-sub    { font-size: 0.85rem; color: var(--gray-text); }
+
+    /* ── Courses grid ────────────────────────────── */
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    /* ── Course card (unlocked) ──────────────────── */
+    .course-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .course-card::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: linear-gradient(90deg, var(--lime), var(--violet));
+    }
+    .course-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+      border-color: rgba(200,230,0,0.2);
+    }
+
+    .card-body { padding: 20px 20px 0; flex: 1; }
+    .card-tag  {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--violet-light);
+      margin-bottom: 8px;
+    }
+    .card-title { font-size: 0.95rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; }
+    .card-desc  { font-size: 0.8rem; color: var(--gray-text); line-height: 1.6; }
+
+    .card-divider { height: 1px; background: var(--card-border); margin: 16px 20px; }
+
+    .card-footer { padding: 0 20px 20px; }
+
+    .badge-access {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(200,230,0,0.1);
+      border: 1px solid rgba(200,230,0,0.25);
+      color: var(--lime);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 100px;
+      margin-bottom: 12px;
+    }
+
+    .btn-ir {
+      width: 100%;
+      background: var(--lime);
+      color: var(--navy);
+      border: none;
+      padding: 11px 16px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-ir:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 16px rgba(200,230,0,0.3);
+    }
+
+    /* Etapa X.10 — progreso + estado por card */
+    .card-progress-block {
+      margin-top: 14px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .card-status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 3px 10px; border-radius: 100px; align-self: flex-start;
+    }
+    .card-status-badge.complete {
+      background: rgba(200,230,0,0.12);
+      border: 1px solid rgba(200,230,0,0.3);
+      color: var(--lime);
+    }
+    .card-status-badge.test {
+      background: rgba(123,79,190,0.15);
+      border: 1px solid rgba(123,79,190,0.32);
+      color: var(--violet-light);
+    }
+    .card-status-badge.nuevo {
+      background: rgba(148,163,184,0.12);
+      border: 1px solid rgba(148,163,184,0.3);
+      color: var(--gray-text);
+    }
+    .card-status-badge.progreso {
+      background: rgba(246,201,14,0.12);
+      border: 1px solid rgba(246,201,14,0.3);
+      color: #f6c90e;
+    }
+    .card-progress-bar {
+      height: 4px; background: var(--card-border);
+      border-radius: 100px; overflow: hidden; margin-top: 4px;
+    }
+    .card-progress-fill {
+      height: 100%; background: var(--lime);
+      border-radius: 100px; transition: width 0.5s ease;
+    }
+    .card-progress-label { font-size: 0.72rem; color: var(--gray-text); margin: 0; }
+
+    /* ── Empty state ─────────────────────────────── */
+    .empty-state {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 56px 32px;
+      text-align: center;
+      max-width: 520px;
+    }
+    .empty-icon {
+      font-size: 2.8rem;
+      margin-bottom: 20px;
+      display: block;
+    }
+    .empty-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .empty-desc {
+      font-size: 0.875rem;
+      color: var(--gray-text);
+      line-height: 1.65;
+      margin-bottom: 28px;
+    }
+    .btn-catalogo {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--lime);
+      color: var(--navy);
+      border: none;
+      padding: 13px 28px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-catalogo:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(200,230,0,0.3);
+    }
+
+    /* ── Error state ─────────────────────────────── */
+    .error-state {
+      background: rgba(252,129,129,0.06);
+      border: 1px solid rgba(252,129,129,0.2);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      max-width: 520px;
+    }
+    .error-state p { font-size: 0.875rem; color: #FC8181; line-height: 1.55; }
+
+    /* ── Account card ────────────────────────────── */
+    .account-section { margin-top: 52px; padding-top: 40px; border-top: 1px solid var(--card-border); }
+    .account-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 24px;
+      max-width: 440px;
+    }
+    .account-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .account-row:last-of-type { border-bottom: none; }
+    .account-label { font-size: 0.78rem; color: var(--gray-text); font-weight: 500; }
+    .account-value { font-size: 0.85rem; font-weight: 600; text-align: right; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+
+    .btn-logout-card {
+      margin-top: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: 1.5px solid rgba(252,129,129,0.35);
+      color: #FC8181;
+      padding: 10px 22px;
+      border-radius: 7px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-logout-card:hover { background: rgba(252,129,129,0.08); border-color: #FC8181; }
+
+    /* ── Responsive ──────────────────────────────── */
+    @media (max-width: 860px) {
+      .courses-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .courses-grid { grid-template-columns: 1fr; }
+      .nav-email { display: none; }
+      .dash-section { padding-bottom: 52px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Loading overlay ────────────────────────── -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ── Navbar ─────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="container nav-inner">
+      <a href="index.html" class="logo-wrap" aria-label="HB Lab">
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+          <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38" stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38" stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="16" x2="28" y2="16" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="24" x2="28" y2="24" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="32" x2="28" y2="32" stroke="rgba(123,79,190,0.5)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <div class="nav-right">
+        <a href="perfil.html" class="nav-link" style="color:var(--gray-text);font-size:0.86rem;font-weight:600;text-decoration:none;padding:6px 10px;border-radius:6px;transition:color 0.15s,background 0.15s;" onmouseover="this.style.color='var(--lime)';this.style.background='rgba(200,230,0,0.06)'" onmouseout="this.style.color='var(--gray-text)';this.style.background='transparent'">Mi perfil</a>
+        <span class="nav-email" id="nav-email"></span>
+        <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Page ───────────────────────────────────── -->
+  <div id="page">
+
+    <!-- Greeting -->
+    <section class="dash-hero">
+      <div class="dash-hero-blob"></div>
+      <div class="container hero-inner">
+        <p class="greeting-tag">Panel del alumno</p>
+        <h1 class="greeting-title">Hola, <span id="greeting-name" style="color:var(--lime)"></span> 👋</h1>
+        <p class="greeting-sub">Desde acá accedés a tus cursos y materiales.</p>
+      </div>
+    </section>
+
+    <!-- Dashboard body -->
+    <div class="dash-section">
+      <div class="container">
+
+        <!-- Mis cursos -->
+        <div class="section-header">
+          <h2 class="section-title">Mis cursos</h2>
+          <p class="section-sub" id="courses-sub">Cargando...</p>
+        </div>
+
+        <!-- Contenedor dinámico -->
+        <div id="courses-container"></div>
+
+        <!-- Cuenta -->
+        <div class="account-section">
+          <div class="section-header">
+            <h2 class="section-title">Mi cuenta</h2>
+          </div>
+          <div class="account-card">
+            <div class="account-row">
+              <span class="account-label">Email</span>
+              <span class="account-value" id="account-email"></span>
+            </div>
+            <div class="account-row">
+              <span class="account-label">Estado</span>
+              <span class="account-value" style="color:var(--lime)">✓ Activo</span>
+            </div>
+            <div class="account-row">
+              <span class="account-label">Último acceso</span>
+              <span class="account-value" id="last-login"></span>
+            </div>
+            <button class="btn-logout-card" onclick="logout()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /#page -->
+
+  <!-- ── Scripts ────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="notifs.js"></script>
+  <script>
+    // ── Etapa X.9: COURSE_META eliminado. TODOS los cursos usan curso.html?slug=X ──
+
+    // ── Helpers ─────────────────────────────────────
+    function hideLoading() {
+      const el = document.getElementById('loading-screen');
+      el.classList.add('fade-out');
+      setTimeout(() => el.remove(), 350);
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('es-AR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    // ── Renderizar cursos comprados ─────────────────
+    // Etapa X.10: async + queries en paralelo para progreso (video_progress)
+    // y test pendiente (course_quizzes + quiz_attempts).
+    async function renderCourses(rows, user) {
+      const container = document.getElementById('courses-container');
+      const sub       = document.getElementById('courses-sub');
+
+      if (!rows || rows.length === 0) {
+        // Estado vacío
+        sub.textContent = 'Todavía no tenés cursos adquiridos.';
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="empty-icon">🎓</span>
+            <h3 class="empty-title">Todavía no tenés cursos</h3>
+            <p class="empty-desc">
+              ¡Explorá el catálogo y encontrá el curso que se adapta a tu perfil como entrenador!
+            </p>
+            <a href="index.html#cursos" class="btn-catalogo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+              Explorar catálogo
+            </a>
+          </div>`;
+        return;
+      }
+
+      sub.textContent = `Tenés ${rows.length} curso${rows.length > 1 ? 's' : ''} activo${rows.length > 1 ? 's' : ''}.`;
+
+      // Etapa X.10: 3 queries batch en paralelo (no N×3 secuenciales)
+      const courseIds = rows.map(r => r.courses?.id).filter(Boolean);
+      let completedByCourse = {};
+      let activeQuizCourses = new Set();
+      let passedCourses     = new Set();
+
+      if (courseIds.length && user) {
+        try {
+          const [progRes, quizRes, attRes] = await Promise.all([
+            sb.from('video_progress')
+              .select('course_id')
+              .eq('user_id', user.id)
+              .eq('completed', true)
+              .in('course_id', courseIds),
+            sb.from('course_quizzes')
+              .select('course_id')
+              .in('course_id', courseIds)
+              .is('module_id', null)
+              .eq('is_active', true),
+            sb.from('quiz_attempts')
+              .select('course_id')
+              .eq('user_id', user.id)
+              .eq('passed', true)
+              .in('course_id', courseIds),
+          ]);
+          (progRes.data || []).forEach(r => {
+            completedByCourse[r.course_id] = (completedByCourse[r.course_id] || 0) + 1;
+          });
+          activeQuizCourses = new Set((quizRes.data || []).map(r => r.course_id));
+          passedCourses     = new Set((attRes.data  || []).map(r => r.course_id));
+        } catch (e) {
+          console.warn('Etapa X.10: queries de progreso/quiz fallaron, render sin badges enriquecidos:', e);
+        }
+      }
+
+      const cards = rows.map(row => {
+        const course = row.courses;
+        const meta   = { tag: 'Curso · Online', page: `curso.html?slug=${course.slug}` };
+
+        const completed = completedByCourse[course.id] || 0;
+        const total     = course.total_videos || 0;
+        // Cap a 100 por si video_progress quedó con índices viejos tras un reordenamiento
+        const pct = total > 0 ? Math.min(100, Math.round(completed / total * 100)) : 0;
+        const hasPendingQuiz = activeQuizCourses.has(course.id) && !passedCourses.has(course.id);
+
+        // Decidir status badge — orden literal del spec del usuario
+        let statusCls, statusText;
+        if (total > 0 && pct >= 100) {
+          statusCls = 'complete'; statusText = '✅ Completado';
+        } else if (hasPendingQuiz) {
+          statusCls = 'test';     statusText = '📝 Test disponible';
+        } else if (completed === 0) {
+          statusCls = 'nuevo';    statusText = '🆕 Sin comenzar';
+        } else {
+          statusCls = 'progreso'; statusText = '▶ En progreso';
+        }
+
+        // Barra de progreso solo si total > 0
+        const progressHtml = total > 0
+          ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${pct}%"></div></div>
+             <p class="card-progress-label">${completed} de ${total} clase${total !== 1 ? 's' : ''} completada${completed !== 1 ? 's' : ''}</p>`
+          : '';
+
+        return `
+          <div class="course-card">
+            <div class="card-body">
+              <div class="card-tag">${meta.tag}</div>
+              <h3 class="card-title">${course.title}</h3>
+              <p class="card-desc">${course.description || ''}</p>
+              <div class="card-progress-block">
+                <span class="card-status-badge ${statusCls}">${statusText}</span>
+                ${progressHtml}
+              </div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-footer">
+              <div class="badge-access">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Acceso activo
+              </div>
+              <button class="btn-ir" onclick="window.location.href='${meta.page}'">
+                Ir al curso →
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `<div class="courses-grid">${cards}</div>`;
+    }
+
+    // ── Renderizar error de consulta ────────────────
+    function renderQueryError() {
+      document.getElementById('courses-sub').textContent = 'No se pudo cargar la información.';
+      document.getElementById('courses-container').innerHTML = `
+        <div class="error-state">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FC8181" stroke-width="2" stroke-linecap="round" flex-shrink="0" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>Ocurrió un error al cargar tus cursos. Intentá recargar la página.</p>
+        </div>`;
+    }
+
+    // ── Init principal ──────────────────────────────
+    async function init() {
+      // 1. Esperar sesión activa
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        window.location.replace('login.html');
+        return;
+      }
+
+      const user = session.user;
+
+      // 2. Consultar rol del usuario en public.profiles
+      //    DEBE hacerse ANTES de renderizar nada para poder redirigir sin flash.
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('role, full_name')
+        .eq('id', user.id)
+        .single();
+
+      const role = profile?.role || 'student';
+
+      if (role === 'admin') {
+        window.location.replace('admin.html');
+        return;
+      }
+      if (role === 'coach') {
+        window.location.replace('coach.html');
+        return;
+      }
+
+      // 3. Es alumno → poblar UI
+      const name = profile?.full_name
+                || user.user_metadata?.full_name
+                || user.user_metadata?.name
+                || user.email.split('@')[0];
+
+      document.getElementById('greeting-name').textContent = name;
+      document.getElementById('nav-email').textContent     = user.email;
+      document.getElementById('account-email').textContent = user.email;
+      document.getElementById('last-login').textContent    = formatDate(user.last_sign_in_at);
+
+      // Notificaciones in-app — bell + dropdown + realtime (Sesión 58)
+      if (typeof initNotifs === 'function') initNotifs(user);
+
+      // 4. Consultar cursos comprados
+      //    JOIN: user_courses → courses
+      //    Filtro: user_id = usuario logueado, payment_status = 'paid', status = 'active'
+      const { data, error } = await sb
+        .from('user_courses')
+        .select(`
+          id,
+          enrolled_at,
+          courses (
+            id,
+            slug,
+            title,
+            description,
+            price_ars,
+            price_usd,
+            total_videos
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('payment_status', 'paid')
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('Error consultando user_courses:', error.message);
+        renderQueryError();
+      } else {
+        // Etapa X.10: pasar el user logueado para poder consultar progress + quiz_attempts en paralelo
+        await renderCourses(data, user);
+      }
+
+      // 5. Ocultar loading
+      hideLoading();
+    }
+
+    // ── Logout ──────────────────────────────────────
+    async function logout() {
+      await sb.auth.signOut();
+      window.location.replace('index.html');
+    }
+
+    // ── Detectar logout desde otra pestaña ──────────
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        window.location.replace('login.html');
+      }
+    });
+
+    // ── Navbar scroll shadow ────────────────────────
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    // ── Arrancar ────────────────────────────────────
+    init();
+  </script>
+
+</body>
+</html>
