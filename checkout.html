@@ -357,6 +357,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
+  <!-- Etapa X.13: SDK de Mercado Pago (carga async, se usa solo si currency=ARS) -->
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
   <script>
     /* ══════════════════════════════════════════════════
        Etapa X.12 — checkout.html
@@ -597,15 +599,30 @@
       }
     }
 
-    /* ── Continuar al pago ───────────────────────────── */
-    function goToPayment() {
+    /* ══════════════════════════════════════════════════
+       Etapa X.13 — Integración Mercado Pago
+       Cuando currency = ARS:
+         1) Inicializar SDK con la public key (ya cargado en el head).
+         2) POST a la Edge Function `create-preference` con los datos del comprador.
+         3) Redirigir a init_point que devuelve la API de MP.
+       Cuando currency = USD: placeholder PayPal (próxima etapa).
+       En cualquier caso: guardar payload en sessionStorage para resiliencia.
+    ══════════════════════════════════════════════════ */
+    const MP_PUBLIC_KEY = 'APP_USR-50bae8c7-b6bf-4f8b-813e-38a4307e91bd';
+
+    async function goToPayment() {
       const btn = document.getElementById('btn-continue');
       btn.disabled = true;
+      btn.textContent = 'Procesando…';
+
+      const nombre   = document.getElementById('ck-nombre').value.trim();
+      const apellido = document.getElementById('ck-apellido').value.trim();
+      const email    = document.getElementById('ck-email').value.trim().toLowerCase();
 
       const payload = {
-        nombre:      document.getElementById('ck-nombre').value.trim(),
-        apellido:    document.getElementById('ck-apellido').value.trim(),
-        email:       document.getElementById('ck-email').value.trim().toLowerCase(),
+        nombre,
+        apellido,
+        email,
         slug:        _course.slug,
         course_id:   _course.id,
         currency:    _currency,
@@ -616,26 +633,63 @@
         timestamp:   new Date().toISOString(),
       };
 
-      try {
-        sessionStorage.setItem('checkout_payload', JSON.stringify(payload));
-      } catch (e) {
-        console.warn('sessionStorage no disponible:', e);
-      }
+      try { sessionStorage.setItem('checkout_payload', JSON.stringify(payload)); }
+      catch (e) { console.warn('sessionStorage no disponible:', e); }
 
       // Mostrar mensaje de redirect
       document.getElementById('redirect-msg').classList.add('show');
 
-      // Determinar URL del medio de pago según moneda
-      // ⚠️ Etapa X.12 — placeholder. La integración real (MP / PayPal SDK)
-      //   debe (a) crear una "preference" o "order" del lado del proveedor,
-      //   (b) redirigir al checkout hosteado del proveedor con el ID retornado.
-      //   La validación final llega vía webhook → process-payment Edge Function (Etapa X.11).
-      const redirectUrl = _currency === 'ARS'
-        ? '#mercadopago-pending'
-        : '#paypal-pending';
+      // ── Branch por moneda ──────────────────────────
+      if (_currency === 'ARS') {
+        // ── Mercado Pago — Etapa X.13 ──────────────
+        try {
+          // Inicializar SDK (idempotente — el mp object no se usa hoy para
+          // checkout-bricks, pero deja la integración lista para tokenización
+          // del lado del cliente si se decide cambiar al método "transparent").
+          if (typeof MercadoPago !== 'undefined') {
+            // eslint-disable-next-line no-unused-vars
+            const mp = new MercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
+          }
 
-      // Pequeño delay para que el usuario vea el mensaje
-      setTimeout(() => { window.location.href = redirectUrl; }, 1200);
+          // POST a la Edge Function que crea la preference con MP_ACCESS_TOKEN
+          const fnUrl = 'https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/create-preference';
+          const res = await fetch(fnUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              // anon key requerido por defecto; la function tiene verify_jwt=false
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
+            },
+            body: JSON.stringify({
+              slug:        _course.slug,
+              email,
+              nombre,
+              apellido,
+              amount:      _finalPrice,
+              coupon_code: _appliedCoupon?.code || null,
+            }),
+          });
+
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`create-preference ${res.status}: ${txt}`);
+          }
+          const data = await res.json();
+          if (!data?.init_point) throw new Error('No se recibió init_point del backend.');
+
+          // Redirigir al checkout hosteado de Mercado Pago
+          window.location.href = data.init_point;
+        } catch (e) {
+          console.error('goToPayment ARS error:', e);
+          alert('No se pudo iniciar el pago: ' + (e.message || e) + '\nIntentá de nuevo.');
+          document.getElementById('redirect-msg').classList.remove('show');
+          btn.disabled = false;
+          btn.textContent = 'Continuar al pago →';
+        }
+      } else {
+        // ── PayPal — placeholder (Etapa X.13 cubre solo ARS/MP) ──
+        setTimeout(() => { window.location.href = '#paypal-pending'; }, 1200);
+      }
     }
   </script>
 

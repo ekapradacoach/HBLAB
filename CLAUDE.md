@@ -29,7 +29,9 @@ hblab/
 ├── perfil.html                    ← Página de perfil (todos los roles) — avatar, datos personales, cursos completados (Sesión 57)
 ├── curso.html                     ← Página de curso dinámica (?slug=) para cursos nuevos
 ├── venta-curso.html               ← Página de venta dinámica (?slug=) para cursos nuevos
-├── checkout.html                  ← Página de checkout pública (?slug=&currency=) — form + cupones + redirect a MP/PayPal (Etapa X.12)
+├── checkout.html                  ← Página de checkout pública (?slug=&currency=) — form + cupones + integración MP (Etapa X.13)
+├── checkout-success.html          ← Pago aprobado — landing post-MP (back_url success, Etapa X.13)
+├── checkout-pending.html          ← Pago en proceso — landing post-MP (back_url pending, Etapa X.13)
 ├── curso-webinar-hipertrofia.html ← Curso legacy 1 (contenido hardcoded)
 ├── curso-carrera-hibrida.html     ← Curso legacy 2
 ├── curso-entrenamiento-hibrido.html ← Curso legacy 3
@@ -165,7 +167,7 @@ Todos los HTML del proyecto (13 archivos) tienen un bloque SEO uniforme insertad
 **Robots por archivo**:
 - `index, follow`: `index.html`, `webinar-hipertrofia.html`, `carrera-hibrida.html`, `entrenamiento-hibrido.html`, `venta-curso.html`
 - `noindex`: `login.html`
-- `noindex, nofollow`: `dashboard.html`, `admin.html`, `coach.html`, `curso.html`, `curso-webinar-hipertrofia.html`, `curso-carrera-hibrida.html`, `curso-entrenamiento-hibrido.html`, `checkout.html`
+- `noindex, nofollow`: `dashboard.html`, `admin.html`, `coach.html`, `curso.html`, `curso-webinar-hipertrofia.html`, `curso-carrera-hibrida.html`, `curso-entrenamiento-hibrido.html`, `checkout.html`, `checkout-success.html`, `checkout-pending.html`
 
 **Títulos públicos** usan formato `Título | HB Lab` (pipe). Privados conservan formato `... — HB Lab` (em-dash).
 
@@ -437,16 +439,25 @@ checkout.html (público, sin auth)
   │     ├── chequea valid_until, max_uses vs uses_count, course_id null|=currentCourseId
   │     └── calcula precio final: discount_pct → base*(1-pct/100); discount_fixed → base-fixed (cap 0)
   │         (discount_fixed solo aplica a ARS — el front bloquea si currency=USD)
-  └── goToPayment() → guarda en sessionStorage 'checkout_payload' { nombre, apellido, email,
-        slug, course_id, currency, base_price, coupon_code, coupon_id, final_price, timestamp }
-        → redirige a #mercadopago-pending (ARS) o #paypal-pending (USD) — placeholders.
-
-(En producción, los placeholders se reemplazan por:
-   ARS → POST /preferences a MP API → redirect a init_point del response.
-   USD → POST /v2/checkout/orders a PayPal API → redirect a approval_url del response.
-La validación final del pago llega vía webhook → Edge Function process-payment
-(Etapa X.11) que hace UPSERT en user_courses.)
+  └── goToPayment() → guarda en sessionStorage 'checkout_payload' { ... } y:
+       ARS  → fetch POST a Edge Function `create-preference` (Etapa X.13)
+              → recibe { init_point } → window.location.href = init_point
+              → MP hostea el checkout y al terminar redirige a back_urls.success/failure/pending
+              → MP también envía webhook a `process-payment` con el resultado del pago
+       USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
+
+**Integración Mercado Pago (Etapa X.13):**
+- **SDK** cargado en `<head>` de `checkout.html`: `<script src="https://sdk.mercadopago.com/js/v2"></script>`.
+- **Public Key** hardcoded en JS: `APP_USR-50bae8c7-b6bf-4f8b-813e-38a4307e91bd` (producción). Se inicializa con `new MercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' })` para dejar el SDK listo si en el futuro se cambia a checkout-bricks (transparente). Hoy se usa el flujo de **redirect a checkout hosteado** vía `init_point`.
+- **Edge Function `create-preference`** (Etapa X.13): recibe `{ slug, email, nombre, apellido, amount, coupon_code }`, resuelve el course en BD con service role (no confía en el front para el `title`), llama a `https://api.mercadopago.com/checkout/preferences` con `Authorization: Bearer ${MP_ACCESS_TOKEN}`, devuelve `init_point` al cliente.
+- **`back_urls`** (configuradas en la preference):
+  - success → `https://ekapradacoach.github.io/HBLAB/checkout-success.html`
+  - failure → `https://ekapradacoach.github.io/HBLAB/checkout.html` (el alumno puede reintentar)
+  - pending → `https://ekapradacoach.github.io/HBLAB/checkout-pending.html`
+- **`auto_return: 'approved'`** — si el pago se aprueba, MP redirige automáticamente a `back_urls.success` sin que el usuario tenga que apretar nada.
+- **`notification_url`** (webhook): `https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment` — MP llama acá tras el pago confirmado, y `process-payment` (Etapa X.11) hace UPSERT en `user_courses`.
+- **`external_reference`**: JSON serializado con `{ slug, email, nombre, apellido, coupon_code, course_id }` — sirve para que `process-payment` recupere los datos del comprador desde el webhook (MP devuelve este string tal cual). **Pendiente** en `process-payment`: parsear `external_reference` y usar esos campos en lugar de leerlos del payload genérico.
 
 **Cupones — semántica:**
 - `code` único, mayúsculas. El front lo upper-casea on-input.
@@ -494,9 +505,10 @@ Alumno tiene acceso a un curso SOLO SI:
 
 ## Edge Functions de Supabase
 
-**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay dos funciones listas en el repo:
+**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay tres funciones listas en el repo:
 
 - **`invite-coach`** — `verify_jwt = true`. POST `{ email, role }`. Verifica que el caller sea admin (lee JWT del Authorization), llama `auth.admin.inviteUserByEmail(email)` con la service role key, hace UPSERT en `profiles.role`. Retorna `{ ok, user_id, email, role }`.
+- **`create-preference`** — `verify_jwt = false`. POST `{ slug, email, nombre, apellido, amount, coupon_code }`. Resuelve el `course` por slug (con service role para bypassear RLS), llama a `https://api.mercadopago.com/checkout/preferences` con `MP_ACCESS_TOKEN`, devuelve `{ ok, init_point, sandbox_init_point, preference_id }` al cliente. El cliente redirige a `init_point`. El webhook de MP llega luego a `process-payment`. Etapa X.13.
 - **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal. Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev), normaliza el payload por proveedor, resuelve `user_id` por email (con invite-on-the-fly si no existe), UPSERT en `user_courses` con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`.
 
 **⚠️ Estado actual: PENDIENTE de deploy.** El código está listo en el repo pero las funciones no están desplegadas todavía. El CLI de Supabase tiene problemas en Windows, así que el deploy se hace **manualmente desde el dashboard**:
@@ -517,28 +529,31 @@ Alumno tiene acceso a un curso SOLO SI:
 
 - `SUPABASE_SERVICE_ROLE_KEY` — **ya configurado en el proyecto** (Supabase lo inyecta automáticamente en el runtime de Edge Functions; no hay que setearlo manualmente).
 - `SUPABASE_URL` — también inyectado automáticamente.
-- `MP_WEBHOOK_SECRET`, `PAYPAL_WEBHOOK_ID` — placeholders, configurar cuando se integre MP/PayPal real desde **Edge Functions → Manage secrets**.
+- `MP_ACCESS_TOKEN` — **REQUERIDO para `create-preference`** (Etapa X.13). Es el Access Token de **producción** del partner de MP (Dashboard MP → Tus integraciones → Credenciales de producción → "Access Token"). **NO** confundir con la Public Key (esa va hardcoded en checkout.html). Setear en Supabase → Edge Functions → Manage secrets.
+- `MP_WEBHOOK_SECRET`, `PAYPAL_WEBHOOK_ID` — placeholders para verificación de firma en `process-payment`, configurar cuando se haga la integración real de webhooks.
 - `PAYMENTS_ALLOW_UNVERIFIED=1` — solo para sandbox/dev mientras la verificación de firma esté pendiente. **NUNCA en producción.**
 
 ### Verificación de los archivos en el repo
 
-Tamaños esperados de las dos funciones (al día de hoy):
+Tamaños esperados de las tres funciones (al día de hoy):
 
 ```
-supabase/functions/invite-coach/index.ts     147 líneas   ~7.2 KB
-supabase/functions/process-payment/index.ts  207 líneas  ~10.8 KB
+supabase/functions/invite-coach/index.ts        147 líneas   ~7.2 KB
+supabase/functions/create-preference/index.ts   ~175 líneas  ~6.1 KB
+supabase/functions/process-payment/index.ts     207 líneas  ~10.8 KB
 ```
 
-Ambos archivos cierran con `});` (el handler `serve(...)`). Si alguno está cortado, no hacer deploy y revisar primero.
+Todos los archivos cierran con `});` (el handler `serve(...)`). Si alguno está cortado, no hacer deploy y revisar primero.
 
 ### Configuración asociada en `supabase/config.toml`
 
 ```toml
-[functions.invite-coach]    verify_jwt = true   # exige JWT del admin en Authorization
-[functions.process-payment] verify_jwt = false  # webhook público — firma valida adentro
+[functions.invite-coach]      verify_jwt = true   # exige JWT del admin en Authorization
+[functions.create-preference] verify_jwt = false  # llamada desde checkout.html (público)
+[functions.process-payment]   verify_jwt = false  # webhook público — firma valida adentro
 ```
 
-Cuando se haga el deploy via "Via Editor", la flag `verify_jwt` puede configurarse desde el panel de **Settings** de cada función (toggle "Enforce JWT verification"). Asegurarse de que **invite-coach tenga JWT enforcement ON** y **process-payment tenga JWT enforcement OFF**.
+Cuando se haga el deploy via "Via Editor", la flag `verify_jwt` puede configurarse desde el panel de **Settings** de cada función (toggle "Enforce JWT verification"). Asegurarse de que **invite-coach tenga JWT enforcement ON** y **create-preference / process-payment tengan JWT enforcement OFF**.
 
 ---
 
