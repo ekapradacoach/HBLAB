@@ -639,6 +639,49 @@
       // Mostrar mensaje de redirect
       document.getElementById('redirect-msg').classList.add('show');
 
+      // ── Branch "cupón al 100%" — Etapa X.14 ────────
+      // Si el cupón aplicado dejó el precio final en $0 (o menos), no tiene
+      // sentido pasar por MP. Llamamos directamente a process-payment con
+      // provider:'coupon' y, si responde ok, redirigimos a checkout-success.
+      if (_finalPrice <= 0) {
+        try {
+          const fnUrl = 'https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment';
+          const res = await fetch(fnUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
+            },
+            body: JSON.stringify({
+              provider:    'coupon',
+              email,
+              nombre,
+              apellido,
+              slug:        _course.slug,
+              amount:      0,
+              currency:    'ARS',
+              coupon_code: _appliedCoupon?.code || null,
+              status:      'approved',
+            }),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`process-payment ${res.status}: ${txt}`);
+          }
+          const data = await res.json();
+          if (!data?.ok) throw new Error('process-payment devolvió respuesta no-ok.');
+          // Éxito: redirigir a la pantalla de success (mismo destino que MP back_urls.success)
+          window.location.href = 'checkout-success.html';
+        } catch (e) {
+          console.error('goToPayment coupon-100% error:', e);
+          alert('No se pudo procesar el cupón: ' + (e.message || e) + '\nIntentá de nuevo.');
+          document.getElementById('redirect-msg').classList.remove('show');
+          btn.disabled = false;
+          btn.textContent = 'Continuar al pago →';
+        }
+        return;  // skip el branch de moneda — el cupón al 100% no pasa por MP/PayPal
+      }
+
       // ── Branch por moneda ──────────────────────────
       if (_currency === 'ARS') {
         // ── Mercado Pago — Etapa X.13 ──────────────

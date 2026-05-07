@@ -22,7 +22,7 @@ Plataforma de cursos online de entrenamiento deportivo. Vende cursos a alumnos, 
 ```
 hblab/
 ├── index.html                     ← Landing (dinámica desde Supabase: launches, cursos, próximamente)
-├── login.html                     ← Login + Registro + Recuperar contraseña (3 paneles)
+├── login.html                     ← Login + Recuperar contraseña (2 paneles — registro eliminado en Etapa X.15; alta automática vía process-payment)
 ├── dashboard.html                 ← Panel alumno (cursos comprados paid+active)
 ├── admin.html                     ← Panel admin (role='admin') — Cursos, Alumnos, Coaches, Lanzamientos, Gestión
 ├── coach.html                     ← Panel coach (role='coach'|'admin') — 2 tabs: Mi curso + Ganancias
@@ -419,6 +419,7 @@ Centro de control visual de `index.html`. Layout `.landing-layout` 40fr/60fr (co
 - Inversión publicitaria: tabla `ad_spend` (ya migrado de localStorage)
 - Resultado neto: `loadResultadoNeto()` — ingresos − comisiones − ad_spend
 - **Ventas por coach (`loadCoachesVentas`)**: acordeón colapsable por coach (Sesión 53). Cada coach es una fila clicable (`cursor:pointer`, `user-select:none`) con nombre + badge de cantidad de cursos + flecha `▾` + ganancia total. Click en la fila → `toggleCoursesRow('ventas-row-${coachId}', arrowEl)` (helper genérico ya usado en Tab Coaches) abre/cierra la sub-fila `<tr class="coach-courses-row">` que contiene una `<table class="coach-courses-subtable">` con curso, ventas y ganancia. Por default todos colapsados (CSS `.coach-courses-row { display:none; }`). El helper rota la flecha ▾↔▴ vía `innerHTML.replace`. ID prefix `ventas-row-` para no colisionar con `courses-row-` de Tab Coaches.
+- **Tabla de ventas detallada (Etapa X.15)**: nueva sub-section `.sub-section` debajo de las stats-grid y arriba del resultado neto. Columnas `Fecha · Alumno (email) · Curso · Monto · Moneda · Método`. SELECT `user_courses` con embed `courses(id, title)` + `profiles(email)` filtrado por `payment_status='paid'` ordenado por `enrolled_at DESC`. Cache en global `_ventas` + filtros in-memory por curso (UUID), mes (`YYYY-MM`), moneda (ARS/USD/todos). Selectores de curso y mes se autopueblan con valores únicos de los datos cargados; preservan la selección entre re-renders. Totales abajo de la tabla: `$X ARS` lime + `USD X` violeta + `N ventas`. Botón "📥 Exportar CSV" (`exportarVentasCSV()`) exporta los datos filtrados con BOM UTF-8 + headers en español + nombre `ventas-YYYY-MM-DD.csv`. Helper `_filteredVentas()` y `_renderVentasTotals(filtered)` separados para reuso entre render y export.
 
 ---
 
@@ -446,6 +447,32 @@ checkout.html (público, sin auth)
               → MP también envía webhook a `process-payment` con el resultado del pago
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
+
+**Etapa X.16 — Bugfix crítico: process-payment ahora hace fetch a la API de MP:**
+- **Causa raíz**: el webhook real de MP solo manda `{ action, data: { id }, type, user_id }`. El parser viejo `normalizeMP(payload)` asumía que el webhook ya traía `payer.email`, `external_reference`, `transaction_amount`, etc., así que devolvía `null` siempre y el endpoint respondía 400. Resultado: ningún pago aprobado llegaba a `user_courses`.
+- **Fix**: la función `normalizeMP` legacy fue eliminada. La normalización del MP webhook ahora se hace **inline en el handler**:
+  1. Extrae `paymentId = payload.data.id`. Si falta → 200 + `skipped:true` (eventos secundarios como test/refund no traen id).
+  2. `fetch GET https://api.mercadopago.com/v1/payments/{paymentId}` con `Authorization: Bearer ${MP_ACCESS_TOKEN}`. Si la API responde no-2xx → 502 (MP reintentará).
+  3. **Skip silencioso si `payment.status !== 'approved'`**: retorna 200 + `{ ok: true, skipped: true, reason: 'status=...' }`. Esto evita que MP reintente el webhook para pagos `in_process` / `pending` / `rejected` (esos estados llegan a status final con webhooks subsiguientes).
+  4. Parsea `payment.external_reference` como JSON (lo armó `create-preference` con `{ slug, email, nombre, apellido, coupon_code, course_id }`). Si el JSON.parse falla, loguea warning y trata el campo como vacío (cae en validaciones siguientes).
+  5. Resuelve `course_id` por `slug` contra la tabla `courses` con service role (bypassea RLS).
+  6. Arma el `NormalizedPayment` con `email` (priorizando `extRef.email` sobre `payment.payer.email` por compatibilidad), `amount=transaction_amount`, `currency=currency_id`, `payment_method='mercadopago'`, `external_ref=payment.id`, y `nombre/apellido` del extRef.
+  7. Continúa al flujo común de invite + UPSERT en `user_courses`.
+- **Re-deploy requerido** en Supabase Dashboard: Edge Functions → process-payment → Code → pegar nuevo contenido (369 líneas) → Deploy. Verificar que el secret `MP_ACCESS_TOKEN` está configurado en Manage Secrets.
+- **Follow-up anotado** (sin implementar todavía): incrementar `coupons.uses_count` cuando `extRef.coupon_code` está set en el webhook MP. Comentario inline marca dónde.
+
+**Etapa X.15 — Cleanup: registro eliminado, sales table, contact email:**
+- `login.html`: panel de registro removido completamente (HTML + JS + form-register handler + indicador de fortaleza de password + checker de confirmación). Solo quedan **Login** y **Recuperar contraseña**. El alta de alumnos se hace 100% automática vía `process-payment` Edge Function al confirmar pago (`auth.admin.inviteUserByEmail` envía un email con magic link). El link "¿No tenés cuenta? Crear cuenta →" del panel login también desapareció. CSS `.pw-bar*` queda definido pero sin uso (harmless).
+- `checkout-success.html`: footer info-box ahora referencia `ekapradacoach@gmail.com` en lugar del placeholder `hola@hblab.com`. (`checkout-pending.html` quedó con el placeholder — no se pidió cambiarlo.)
+- `admin.html` Tab Gestión: tabla de ventas detallada (ver sección "Tab Gestión" más abajo).
+
+**Etapa X.14 — Cupón 100% off (precio final $0) salta MP/PayPal:**
+- `checkout.html` → `goToPayment()`: branch nuevo al inicio. Si `_finalPrice <= 0` (cupón con `discount_pct=100` o `discount_fixed >= base_price`), NO se llama a `create-preference` ni se redirige a MP.
+- En su lugar, `fetch POST` directo a `https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment` con body `{ provider: 'coupon', email, nombre, apellido, slug, amount: 0, currency: 'ARS', coupon_code, status: 'approved' }`.
+- Si `process-payment` responde `{ ok: true }` → redirect a `checkout-success.html`.
+- Si responde error → alert con el detalle, restaura el botón "Continuar al pago →" y permite reintentar.
+- En `process-payment`, el branch "coupon" detecta `provider === 'coupon'` ANTES de la verificación de firma (early return) y procesa el acceso. Validaciones server-side: existencia del slug + curso activo, cupón existe + `is_active=true`, `valid_until` no vencido, `max_uses` no excedido, `course_id` matchea (si está set). Defensivo contra clientes maliciosos que envíen `amount: 0` con un cupón inválido.
+- El email de invitación que envía Supabase Auth ahora incluye `full_name` en `user_metadata` (extraído de `nombre + apellido`) → el trigger `handle_new_user` lo persiste en `profiles.full_name` automáticamente. Aplica a **todos los flujos** (MP, PayPal y coupon) — antes el invite no pasaba metadata, lo que dejaba `profiles.full_name` vacío y forzaba al alumno a completarlo manualmente desde `perfil.html`.
 
 **Bugfix Etapa X.13.1 — botón "Comprar ahora" de la card en `index.html`:**
 - El handler antiguo `alert('Próximamente — integración con Mercado Pago y PayPal')` se reemplazó por `window.location.href='${coursePage}&buy=1'` (navega a `venta-curso.html?slug=X&buy=1`).
@@ -513,7 +540,12 @@ Alumno tiene acceso a un curso SOLO SI:
 
 - **`invite-coach`** — `verify_jwt = true`. POST `{ email, role }`. Verifica que el caller sea admin (lee JWT del Authorization), llama `auth.admin.inviteUserByEmail(email)` con la service role key, hace UPSERT en `profiles.role`. Retorna `{ ok, user_id, email, role }`.
 - **`create-preference`** — `verify_jwt = false`. POST `{ slug, email, nombre, apellido, amount, coupon_code }`. Resuelve el `course` por slug (con service role para bypassear RLS), llama a `https://api.mercadopago.com/checkout/preferences` con `MP_ACCESS_TOKEN`, devuelve `{ ok, init_point, sandbox_init_point, preference_id }` al cliente. El cliente redirige a `init_point`. El webhook de MP llega luego a `process-payment`. Etapa X.13.
-- **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal. Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev), normaliza el payload por proveedor, resuelve `user_id` por email (con invite-on-the-fly si no existe), UPSERT en `user_courses` con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`.
+- **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal **+ entry point del cupón 100% off** (Etapa X.14). Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev). Tres branches según el provider:
+  - **MP** (Etapa X.16 — fix crítico): el webhook real de MP solo trae `{ action, data: { id }, type, user_id }` — NO incluye email/amount/external_reference. Por eso process-payment ahora hace `GET https://api.mercadopago.com/v1/payments/{data.id}` con `Authorization: Bearer ${MP_ACCESS_TOKEN}` para enriquecer el pago. Si `payment.status !== 'approved'` (pending, in_process, rejected, etc.) → retorna `{ ok: true, skipped: true, reason: 'status=...' }` con HTTP 200 para que MP no reintente. Si está aprobado, parsea `payment.external_reference` (JSON con `{ slug, email, nombre, apellido, coupon_code, course_id }` que `create-preference` armó al crear la preference), resuelve `course_id` por slug y arma el `NormalizedPayment`. Si el webhook llega sin `data.id` (eventos secundarios tipo test/refund) responde 200 con `skipped: true` también, sin error.
+  - **PayPal**: usa `normalizePayPal(payload)` legacy — pendiente de integración real.
+  - **Coupon**: si el body trae `provider: 'coupon'`, salta la verificación de firma, resuelve `course_id` por `slug` con service role, valida el cupón contra la tabla `coupons` (existencia + activo + vencimiento + max_uses + course_id match), y procesa el acceso con el mismo flujo (`payment_method='coupon'`, `amount_paid=0`, `external_ref='coupon:{CODE}'`).
+
+  En los 3 branches: resuelve `user_id` por email (con invite-on-the-fly si no existe — pasando `nombre`/`apellido` como metadata para que el trigger `handle_new_user` los guarde en `profiles.full_name`), UPSERT en `user_courses` con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`.
 
 **⚠️ Estado actual: PENDIENTE de deploy.** El código está listo en el repo pero las funciones no están desplegadas todavía. El CLI de Supabase tiene problemas en Windows, así que el deploy se hace **manualmente desde el dashboard**:
 

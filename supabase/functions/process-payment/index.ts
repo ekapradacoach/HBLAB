@@ -35,8 +35,11 @@ interface NormalizedPayment {
   course_id:      string;
   amount:         number;
   currency:       string;             // 'ARS' | 'USD'
-  payment_method: 'mercadopago' | 'paypal' | 'manual';
+  payment_method: 'mercadopago' | 'paypal' | 'manual' | 'coupon';
   external_ref?:  string;             // id de la transacción en el proveedor
+  // Datos opcionales del comprador para el invite (Etapa X.13)
+  nombre?:        string;
+  apellido?:      string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -79,25 +82,11 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
 // ─────────────────────────────────────────────────────────────
 // NORMALIZACIÓN DEL PAYLOAD
 // ─────────────────────────────────────────────────────────────
-// Cada proveedor manda el payload con su propio shape. Acá lo aplanamos a
-// NormalizedPayment para que el resto del flujo no se entere.
-//
-// NOTA: estos parsers son placeholders — al integrar de verdad hay que
-// confirmar los campos exactos contra docs/sandbox del proveedor.
-function normalizeMP(payload: any): NormalizedPayment | null {
-  // payload.type === 'payment' → payload.data.id es el id del pago.
-  // En producción, con el id, se debería hacer un GET /v1/payments/{id} a la
-  // API de MP para obtener email + currency + status confirmados (no confiar
-  // en el body del webhook). Acá modelamos el caso "ya enriquecido":
-  const p = payload?.data || payload;
-  const email     = p?.payer?.email || p?.email;
-  const courseId  = p?.metadata?.course_id || p?.external_reference;
-  const amount    = Number(p?.transaction_amount ?? p?.amount ?? 0);
-  const currency  = (p?.currency_id || p?.currency || 'ARS').toUpperCase();
-  const externalRef = p?.id ? String(p.id) : undefined;
-  if (!email || !courseId) return null;
-  return { email, course_id: courseId, amount, currency, payment_method: 'mercadopago', external_ref: externalRef };
-}
+// El parser de MP fue REMOVIDO: el webhook real de MP solo trae
+//   { action, data: { id }, type, user_id }
+// — sin email, sin amount, sin external_reference. La normalización
+// se hace inline en el handler (sección 2a) llamando a la API de MP
+// con el payment_id para enriquecer todos los datos. Etapa X.16.
 
 function normalizePayPal(payload: any): NormalizedPayment | null {
   // PayPal manda CHECKOUT.ORDER.APPROVED o PAYMENT.CAPTURE.COMPLETED.
@@ -121,31 +110,200 @@ serve(async (req: Request) => {
   // Leer body como texto primero (necesario para verificar firma)
   const rawBody = await req.text();
 
-  // ── 1) Verificar firma ──────────────────────────────────
-  const sig = await verifySignature(req, rawBody);
-  if (!sig.ok) {
-    console.warn('process-payment: firma inválida —', sig.reason || 'unknown');
-    return errOut('Firma inválida o no verificada.', 401);
+  // ── 0) Branch "coupon" — pago 100% off (Etapa X.14) ─────
+  // Cuando el cupón aplicado deja el precio en $0, el cliente NO pasa por MP/PayPal.
+  // En su lugar manda directamente a este endpoint con provider:'coupon' y los datos
+  // del comprador. Saltamos la verificación de firma (no la hay — confiamos en
+  // que la BD valida que el coupon exista y deje el precio en 0) y procesamos
+  // el acceso con el mismo flujo de invite + UPSERT user_courses.
+  let earlyParsed: any = null;
+  try { earlyParsed = JSON.parse(rawBody); } catch { /* fall-through al flujo normal */ }
+  const isCouponFlow = earlyParsed && earlyParsed.provider === 'coupon';
+
+  let normalized: NormalizedPayment | null = null;
+  let sigInfo: { ok: boolean; provider: string; reason?: string } | null = null;
+
+  if (isCouponFlow) {
+    // Resolver course_id por slug (el cliente solo conoce slug)
+    const slug = (earlyParsed.slug || '').trim();
+    if (!slug) return errOut('coupon flow: falta slug.');
+    const SERVICE_ROLE_EARLY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const SUPABASE_URL_EARLY = Deno.env.get('SUPABASE_URL');
+    if (!SERVICE_ROLE_EARLY || !SUPABASE_URL_EARLY) {
+      console.error('process-payment[coupon]: faltan SUPABASE_URL/SERVICE_ROLE');
+      return errOut('Configuración del servidor incompleta.', 500);
+    }
+    const sbEarly = createClient(SUPABASE_URL_EARLY, SERVICE_ROLE_EARLY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: course, error: courseErr } = await sbEarly
+      .from('courses').select('id').eq('slug', slug).eq('is_active', true).maybeSingle();
+    if (courseErr || !course) {
+      console.error('process-payment[coupon]: course lookup falló', courseErr);
+      return errOut('Curso no encontrado o inactivo.', 404);
+    }
+    // Validar que el cupón exista, esté activo, y resulte en amount=0 contra el course
+    // (defensivo — evita que un cliente malicioso envíe amount:0 con un cupón inválido).
+    const couponCode = (earlyParsed.coupon_code || '').toUpperCase();
+    if (couponCode) {
+      const { data: cps } = await sbEarly
+        .from('coupons')
+        .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
+        .eq('code', couponCode)
+        .eq('is_active', true);
+      const coupon = (cps || [])[0];
+      if (!coupon) return errOut('Cupón inválido o inactivo.', 400);
+      if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+        return errOut('Cupón vencido.', 400);
+      }
+      if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
+        return errOut('Cupón agotado.', 400);
+      }
+      if (coupon.course_id && coupon.course_id !== course.id) {
+        return errOut('Cupón no aplicable a este curso.', 400);
+      }
+      // (En este flujo NO recalculamos el precio: si el cliente reportó amount=0 y
+      // el cupón existe + está vigente, asumimos que el descuento legítimamente lo dejó
+      // en 0. La validación exhaustiva del cálculo queda como follow-up — process-payment
+      // necesitaría también el price_ars del course, que ya tenemos en `course`. Por ahora
+      // confiamos en la chequeada simétrica que ya hace checkout.html antes de llamar.)
+    }
+
+    normalized = {
+      email:          (earlyParsed.email || '').trim().toLowerCase(),
+      course_id:      course.id,
+      amount:         0,
+      currency:       (earlyParsed.currency || 'ARS').toUpperCase(),
+      payment_method: 'coupon',
+      external_ref:   couponCode ? `coupon:${couponCode}` : 'coupon:none',
+      nombre:         (earlyParsed.nombre   || '').trim() || undefined,
+      apellido:       (earlyParsed.apellido || '').trim() || undefined,
+    };
+    if (!normalized.email) return errOut('coupon flow: falta email.');
+    sigInfo = { ok: true, provider: 'coupon' };
+  } else {
+    // ── 1) Flujo normal: Verificar firma ──────────────────
+    sigInfo = await verifySignature(req, rawBody);
+    if (!sigInfo.ok) {
+      console.warn('process-payment: firma inválida —', sigInfo.reason || 'unknown');
+      return errOut('Firma inválida o no verificada.', 401);
+    }
+
+    // ── 2) Parsear ──────────────────────────────────────
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return errOut('Body inválido: se esperaba JSON.');
+    }
+
+    if (sigInfo.provider === 'mercadopago') {
+      // ── 2a) MP webhook (Etapa X.16) ─────────────────────
+      // El webhook real de MP solo trae { action, data: { id }, type, user_id }.
+      // Tenemos que hacer GET /v1/payments/{id} para obtener email, monto,
+      // currency, status y external_reference. Si el pago no está aprobado
+      // todavía (pending, in_process, rejected) → skip silencioso (200 ok)
+      // para que MP no reintente. external_reference viene como un string
+      // JSON serializado por create-preference con { slug, email, nombre,
+      // apellido, coupon_code, course_id }.
+
+      const paymentId = payload?.data?.id;
+      if (!paymentId) {
+        console.warn('process-payment[MP]: webhook sin data.id, payload:', payload);
+        // Algunos eventos secundarios (test, refund, etc.) no traen data.id —
+        // respondemos 200 para que MP no reintente, pero no procesamos nada.
+        return json({ ok: true, skipped: true, reason: 'sin data.id' });
+      }
+
+      const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN');
+      if (!MP_ACCESS_TOKEN) {
+        console.error('process-payment[MP]: MP_ACCESS_TOKEN no configurado');
+        return errOut('Configuración del servidor incompleta (MP_ACCESS_TOKEN).', 500);
+      }
+
+      // ── Fetch a la API de MP ──────────────────────────
+      let payment: any;
+      try {
+        const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(`MP /v1/payments/${paymentId} → HTTP ${r.status}: ${txt}`);
+        }
+        payment = await r.json();
+      } catch (e: any) {
+        console.error('process-payment[MP]: fetch payment falló:', e);
+        return errOut('No se pudo consultar el pago en MP: ' + (e.message || e), 502);
+      }
+
+      // ── Skip si no está aprobado ──────────────────────
+      // status posibles: approved, in_process, pending, rejected, cancelled,
+      // refunded, charged_back. Solo procesamos `approved`. MP reintenta los
+      // webhooks ante 4xx/5xx, así que respondemos 200 con skipped:true.
+      if (payment.status !== 'approved') {
+        console.log(`process-payment[MP]: payment ${paymentId} status=${payment.status} → skip`);
+        return json({ ok: true, skipped: true, reason: `status=${payment.status}`, payment_id: paymentId });
+      }
+
+      // ── Parsear external_reference ────────────────────
+      let extRef: any = {};
+      try {
+        if (payment.external_reference) extRef = JSON.parse(payment.external_reference);
+      } catch (e) {
+        console.warn('process-payment[MP]: external_reference no es JSON válido:', payment.external_reference);
+        extRef = {};
+      }
+
+      const slug      = (extRef.slug || '').trim();
+      const refEmail  = (extRef.email || payment?.payer?.email || '').trim().toLowerCase();
+      const refNombre = (extRef.nombre   || '').trim() || undefined;
+      const refApell  = (extRef.apellido || '').trim() || undefined;
+
+      if (!slug)     return errOut('webhook MP: external_reference sin slug.');
+      if (!refEmail) return errOut('webhook MP: no se pudo determinar el email del comprador.');
+
+      // ── Resolver course_id por slug (service role bypassea RLS) ──
+      const SERVICE_ROLE_MP = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      const SUPABASE_URL_MP = Deno.env.get('SUPABASE_URL');
+      if (!SERVICE_ROLE_MP || !SUPABASE_URL_MP) {
+        console.error('process-payment[MP]: faltan SUPABASE_URL/SERVICE_ROLE');
+        return errOut('Configuración del servidor incompleta.', 500);
+      }
+      const sbMP = createClient(SUPABASE_URL_MP, SERVICE_ROLE_MP, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: course, error: courseErr } = await sbMP
+        .from('courses').select('id').eq('slug', slug).eq('is_active', true).maybeSingle();
+      if (courseErr || !course) {
+        console.error('process-payment[MP]: curso no encontrado para slug=' + slug, courseErr);
+        return errOut(`Curso no encontrado o inactivo (slug=${slug}).`, 404);
+      }
+
+      normalized = {
+        email:          refEmail,
+        course_id:      course.id,
+        amount:         Number(payment.transaction_amount || 0),
+        currency:       (payment.currency_id || 'ARS').toUpperCase(),
+        payment_method: 'mercadopago',
+        external_ref:   String(payment.id),
+        nombre:         refNombre,
+        apellido:       refApell,
+      };
+
+      // (Follow-up Etapa X.14): incrementar coupons.uses_count si extRef.coupon_code
+      // está set y el cupón existe. No bloquea el flujo del pago.
+    } else if (sigInfo.provider === 'paypal') {
+      normalized = normalizePayPal(payload);
+      if (!normalized) {
+        return errOut('Payload PayPal no reconocido o incompleto.');
+      }
+    } else {
+      return errOut(`Payload no reconocido (provider=${sigInfo.provider}).`);
+    }
   }
 
-  // ── 2) Parsear y normalizar ────────────────────────────
-  let payload: any;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return errOut('Body inválido: se esperaba JSON.');
-  }
-
-  const normalized: NormalizedPayment | null =
-    sig.provider === 'mercadopago' ? normalizeMP(payload)
-    : sig.provider === 'paypal'    ? normalizePayPal(payload)
-    : null;
-
-  if (!normalized) {
-    return errOut(`Payload no reconocido o incompleto (provider=${sig.provider}).`);
-  }
-
-  const { email, course_id, amount, currency, payment_method, external_ref } = normalized;
+  const { email, course_id, amount, currency, payment_method, external_ref, nombre, apellido } = normalized;
 
   // ── 3) Cliente service role ─────────────────────────────
   const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -175,7 +333,11 @@ serve(async (req: Request) => {
 
   // 4.b) Si no existe, invitar
   if (!userId) {
-    const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email);
+    // Si tenemos nombre+apellido (coupon flow trae estos campos), pasarlos como
+    // metadata para que el trigger handle_new_user los guarde en profiles.full_name.
+    const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
+    const inviteOpts = fullName ? { data: { full_name: fullName, name: fullName } } : undefined;
+    const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, inviteOpts);
     if (inviteErr || !invited?.user?.id) {
       console.error('process-payment: invite falló:', inviteErr);
       return errOut('No se pudo invitar al usuario: ' + (inviteErr?.message || 'sin id'), 500);

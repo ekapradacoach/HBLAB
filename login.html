@@ -387,74 +387,12 @@
           </button>
         </form>
 
-        <p class="mode-switch">
-          ¿No tenés cuenta?
-          <a id="link-to-register">Crear cuenta →</a>
-        </p>
-
       </div><!-- /#panel-login -->
 
 
-      <!-- ════════════════════════════════════════
-           PANEL 2 — REGISTRO
-      ════════════════════════════════════════ -->
-      <div id="panel-register" class="panel">
-
-        <div class="card-header">
-          <h1>Crear cuenta</h1>
-          <p>Completá los datos para registrarte en HB Lab</p>
-        </div>
-
-        <div id="msg-register" class="msg hidden"></div>
-
-        <form id="form-register" novalidate>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="reg-nombre">Nombre</label>
-              <input type="text" id="reg-nombre" placeholder="Juan" autocomplete="given-name" required />
-            </div>
-            <div class="form-group">
-              <label for="reg-apellido">Apellido</label>
-              <input type="text" id="reg-apellido" placeholder="García" autocomplete="family-name" required />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="reg-email">Email</label>
-            <input type="email" id="reg-email" placeholder="tucorreo@email.com" autocomplete="email" required />
-          </div>
-
-          <div class="form-group">
-            <label for="reg-password">Contraseña</label>
-            <input type="password" id="reg-password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required />
-            <div class="pw-strength" id="pw-strength" aria-hidden="true">
-              <div class="pw-bar" id="pw-bar-1"></div>
-              <div class="pw-bar" id="pw-bar-2"></div>
-              <div class="pw-bar" id="pw-bar-3"></div>
-              <div class="pw-bar" id="pw-bar-4"></div>
-            </div>
-            <p class="field-hint" id="pw-hint">Mínimo 8 caracteres</p>
-          </div>
-
-          <div class="form-group">
-            <label for="reg-confirm">Confirmar contraseña</label>
-            <input type="password" id="reg-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password" required />
-            <p class="field-hint hidden" id="confirm-hint"></p>
-          </div>
-
-          <button type="submit" class="btn-submit" id="btn-register">
-            <span class="btn-label">Crear cuenta</span>
-            <span class="btn-spinner"></span>
-          </button>
-        </form>
-
-        <p class="mode-switch">
-          ¿Ya tenés cuenta?
-          <a id="link-to-login">Ingresar →</a>
-        </p>
-
-      </div><!-- /#panel-register -->
+      <!-- (Etapa X.15) Panel de registro eliminado — el alta de alumnos se hace
+           automáticamente al confirmar un pago vía Edge Function process-payment
+           (auth.admin.inviteUserByEmail). Solo quedan Login y Recuperar contraseña. -->
 
 
       <!-- ════════════════════════════════════════
@@ -528,19 +466,9 @@
       }, 150);
     }
 
-    // Navegación entre paneles
-    document.getElementById('link-to-register').addEventListener('click', e => {
-      e.preventDefault();
-      clearMsg('msg-login');
-      switchPanel('panel-register');
-    });
-
-    document.getElementById('link-to-login').addEventListener('click', e => {
-      e.preventDefault();
-      clearMsg('msg-register');
-      switchPanel('panel-login');
-    });
-
+    // (Etapa X.15) Navegación entre paneles — solo Login y Recuperar contraseña.
+    // Los handlers de link-to-register / link-to-login fueron eliminados junto con
+    // el panel de registro: el alta se hace automáticamente al confirmar pago.
     document.getElementById('link-forgot').addEventListener('click', e => {
       e.preventDefault();
       clearMsg('msg-login');
@@ -591,70 +519,8 @@
     }
 
 
-    // ════════════════════════════════════════════════
-    //  INDICADOR DE FORTALEZA DE CONTRASEÑA
-    // ════════════════════════════════════════════════
-    const pwInput  = document.getElementById('reg-password');
-    const pwHint   = document.getElementById('pw-hint');
-    const pwBars   = [1,2,3,4].map(i => document.getElementById(`pw-bar-${i}`));
-
-    function getStrength(pw) {
-      let score = 0;
-      if (pw.length >= 8)  score++;
-      if (pw.length >= 12) score++;
-      if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
-      if (/\d/.test(pw) || /[^A-Za-z0-9]/.test(pw)) score++;
-      return score; // 0–4
-    }
-
-    pwInput.addEventListener('input', () => {
-      const pw    = pwInput.value;
-      const score = getStrength(pw);
-      const level = score <= 1 ? 'weak' : score <= 2 ? 'medium' : 'strong';
-      const labels = ['', 'Débil', 'Débil', 'Buena', 'Fuerte'];
-
-      pwBars.forEach((bar, i) => {
-        bar.className = 'pw-bar';
-        if (i < score) bar.classList.add(level);
-      });
-
-      if (pw.length === 0) {
-        pwHint.textContent = 'Mínimo 8 caracteres';
-        pwHint.className = 'field-hint';
-      } else if (pw.length < 8) {
-        pwHint.textContent = `Faltan ${8 - pw.length} caracteres`;
-        pwHint.className = 'field-hint error-hint';
-      } else {
-        pwHint.textContent = labels[score] || 'Fuerte';
-        pwHint.className = `field-hint ${level === 'weak' ? 'error-hint' : ''}`;
-      }
-
-      // Actualizar indicador de confirmación en tiempo real
-      checkConfirm();
-    });
-
-    const confirmInput = document.getElementById('reg-confirm');
-    const confirmHint  = document.getElementById('confirm-hint');
-
-    function checkConfirm() {
-      const pw      = pwInput.value;
-      const confirm = confirmInput.value;
-      if (!confirm) {
-        confirmHint.className = 'field-hint hidden';
-        markInvalid(confirmInput, false);
-        return;
-      }
-      if (pw === confirm) {
-        confirmHint.textContent = '✓ Las contraseñas coinciden';
-        confirmHint.className = 'field-hint';
-        markInvalid(confirmInput, false);
-      } else {
-        confirmHint.textContent = 'Las contraseñas no coinciden';
-        confirmHint.className = 'field-hint error-hint';
-        markInvalid(confirmInput, true);
-      }
-    }
-    confirmInput.addEventListener('input', checkConfirm);
+    // (Etapa X.15) Indicador de fortaleza de contraseña + checker de confirmación
+    // eliminados — vivían en el panel de registro que ya no existe.
 
 
     // ════════════════════════════════════════════════
@@ -686,74 +552,8 @@
     });
 
 
-    // ════════════════════════════════════════════════
-    //  FORMULARIO REGISTRO
-    // ════════════════════════════════════════════════
-    document.getElementById('form-register').addEventListener('submit', async e => {
-      e.preventDefault();
-      clearMsg('msg-register');
-
-      const nombre   = document.getElementById('reg-nombre').value.trim();
-      const apellido = document.getElementById('reg-apellido').value.trim();
-      const email    = document.getElementById('reg-email').value.trim();
-      const password = document.getElementById('reg-password').value;
-      const confirm  = document.getElementById('reg-confirm').value;
-
-      // Validaciones
-      if (!nombre || !apellido) {
-        showMsg('msg-register', 'Ingresá tu nombre y apellido para continuar.', 'error');
-        return;
-      }
-      if (!email) {
-        showMsg('msg-register', 'Ingresá tu email para continuar.', 'error');
-        return;
-      }
-      if (password.length < 8) {
-        showMsg('msg-register', 'La contraseña debe tener al menos 8 caracteres.', 'error');
-        markInvalid(document.getElementById('reg-password'), true);
-        return;
-      }
-      if (password !== confirm) {
-        showMsg('msg-register', 'Las contraseñas no coinciden. Verificalas e intentá de nuevo.', 'error');
-        markInvalid(confirmInput, true);
-        return;
-      }
-
-      setLoading('btn-register', true);
-
-      const fullName = `${nombre} ${apellido}`.trim();
-
-      // signUp — pasamos full_name en options.data.name
-      // El trigger handle_new_user lee raw_user_meta_data->>'name'
-      // y lo guarda en public.profiles.full_name automáticamente
-      const { error } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name: fullName },
-        },
-      });
-
-      setLoading('btn-register', false);
-
-      if (error) {
-        showMsg('msg-register', translateError(error.message), 'error');
-        return;
-      }
-
-      // Éxito — mostrar confirmación (Supabase envía email de confirmación)
-      document.getElementById('form-register').reset();
-      pwBars.forEach(b => b.className = 'pw-bar');
-      pwHint.textContent = 'Mínimo 8 caracteres';
-      pwHint.className   = 'field-hint';
-      confirmHint.className = 'field-hint hidden';
-
-      showMsg(
-        'msg-register',
-        `¡Cuenta creada, ${nombre}! Revisá tu email para confirmar tu cuenta antes de ingresar.`,
-        'success'
-      );
-    });
+    // (Etapa X.15) Formulario de registro eliminado — el alta de alumnos se hace
+    // automáticamente vía Edge Function process-payment al confirmar un pago.
 
 
     // ════════════════════════════════════════════════
