@@ -3640,35 +3640,54 @@
       if (!tbody) return;
       tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Cargando...</td></tr>`;
 
-      // SELECT con joins. profiles tiene RLS pero el admin es admin → con su JWT
-      // PostgREST resuelve el join (gracias a la policy admin-all sobre profiles
-      // vía rol). Si no anduviera, fallback a un map por user_id usando RPC.
-      const { data, error } = await sb
+      // Etapa X.16.1: el JOIN de PostgREST `profiles(email)` falla con
+      //   "Could not find a relationship between 'user_courses' and 'profiles'"
+      // porque user_courses.user_id apunta a auth.users(id), no a profiles(id) —
+      // PostgREST no detecta el FK indirecto. Reemplazado por 3 queries separadas
+      // (user_courses + lookups por user_id y course_id) y merge client-side.
+
+      // 1) Filas crudas de user_courses
+      const { data: ucData, error: ucErr } = await sb
         .from('user_courses')
-        .select(`
-          enrolled_at,
-          amount_paid,
-          currency,
-          payment_method,
-          user_id,
-          courses ( id, title ),
-          profiles ( email )
-        `)
+        .select('id, user_id, course_id, enrolled_at, amount_paid, currency, payment_method')
         .eq('payment_status', 'paid')
         .order('enrolled_at', { ascending: false });
 
-      if (error) {
-        console.error('loadVentas:', error);
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Error al cargar ventas: ${error.message}</td></tr>`;
+      if (ucErr) {
+        console.error('loadVentas[user_courses]:', ucErr);
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Error al cargar ventas: ${ucErr.message}</td></tr>`;
         _ventas = [];
         return;
       }
 
-      _ventas = (data || []).map(r => ({
+      const rows = ucData || [];
+      const userIds   = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+      const courseIds = [...new Set(rows.map(r => r.course_id).filter(Boolean))];
+
+      // 2) Lookups paralelos: profiles por user_id, courses por course_id
+      const [profilesRes, coursesRes] = await Promise.all([
+        userIds.length
+          ? sb.from('profiles').select('id, email').in('id', userIds)
+          : Promise.resolve({ data: [], error: null }),
+        courseIds.length
+          ? sb.from('courses').select('id, title').in('id', courseIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (profilesRes.error) console.warn('loadVentas[profiles]:', profilesRes.error);
+      if (coursesRes.error)  console.warn('loadVentas[courses]:',  coursesRes.error);
+
+      const emailByUser = {};
+      (profilesRes.data || []).forEach(p => { emailByUser[p.id] = p.email || ''; });
+      const titleByCourse = {};
+      (coursesRes.data || []).forEach(c => { titleByCourse[c.id] = c.title || ''; });
+
+      // 3) Merge client-side
+      _ventas = rows.map(r => ({
         enrolled_at:    r.enrolled_at,
-        email:          r.profiles?.email || '(sin email)',
-        course_id:      r.courses?.id || null,
-        course_title:   r.courses?.title || '(curso eliminado)',
+        email:          emailByUser[r.user_id]    || '(sin email)',
+        course_id:      r.course_id || null,
+        course_title:   titleByCourse[r.course_id] || '(curso eliminado)',
         amount_paid:    Number(r.amount_paid || 0),
         currency:       r.currency || 'ARS',
         payment_method: r.payment_method || '—',
