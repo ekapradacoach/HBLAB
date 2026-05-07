@@ -1439,6 +1439,11 @@
             </table>
           </div>
 
+          <!-- Etapa X.16.2: toggle ver todas / ver menos -->
+          <div id="ventas-toggle-wrap" style="display:none; text-align:center; margin-top:14px;">
+            <button class="btn-secondary" id="btn-ventas-toggle" onclick="toggleVentasExpanded()">Ver todas las ventas →</button>
+          </div>
+
           <div id="ventas-totals" style="display:flex; justify-content:flex-end; gap:24px; margin-top:14px; font-size:0.88rem;">
             <span style="color:var(--gray-text);">Total filtrado:</span>
             <strong id="ventas-total-ars" style="color:var(--lime);">$0 ARS</strong>
@@ -3736,6 +3741,12 @@
       });
     }
 
+    // Etapa X.16.2: la tabla muestra solo las últimas 5 ventas por default;
+    // botón "Ver todas las ventas →" expande para mostrar todas. Toggle CSS/JS,
+    // sin nueva query — _ventas ya tiene todos los datos cargados.
+    let _ventasExpanded = false;
+    const VENTAS_PREVIEW = 5;
+
     function renderVentas() {
       const tbody = document.getElementById('tbody-ventas');
       if (!tbody) return;
@@ -3744,10 +3755,16 @@
       if (!filtered.length) {
         tbody.innerHTML = `<tr><td colspan="6" class="empty-td">${_ventas.length === 0 ? '💸 No hay ventas registradas.' : '🔍 Sin resultados para los filtros aplicados.'}</td></tr>`;
         _renderVentasTotals(filtered);
+        _renderVentasToggle(filtered.length);
         return;
       }
 
-      tbody.innerHTML = filtered.map(v => {
+      // Slice a las primeras N filas si no está expandido y hay más que el preview
+      const visible = (_ventasExpanded || filtered.length <= VENTAS_PREVIEW)
+        ? filtered
+        : filtered.slice(0, VENTAS_PREVIEW);
+
+      tbody.innerHTML = visible.map(v => {
         const fecha = v.enrolled_at
           ? new Date(v.enrolled_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' })
           : '—';
@@ -3773,6 +3790,32 @@
       }).join('');
 
       _renderVentasTotals(filtered);
+      _renderVentasToggle(filtered.length);
+    }
+
+    function _renderVentasToggle(totalCount) {
+      const wrap = document.getElementById('ventas-toggle-wrap');
+      const btn  = document.getElementById('btn-ventas-toggle');
+      if (!wrap || !btn) return;
+      // Solo mostrar el toggle si hay MÁS filas que el preview
+      if (totalCount <= VENTAS_PREVIEW) {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = '';
+      btn.textContent = _ventasExpanded
+        ? 'Ver menos ↑'
+        : `Ver todas las ventas → (${totalCount})`;
+    }
+
+    function toggleVentasExpanded() {
+      _ventasExpanded = !_ventasExpanded;
+      renderVentas();
+      // Si se está colapsando, scrollear el header de la sección al view
+      if (!_ventasExpanded) {
+        document.querySelector('#panel-gestion .sub-section h3.sub-section-title')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
 
     function _renderVentasTotals(filtered) {
