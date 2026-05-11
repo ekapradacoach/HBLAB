@@ -335,8 +335,13 @@ serve(async (req: Request) => {
   if (!userId) {
     // Si tenemos nombre+apellido (coupon flow trae estos campos), pasarlos como
     // metadata para que el trigger handle_new_user los guarde en profiles.full_name.
+    // redirectTo: el botón del email de invite manda al alumno a set-password.html
+    // (Etapa X.17) para que elija su contraseña y entre al dashboard.
     const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
-    const inviteOpts = fullName ? { data: { full_name: fullName, name: fullName } } : undefined;
+    const inviteOpts: { data?: Record<string, unknown>; redirectTo: string } = {
+      redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html',
+    };
+    if (fullName) inviteOpts.data = { full_name: fullName, name: fullName };
     const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, inviteOpts);
     if (inviteErr || !invited?.user?.id) {
       console.error('process-payment: invite falló:', inviteErr);

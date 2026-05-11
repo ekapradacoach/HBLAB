@@ -104,8 +104,12 @@ serve(async (req: Request) => {
   // ── 4) Invitar por email ────────────────────────────────
   // Si el email ya existe en auth.users, inviteUserByEmail retorna error.
   // Tratamos ese caso como "ya invitado / ya existe" y solo seteamos el rol.
+  // redirectTo: el botón del email manda al usuario a set-password.html
+  // (Etapa X.17) para que elija su contraseña al activar la cuenta.
   let invitedUserId: string | null = null;
-  const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email);
+  const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html',
+  });
 
   if (inviteErr) {
     // Caso "ya existe": resolver el id por listado o lookup directo.
