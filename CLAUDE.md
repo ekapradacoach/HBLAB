@@ -23,6 +23,7 @@ Plataforma de cursos online de entrenamiento deportivo. Vende cursos a alumnos, 
 hblab/
 ├── index.html                     ← Landing (dinámica desde Supabase: launches, cursos, próximamente)
 ├── login.html                     ← Login + Recuperar contraseña (2 paneles — registro eliminado en Etapa X.15; alta automática vía process-payment)
+├── set-password.html              ← Activación de cuenta para alumnos invitados (Etapa X.17 — recibe token del email de invite, fija password, redirige a dashboard)
 ├── dashboard.html                 ← Panel alumno (cursos comprados paid+active)
 ├── admin.html                     ← Panel admin (role='admin') — Cursos, Alumnos, Coaches, Lanzamientos, Gestión
 ├── coach.html                     ← Panel coach (role='coach'|'admin') — 2 tabs: Mi curso + Ganancias
@@ -167,7 +168,7 @@ Todos los HTML del proyecto (13 archivos) tienen un bloque SEO uniforme insertad
 **Robots por archivo**:
 - `index, follow`: `index.html`, `webinar-hipertrofia.html`, `carrera-hibrida.html`, `entrenamiento-hibrido.html`, `venta-curso.html`
 - `noindex`: `login.html`
-- `noindex, nofollow`: `dashboard.html`, `admin.html`, `coach.html`, `curso.html`, `curso-webinar-hipertrofia.html`, `curso-carrera-hibrida.html`, `curso-entrenamiento-hibrido.html`, `checkout.html`, `checkout-success.html`, `checkout-pending.html`
+- `noindex, nofollow`: `dashboard.html`, `admin.html`, `coach.html`, `curso.html`, `curso-webinar-hipertrofia.html`, `curso-carrera-hibrida.html`, `curso-entrenamiento-hibrido.html`, `checkout.html`, `checkout-success.html`, `checkout-pending.html`, `set-password.html`
 
 **Títulos públicos** usan formato `Título | HB Lab` (pipe). Privados conservan formato `... — HB Lab` (em-dash).
 
@@ -452,6 +453,32 @@ checkout.html (público, sin auth)
               → MP también envía webhook a `process-payment` con el resultado del pago
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
+
+**Etapa X.17 — `set-password.html`: activación de cuenta para alumnos invitados:**
+
+Cuando `process-payment` confirma un pago e invita al alumno con `auth.admin.inviteUserByEmail(email, { data: { full_name } })`, Supabase envía un email con un magic link. Hasta ahora ese link aterrizaba en una página default de Supabase (no en HB Lab). La página nueva `set-password.html` es la landing oficial post-invite: valida el token, deja al alumno crear una contraseña, y lo lleva al dashboard.
+
+**Flujos de token soportados** (`set-password.html` los detecta en cascada en el IIFE `bootstrap()`):
+1. **Hash fragment (implicit flow)** — `#access_token=XXX&refresh_token=YYY&type=invite` → `sb.auth.setSession({ access_token, refresh_token })`.
+2. **PKCE flow** — `?code=XXX` → `sb.auth.exchangeCodeForSession(window.location.href)`.
+3. **OTP verify** — `?token_hash=XXX&type=invite` → `sb.auth.verifyOtp({ token_hash, type })`.
+4. **Sesión preexistente** (recargó la página tras setSession): `sb.auth.getSession()` → si retorna session, ir directo al form.
+
+Tras el bootstrap exitoso: `history.replaceState(null, '', pathname)` para limpiar la URL (no exponer tokens en la barra del navegador), luego `revealForm()` que también muestra el email del usuario en un pill `.user-pill` lime.
+
+**UI**: card centrada al estilo `login.html` (gradiente top lime→violet, blobs decorativos, `--card-bg`). 3 paneles mutuamente excluyentes:
+- `#panel-loading` (default mientras valida el token) — spinner grande + "Validando tu invitación…".
+- `#panel-form` — header "Bienvenida/o a HB Lab" con "HB Lab" en lime, pill con el email, 2 campos (password + confirmar) con indicador de fortaleza de 4 barras (mismo helper `getStrength()` que la sesión vieja de registro reusado), botón "Crear contraseña y entrar →".
+- `#panel-error` — ícono ⚠️ + título "Link inválido o expirado" + detalle dinámico (`#error-detail innerHTML`) + link a `login.html` como fallback.
+
+**Submit**: `sb.auth.updateUser({ password: pw })` → si éxito, mensaje verde "¡Listo! Redirigiendo…" + `window.location.replace('dashboard.html')` tras 1s.
+
+**Configuración requerida en Supabase Dashboard** (para que el link del invite apunte a esta página):
+1. **Authentication → URL Configuration**:
+   - **Site URL**: setear como `https://ekapradacoach.github.io/HBLAB/` (es la URL base del proyecto en GitHub Pages — Supabase la usa como destino por defecto cuando el invite no especifica `redirectTo`).
+   - **Redirect URLs** (allow-list): agregar `https://ekapradacoach.github.io/HBLAB/set-password.html` para permitir el redirect explícito.
+2. **Authentication → Email Templates → Invite user**: revisar que el botón principal del template use `{{ .SiteURL }}set-password.html` o un `{{ .ConfirmationURL }}` que finalmente redirija ahí. Si el template tiene un URL hardcoded a otra página (login.html legacy), reemplazarlo.
+3. **Opcionalmente** modificar `process-payment` Edge Function para pasar `redirectTo` explícito en cada invite: cambiar `auth.admin.inviteUserByEmail(email, inviteOpts)` por `auth.admin.inviteUserByEmail(email, { ...inviteOpts, redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html' })`. **No es estrictamente necesario** si el Site URL ya apunta ahí, pero es más explícito y resiliente a cambios futuros del Site URL. Queda como follow-up.
 
 **Etapa X.16 — Bugfix crítico: process-payment ahora hace fetch a la API de MP:**
 - **Causa raíz**: el webhook real de MP solo manda `{ action, data: { id }, type, user_id }`. El parser viejo `normalizeMP(payload)` asumía que el webhook ya traía `payer.email`, `external_reference`, `transaction_amount`, etc., así que devolvía `null` siempre y el endpoint respondía 400. Resultado: ningún pago aprobado llegaba a `user_courses`.
