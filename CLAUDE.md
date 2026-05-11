@@ -454,6 +454,21 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.18 — `process-payment` robusto: usuarios existentes + rate limit del invite:**
+
+Tres problemas detectados en producción que esta etapa cubre:
+
+1. **Usuario que ya compró antes**: la cascada anterior usaba `auth.admin.listUsers({ page:1, perPage:200 })` y filtraba por email — funcionaba pero no escala más allá de 200 usuarios y obliga al invite a manejar el "ya existe" cada vez. **Fix**: lookup primario en `profiles.email` con `maybeSingle()`. Esto requiere que el trigger `handle_new_user` también persista el email en `profiles` (SQL ya ejecutado en Supabase). Si la query devuelve un id, salta el invite completamente — el alumno no recibe email duplicado por cada compra adicional.
+
+2. **`AuthApiError: email rate limit exceeded`**: Supabase rate-limita los emails de invite (default ~30/hora). Cuando se supera, el `inviteUserByEmail` retorna error. Antes esto abortaba todo el handler con 500 y MP reintentaba el webhook, lo que generaba más invites fallidos y más rate limit — espiral. **Fix**: el `inviteUserByEmail` ahora corre dentro de `try/catch`. Si el error contiene `"rate limit"` o `"email"` (o cualquier otro error), se loguea con `console.warn('invite rate limited:', email, ...)` y se guarda el motivo en `inviteSkippedReason`. **NO se relanza ni se aborta el flujo**.
+
+3. **`UPSERT user_courses` siempre debe correr**: independiente de si el invite funcionó o falló. Antes estaba inmediatamente después del invite y compartía la misma rama de error → si el invite reventaba, el pago no se registraba. **Fix**: el UPSERT ahora vive fuera del `if (!userId)` del invite. Tres outcomes:
+   - **Usuario existía** (lookup en profiles encontró id) → invite skipped + UPSERT normal con ese id.
+   - **Usuario nuevo, invite OK** → UPSERT normal con el id retornado.
+   - **Usuario nuevo, invite falló** → no hay `userId`, **no podemos hacer UPSERT** (la columna es NOT NULL). Respondemos `{ ok: true, pending_invite: true, reason: inviteSkippedReason, email, course_id, ... }` con HTTP 200 para que MP no reintente. El admin puede asignar el curso manualmente desde `admin.html` → Tab Alumnos → "➕ Asignar curso" una vez que el alumno se registre por su cuenta. Caso esperado a ser raro (solo si los 3 outcomes anteriores fallan a la vez).
+
+**Response shape** de `process-payment` ahora incluye opcionalmente `invite_skipped: string` (motivo del skip cuando aplica). Útil para debugging desde el log de la Edge Function.
+
 **Etapa X.17 — `set-password.html`: activación de cuenta para alumnos invitados:**
 
 Cuando `process-payment` confirma un pago e invita al alumno con `auth.admin.inviteUserByEmail(email, { data: { full_name } })`, Supabase envía un email con un magic link. Hasta ahora ese link aterrizaba en una página default de Supabase (no en HB Lab). La página nueva `set-password.html` es la landing oficial post-invite: valida el token, deja al alumno crear una contraseña, y lo lleva al dashboard.
@@ -580,7 +595,12 @@ Alumno tiene acceso a un curso SOLO SI:
   - **PayPal**: usa `normalizePayPal(payload)` legacy — pendiente de integración real.
   - **Coupon**: si el body trae `provider: 'coupon'`, salta la verificación de firma, resuelve `course_id` por `slug` con service role, valida el cupón contra la tabla `coupons` (existencia + activo + vencimiento + max_uses + course_id match), y procesa el acceso con el mismo flujo (`payment_method='coupon'`, `amount_paid=0`, `external_ref='coupon:{CODE}'`).
 
-  En los 3 branches: resuelve `user_id` por email (con invite-on-the-fly si no existe — pasando `nombre`/`apellido` como metadata para que el trigger `handle_new_user` los guarde en `profiles.full_name`, y `redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html'` para que el email mande a la página de activación — Etapa X.17.1), UPSERT en `user_courses` con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`.
+  En los 3 branches: resuelve `user_id` por email con la siguiente cascada (Etapa X.18):
+    1. **Lookup primario en `profiles.email`** (`select('id').eq('email', X).maybeSingle()`) — más rápido y barato que `listUsers`, y `profiles` se mantiene en sync con `auth.users` vía el trigger `handle_new_user` que persiste email. Si encuentra → usa ese id y salta el invite.
+    2. **Solo si profiles devuelve `null`** → `auth.admin.inviteUserByEmail(email, { redirectTo, data: { full_name, name } })`. La metadata permite que el trigger guarde `profiles.full_name`; el `redirectTo` apunta a `set-password.html` (Etapa X.17.1).
+    3. **Tolerante a rate limit / email errors**: el invite va en `try/catch`; si el error contiene `"rate limit"` o `"email"` → `console.warn('invite rate limited:', email, ...)` y guarda el motivo en `inviteSkippedReason`, NO aborta el flujo. Cualquier otro error del invite también degrada a warning + sigue.
+    4. **`UPSERT user_courses` corre SIEMPRE** fuera del `if` del invite. Si tenemos `userId` (de profiles o del invite OK) → UPSERT normal con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`. Si NO hay `userId` (invite falló Y el usuario era nuevo) → responde 200 con `{ ok: true, pending_invite: true, reason }` para que MP no reintente; el admin asigna el curso manualmente desde admin.html cuando el alumno se registre.
+    5. La response normal incluye `invite_skipped` si por algún motivo el invite no corrió (usuario ya existía o rate-limited).
 
 **⚠️ Estado actual: PENDIENTE de deploy.** El código está listo en el repo pero las funciones no están desplegadas todavía. El CLI de Supabase tiene problemas en Windows, así que el deploy se hace **manualmente desde el dashboard**:
 

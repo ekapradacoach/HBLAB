@@ -317,21 +317,37 @@ serve(async (req: Request) => {
   });
 
   // ── 4) Resolver user_id por email ──────────────────────
-  // Si existe → usar su id.
-  // Si no → invitar por email; el id se obtiene del response del invite.
+  // Etapa X.18 — tres mejoras:
+  //   (a) Lookup PRIMARIO en `profiles.email` (más rápido y barato que listUsers,
+  //       y `profiles` se mantiene en sync con auth.users vía el trigger
+  //       `handle_new_user` que ahora persiste email también).
+  //   (b) Solo invitamos si la búsqueda devuelve data = null. Evita reinvitar
+  //       a usuarios existentes cada vez que compran un nuevo curso.
+  //   (c) El invite va en try/catch y los errores de rate limit / email no
+  //       abortan el flujo: el UPSERT en user_courses siempre se ejecuta. Si
+  //       el invite falla, el alumno puede pedir un nuevo magic link desde
+  //       login.html → "Olvidaste tu contraseña".
   let userId: string | null = null;
+  let inviteSkippedReason: string | null = null;
 
-  // 4.a) Intento de lookup por listUsers (paginado)
+  // 4.a) Lookup primario en profiles por email
   try {
-    const { data: list, error: listErr } = await sbAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (listErr) throw listErr;
-    const found = (list?.users || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase());
-    if (found) userId = found.id;
+    const { data: prof, error: profErr } = await sbAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (profErr) {
+      console.warn('process-payment: lookup profiles falló (sigo con invite):', profErr);
+    } else if (prof?.id) {
+      userId = prof.id;
+      inviteSkippedReason = 'usuario ya existe en profiles';
+    }
   } catch (e) {
-    console.warn('process-payment: listUsers falló (sigo con invite):', e);
+    console.warn('process-payment: lookup profiles excepción:', e);
   }
 
-  // 4.b) Si no existe, invitar
+  // 4.b) Si no existe en profiles, invitar — tolerante a rate limit
   if (!userId) {
     // Si tenemos nombre+apellido (coupon flow trae estos campos), pasarlos como
     // metadata para que el trigger handle_new_user los guarde en profiles.full_name.
@@ -342,15 +358,53 @@ serve(async (req: Request) => {
       redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html',
     };
     if (fullName) inviteOpts.data = { full_name: fullName, name: fullName };
-    const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, inviteOpts);
-    if (inviteErr || !invited?.user?.id) {
-      console.error('process-payment: invite falló:', inviteErr);
-      return errOut('No se pudo invitar al usuario: ' + (inviteErr?.message || 'sin id'), 500);
+
+    try {
+      const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, inviteOpts);
+      if (inviteErr) {
+        // Rate limit / email error → degradar a warning, NO abortar el flujo.
+        const msg = (inviteErr.message || '').toLowerCase();
+        if (msg.includes('rate limit') || msg.includes('email')) {
+          console.warn('invite rate limited:', email, '—', inviteErr.message);
+          inviteSkippedReason = 'rate limit / email error: ' + inviteErr.message;
+        } else {
+          // Cualquier otro error del invite también lo logueamos pero NO abortamos
+          // — el UPSERT en user_courses debe ocurrir igual para no perder el pago.
+          console.warn('process-payment: invite falló (sigo con UPSERT):', inviteErr);
+          inviteSkippedReason = 'invite error: ' + inviteErr.message;
+        }
+      } else if (invited?.user?.id) {
+        userId = invited.user.id;
+      } else {
+        console.warn('process-payment: invite no devolvió user.id (sigo con UPSERT)');
+        inviteSkippedReason = 'invite sin user.id';
+      }
+    } catch (e: any) {
+      console.warn('invite rate limited:', email, '—', e?.message || e);
+      inviteSkippedReason = 'invite exception: ' + (e?.message || e);
     }
-    userId = invited.user.id;
   }
 
   // ── 5) UPSERT en user_courses ──────────────────────────
+  // ⚠️ Etapa X.18: este bloque corre SIEMPRE, fuera del if del invite.
+  // Si tenemos userId (de profiles o del invite) → registramos el acceso.
+  // Si NO tenemos userId (invite falló por rate limit Y el usuario era nuevo)
+  // → no podemos hacer el UPSERT (user_id es NOT NULL); respondemos 200 con
+  // un flag `pending_invite` para que MP no reintente. El admin puede asignar
+  // el curso manualmente desde admin.html una vez que el alumno se registre.
+  if (!userId) {
+    console.error('process-payment: no se pudo resolver user_id —', { email, course_id, inviteSkippedReason });
+    return json({
+      ok: true,
+      pending_invite: true,
+      reason: inviteSkippedReason || 'no user_id',
+      email,
+      course_id,
+      payment_method,
+      external_ref,
+    });
+  }
+
   // onConflict (user_id, course_id) — si ya existe la inscripción, la pisamos
   // con payment_status='paid' (idempotencia frente a re-envío del webhook).
   const upsertPayload = {
@@ -370,5 +424,12 @@ serve(async (req: Request) => {
     return errOut('No se pudo registrar el acceso al curso: ' + ucErr.message, 500);
   }
 
-  return json({ ok: true, user_id: userId, course_id, payment_method, external_ref });
+  return json({
+    ok: true,
+    user_id: userId,
+    course_id,
+    payment_method,
+    external_ref,
+    invite_skipped: inviteSkippedReason || undefined,
+  });
 });
