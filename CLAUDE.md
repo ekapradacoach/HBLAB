@@ -454,6 +454,34 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.19 — `createUser` + email de bienvenida vía Resend (reemplaza inviteUserByEmail):**
+
+Problema en producción: `auth.admin.inviteUserByEmail` depende del SMTP que Supabase tiene configurado para auth-emails. Cuando ese SMTP no está bien configurado para edge functions (o se llega al rate limit), el invite falla con `"Error sending invite email"` y el alumno no recibe nada. Etapa X.18 logró que el handler no abortara, pero el alumno seguía sin acceso porque el email nunca llegaba.
+
+**Solución**: dejamos de depender del SMTP de Supabase para el email de invite. Ahora:
+
+1. **Creamos el usuario directamente** con `auth.admin.createUser({ email, email_confirm: true, password: tempPassword, user_metadata: { full_name, name } })`. La password temporal se genera localmente con `generateTempPassword()` (12 chars alfanuméricos random vía `crypto.getRandomValues`). `email_confirm: true` deja al alumno listo para loguear sin pasar por confirmación adicional.
+2. **Si `createUser` falla con "already exists"** (race condition): re-lookup en `profiles` por email, recuperar el id, **no enviar email** (el usuario ya tenía cuenta).
+3. **El UPSERT en `user_courses` corre siempre** (igual que en X.18).
+4. **Email de bienvenida vía Resend API** (DESPUÉS del UPSERT): `fetch POST https://api.resend.com/emails` con header `Authorization: Bearer ${RESEND_API_KEY}`. Body con `from: 'onboarding@resend.dev'`, `to: email del alumno`, `subject: 'Acceso a HB Lab — {courseTitle}'`, y `html` con un template inline-styled (email-safe, sin grids/flex):
+   - Encabezado "¡Bienvenida/o a **HB Lab**!" (HB Lab en lime).
+   - Saludo personalizado con `full_name` si está disponible (fallback "alumna/o").
+   - Confirmación del curso comprado en bold.
+   - **Box destacado con la contraseña temporal** en font monoespaciada lime.
+   - Botón CTA "Ingresar a HB Lab →" linkeando a `login.html` con el email del alumno.
+   - Link secundario a `set-password.html` para cambiar la temp por una propia.
+   - Footer con email de contacto `ekapradacoach@gmail.com`.
+
+**Helpers nuevos** en `process-payment/index.ts`:
+- `generateTempPassword(length = 12)`: genera string aleatorio uniforme con `crypto.getRandomValues` sobre charset alfanumérico (A-Z, a-z, 0-9).
+- `sendWelcomeEmail({ email, fullName?, courseTitle, tempPassword })`: arma el HTML, hace fetch a Resend, devuelve `{ ok, error? }`. NO lanza — los errores quedan en el log.
+
+**Secret nuevo requerido en Supabase**: `RESEND_API_KEY` (Edge Functions → Manage secrets). Get del dashboard de Resend.com → API Keys. Mientras esté en sandbox, Resend solo permite enviar a la dirección verificada del owner — al pasar a producción hay que verificar un dominio propio (`hblab.com` o el que se use) y cambiar `from: 'onboarding@resend.dev'` por algo como `from: 'hola@hblab.com'`.
+
+**Response shape** ahora incluye `welcome_email: 'sent' | 'failed: ...' | 'not_needed'` además del `invite_skipped` ya existente.
+
+**Re-deploy manual requerido** en Supabase Dashboard → Edge Functions → process-payment → Code → pegar el contenido del archivo (577 líneas) → Deploy updates. Antes de testear, agregar el secret `RESEND_API_KEY` en Manage secrets.
+
 **Etapa X.18 — `process-payment` robusto: usuarios existentes + rate limit del invite:**
 
 Tres problemas detectados en producción que esta etapa cubre:
@@ -595,12 +623,14 @@ Alumno tiene acceso a un curso SOLO SI:
   - **PayPal**: usa `normalizePayPal(payload)` legacy — pendiente de integración real.
   - **Coupon**: si el body trae `provider: 'coupon'`, salta la verificación de firma, resuelve `course_id` por `slug` con service role, valida el cupón contra la tabla `coupons` (existencia + activo + vencimiento + max_uses + course_id match), y procesa el acceso con el mismo flujo (`payment_method='coupon'`, `amount_paid=0`, `external_ref='coupon:{CODE}'`).
 
-  En los 3 branches: resuelve `user_id` por email con la siguiente cascada (Etapa X.18):
-    1. **Lookup primario en `profiles.email`** (`select('id').eq('email', X).maybeSingle()`) — más rápido y barato que `listUsers`, y `profiles` se mantiene en sync con `auth.users` vía el trigger `handle_new_user` que persiste email. Si encuentra → usa ese id y salta el invite.
-    2. **Solo si profiles devuelve `null`** → `auth.admin.inviteUserByEmail(email, { redirectTo, data: { full_name, name } })`. La metadata permite que el trigger guarde `profiles.full_name`; el `redirectTo` apunta a `set-password.html` (Etapa X.17.1).
-    3. **Tolerante a rate limit / email errors**: el invite va en `try/catch`; si el error contiene `"rate limit"` o `"email"` → `console.warn('invite rate limited:', email, ...)` y guarda el motivo en `inviteSkippedReason`, NO aborta el flujo. Cualquier otro error del invite también degrada a warning + sigue.
-    4. **`UPSERT user_courses` corre SIEMPRE** fuera del `if` del invite. Si tenemos `userId` (de profiles o del invite OK) → UPSERT normal con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`. Si NO hay `userId` (invite falló Y el usuario era nuevo) → responde 200 con `{ ok: true, pending_invite: true, reason }` para que MP no reintente; el admin asigna el curso manualmente desde admin.html cuando el alumno se registre.
-    5. La response normal incluye `invite_skipped` si por algún motivo el invite no corrió (usuario ya existía o rate-limited).
+  En los 3 branches: resuelve `user_id` por email con la siguiente cascada (Etapa X.19 — reemplazo de invite por createUser + Resend):
+    1. **Lookup primario en `profiles.email`** (`select('id').eq('email', X).maybeSingle()`) — más rápido y barato que `listUsers`, y `profiles` se mantiene en sync con `auth.users` vía el trigger `handle_new_user` que persiste email. Si encuentra → usa ese id, salta la creación y **no envía email de bienvenida** (el alumno ya tenía cuenta).
+    2. **Solo si profiles devuelve `null`** → `auth.admin.createUser({ email, email_confirm: true, password: tempPassword, user_metadata: { full_name, name } })`. La contraseña temporal se genera localmente con `generateTempPassword()` (12 chars alfanuméricos vía `crypto.getRandomValues`). El `email_confirm: true` marca el email como confirmado de entrada — el alumno puede loguear inmediatamente. La metadata permite que `handle_new_user` guarde `profiles.full_name`.
+    3. **Caso race "already exists"** (alguien creó al usuario entre el lookup y este punto): re-lookup en `profiles` para recuperar el id. Si tampoco aparece → log warning y sigue (sin id).
+    4. **Otros errores de `createUser`**: degradados a `console.warn`, NO abortan el flujo.
+    5. **`UPSERT user_courses` corre SIEMPRE** fuera del `if` de createUser. Si tenemos `userId` → UPSERT normal con `payment_status='paid'`, `status='active'`. Idempotente por `onConflict: 'user_id,course_id'`. Si NO hay `userId` → responde 200 con `{ ok: true, pending_invite: true, reason }` para que MP no reintente; el admin asigna el curso manualmente desde admin.html.
+    6. **Email de bienvenida vía Resend** (Etapa X.19): después del UPSERT exitoso, si `tempPassword` está set (usuario nuevo creado en este request), se hace fetch a `https://api.resend.com/emails` con `Authorization: Bearer ${RESEND_API_KEY}`. Body: `{ from: 'onboarding@resend.dev', to: email, subject: 'Acceso a HB Lab — {courseTitle}', html: <plantilla dark con la temp password + link a login.html + link a set-password.html> }`. Para resolver el course title se hace una SELECT mínima a `courses.title` por id. Si Resend falla → `console.warn`, NO aborta el handler (el acceso ya quedó registrado; el admin puede reenviar manualmente).
+    7. La response final incluye `invite_skipped` (motivo del skip si el usuario ya existía) y `welcome_email` (`'sent'` / `'failed: ...'` / `'not_needed'`) para debugging.
 
 **⚠️ Estado actual: PENDIENTE de deploy.** El código está listo en el repo pero las funciones no están desplegadas todavía. El CLI de Supabase tiene problemas en Windows, así que el deploy se hace **manualmente desde el dashboard**:
 

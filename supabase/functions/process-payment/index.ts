@@ -7,9 +7,18 @@
 // id retornado para insertar la fila de acceso.
 //
 // Despliegue: `supabase functions deploy process-payment`
-// Secret requerido: SUPABASE_SERVICE_ROLE_KEY (vía `supabase secrets set ...`).
 // `verify_jwt = false` en config.toml — los webhooks de MP/PayPal no llevan JWT
 // de Supabase, la autenticación es por firma del proveedor (verificada abajo).
+//
+// Secrets requeridos (Supabase → Edge Functions → Manage secrets):
+//   - SUPABASE_SERVICE_ROLE_KEY  → auto-inyectado por el runtime.
+//   - SUPABASE_URL               → auto-inyectado por el runtime.
+//   - MP_ACCESS_TOKEN            → access token de PRODUCCIÓN de Mercado Pago, usado
+//                                  para enriquecer el webhook con GET /v1/payments/{id}.
+//   - RESEND_API_KEY             → Etapa X.19 — API key de Resend.com para enviar el
+//                                  email de bienvenida con la contraseña temporal al
+//                                  alumno cuando se crea por primera vez.
+//   - PAYMENTS_ALLOW_UNVERIFIED  → opcional (=1 en dev/sandbox para bypassear firma).
 
 // @ts-ignore — Deno std
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
@@ -28,6 +37,94 @@ const json = (body: unknown, status = 200) =>
     },
   });
 const errOut = (msg: string, status = 400) => json({ error: msg }, status);
+
+// ─────────────────────────────────────────────────────────────
+// Etapa X.19 — Helpers para creación de usuario + email de bienvenida
+// ─────────────────────────────────────────────────────────────
+// Antes usábamos `auth.admin.inviteUserByEmail` que dependía del SMTP de
+// Supabase para enviar el email de invite — esto falla con "Error sending
+// invite email" cuando el SMTP no está bien configurado para edge functions.
+// Ahora creamos el usuario directamente con `auth.admin.createUser`
+// (email_confirm: true + password temporal random) y enviamos el email de
+// bienvenida via Resend API, que es más confiable y nos da control total
+// del contenido del mensaje.
+
+function generateTempPassword(length = 12): string {
+  // 12 chars alfanuméricos (letras mayúsculas, minúsculas y dígitos).
+  // crypto.getRandomValues garantiza distribución uniforme.
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < length; i++) out += charset[bytes[i] % charset.length];
+  return out;
+}
+
+async function sendWelcomeEmail(opts: {
+  email: string;
+  fullName?: string;
+  courseTitle: string;
+  tempPassword: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+  if (!RESEND_API_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY no configurado en env' };
+  }
+  const setPasswordUrl = 'https://ekapradacoach.github.io/HBLAB/set-password.html';
+  const loginUrl       = 'https://ekapradacoach.github.io/HBLAB/login.html';
+  const safeName = (opts.fullName || '').trim() || 'alumna/o';
+  const safeTitle = (opts.courseTitle || '(tu curso)').replace(/</g, '&lt;');
+
+  // HTML email-safe (inline styles, table layout — sin grids/flex modernos)
+  const html = `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#1E2A3A;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:560px;background:#243042;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
+        <tr><td>
+          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;">¡Bienvenida/o a <span style="color:#C8E600">HB Lab</span>!</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, gracias por sumarte. Tu compra del curso <strong style="color:#FFFFFF">${safeTitle}</strong> está confirmada y ya podés acceder.</p>
+
+          <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Tu contraseña temporal</p>
+          <div style="background:rgba(200,230,0,0.08);border:1px solid rgba(200,230,0,0.32);border-radius:8px;padding:14px 18px;margin:0 0 20px;font-family:'Courier New',monospace;font-size:18px;color:#C8E600;font-weight:700;letter-spacing:0.06em;">${opts.tempPassword}</div>
+
+          <p style="margin:0 0 12px;font-size:14px;color:#94A3B8;line-height:1.55;">Usá esa contraseña con tu email <strong style="color:#FFFFFF">${opts.email}</strong> para ingresar:</p>
+          <p style="margin:0 0 28px;"><a href="${loginUrl}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:12px 26px;border-radius:8px;font-size:15px;">Ingresar a HB Lab →</a></p>
+
+          <p style="margin:24px 0 8px;font-size:13px;color:#94A3B8;line-height:1.55;">Cuando ingreses por primera vez te recomendamos cambiar la contraseña temporal por una propia. Lo podés hacer acá:</p>
+          <p style="margin:0 0 24px;"><a href="${setPasswordUrl}" style="color:#9B6FDE;text-decoration:underline;font-size:14px;">${setPasswordUrl}</a></p>
+
+          <hr style="border:none;border-top:1px solid #2f3e52;margin:28px 0;">
+          <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.5;">Si tenés alguna pregunta, respondé este email o escribinos a ekapradacoach@gmail.com.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    'onboarding@resend.dev',
+        to:      opts.email,
+        subject: `Acceso a HB Lab — ${opts.courseTitle}`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: `Resend HTTP ${res.status}: ${txt}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
 
 // ── Tipos del payload normalizado ─────────────────────────
 interface NormalizedPayment {
@@ -317,18 +414,23 @@ serve(async (req: Request) => {
   });
 
   // ── 4) Resolver user_id por email ──────────────────────
-  // Etapa X.18 — tres mejoras:
-  //   (a) Lookup PRIMARIO en `profiles.email` (más rápido y barato que listUsers,
-  //       y `profiles` se mantiene en sync con auth.users vía el trigger
-  //       `handle_new_user` que ahora persiste email también).
-  //   (b) Solo invitamos si la búsqueda devuelve data = null. Evita reinvitar
-  //       a usuarios existentes cada vez que compran un nuevo curso.
-  //   (c) El invite va en try/catch y los errores de rate limit / email no
-  //       abortan el flujo: el UPSERT en user_courses siempre se ejecuta. Si
-  //       el invite falla, el alumno puede pedir un nuevo magic link desde
-  //       login.html → "Olvidaste tu contraseña".
+  // Etapa X.19 — flujo simplificado:
+  //   (a) Lookup PRIMARIO en `profiles.email`. Si existe → usar ese id y NO
+  //       mandar email de bienvenida (el alumno ya tenía cuenta).
+  //   (b) Si no existe → `auth.admin.createUser({ email_confirm: true, password })`
+  //       con contraseña temporal random. Más confiable que inviteUserByEmail,
+  //       que dependía del SMTP de Supabase (fallaba con "Error sending invite
+  //       email" cuando el SMTP no está bien configurado para edge functions).
+  //       Si createUser dice "already exists" (race condition) → re-lookup en
+  //       profiles. Otros errores → degradan a warning, NO abortan el flujo.
+  //   (c) El UPSERT en user_courses siempre se ejecuta (paso 5), aunque el
+  //       createUser haya fallado. Si tampoco hay userId al final → respuesta
+  //       200 con `pending_invite:true` para que MP no reintente.
+  //   (d) Etapa X.19: tras el UPSERT, si el usuario era nuevo (tempPassword set),
+  //       enviamos el email de bienvenida con la contraseña temporal vía Resend.
   let userId: string | null = null;
   let inviteSkippedReason: string | null = null;
+  let tempPassword: string | null = null;     // se setea solo si createUser fue OK con usuario nuevo
 
   // 4.a) Lookup primario en profiles por email
   try {
@@ -338,7 +440,7 @@ serve(async (req: Request) => {
       .eq('email', email)
       .maybeSingle();
     if (profErr) {
-      console.warn('process-payment: lookup profiles falló (sigo con invite):', profErr);
+      console.warn('process-payment: lookup profiles falló (sigo con createUser):', profErr);
     } else if (prof?.id) {
       userId = prof.id;
       inviteSkippedReason = 'usuario ya existe en profiles';
@@ -347,41 +449,51 @@ serve(async (req: Request) => {
     console.warn('process-payment: lookup profiles excepción:', e);
   }
 
-  // 4.b) Si no existe en profiles, invitar — tolerante a rate limit
+  // 4.b) Si no existe en profiles, crear el usuario con createUser (Etapa X.19)
   if (!userId) {
-    // Si tenemos nombre+apellido (coupon flow trae estos campos), pasarlos como
-    // metadata para que el trigger handle_new_user los guarde en profiles.full_name.
-    // redirectTo: el botón del email de invite manda al alumno a set-password.html
-    // (Etapa X.17) para que elija su contraseña y entre al dashboard.
+    const tp = generateTempPassword();
     const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
-    const inviteOpts: { data?: Record<string, unknown>; redirectTo: string } = {
-      redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html',
-    };
-    if (fullName) inviteOpts.data = { full_name: fullName, name: fullName };
+    const userMeta: Record<string, unknown> = fullName
+      ? { full_name: fullName, name: fullName }
+      : {};
 
     try {
-      const { data: invited, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(email, inviteOpts);
-      if (inviteErr) {
-        // Rate limit / email error → degradar a warning, NO abortar el flujo.
-        const msg = (inviteErr.message || '').toLowerCase();
-        if (msg.includes('rate limit') || msg.includes('email')) {
-          console.warn('invite rate limited:', email, '—', inviteErr.message);
-          inviteSkippedReason = 'rate limit / email error: ' + inviteErr.message;
+      const { data: created, error: createErr } = await sbAdmin.auth.admin.createUser({
+        email,
+        email_confirm: true,        // marca el email como confirmado → puede loguear al toque
+        password: tp,
+        user_metadata: userMeta,    // el trigger handle_new_user lee `name`/`full_name`
+      });
+
+      if (createErr) {
+        const msg = (createErr.message || '').toLowerCase();
+        if (msg.includes('already') || msg.includes('exists') || msg.includes('registered')) {
+          // Race condition: alguien creó al usuario entre el lookup y este punto.
+          // Re-lookup en profiles para recuperar el id existente. No mandamos email.
+          const { data: prof2 } = await sbAdmin
+            .from('profiles').select('id').eq('email', email).maybeSingle();
+          if (prof2?.id) {
+            userId = prof2.id;
+            inviteSkippedReason = 'usuario ya existía (race) — recuperado de profiles';
+          } else {
+            console.warn('process-payment: createUser dijo "already exists" pero profiles no lo tiene:', email);
+            inviteSkippedReason = 'createUser already-exists / profiles vacío';
+          }
         } else {
-          // Cualquier otro error del invite también lo logueamos pero NO abortamos
-          // — el UPSERT en user_courses debe ocurrir igual para no perder el pago.
-          console.warn('process-payment: invite falló (sigo con UPSERT):', inviteErr);
-          inviteSkippedReason = 'invite error: ' + inviteErr.message;
+          // Cualquier otro error de createUser → log + NO abortar.
+          console.warn('process-payment: createUser falló (sigo con UPSERT):', createErr);
+          inviteSkippedReason = 'createUser error: ' + createErr.message;
         }
-      } else if (invited?.user?.id) {
-        userId = invited.user.id;
+      } else if (created?.user?.id) {
+        userId = created.user.id;
+        tempPassword = tp;          // ← marca: hay que mandar email de bienvenida
       } else {
-        console.warn('process-payment: invite no devolvió user.id (sigo con UPSERT)');
-        inviteSkippedReason = 'invite sin user.id';
+        console.warn('process-payment: createUser no devolvió user.id');
+        inviteSkippedReason = 'createUser sin user.id';
       }
     } catch (e: any) {
-      console.warn('invite rate limited:', email, '—', e?.message || e);
-      inviteSkippedReason = 'invite exception: ' + (e?.message || e);
+      console.warn('process-payment: createUser excepción:', e?.message || e);
+      inviteSkippedReason = 'createUser exception: ' + (e?.message || e);
     }
   }
 
@@ -424,6 +536,33 @@ serve(async (req: Request) => {
     return errOut('No se pudo registrar el acceso al curso: ' + ucErr.message, 500);
   }
 
+  // ── 6) Etapa X.19: enviar email de bienvenida si el usuario es nuevo ──
+  // Solo cuando createUser arriba devolvió un id real (tempPassword set).
+  // Para usuarios pre-existentes saltamos esto — ya tienen su password.
+  // Si el envío falla, NO abortamos: el acceso al curso ya quedó registrado;
+  // el admin puede reenviar el email manualmente desde el panel.
+  let emailDelivery: { ok: boolean; error?: string } | null = null;
+  if (tempPassword) {
+    // Resolver title del curso para el subject + body del email
+    let courseTitle = '(tu curso)';
+    try {
+      const { data: c } = await sbAdmin
+        .from('courses').select('title').eq('id', course_id).maybeSingle();
+      if (c?.title) courseTitle = c.title;
+    } catch (e) { /* fallback al placeholder */ }
+
+    const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
+    emailDelivery = await sendWelcomeEmail({
+      email,
+      fullName: fullName || undefined,
+      courseTitle,
+      tempPassword,
+    });
+    if (!emailDelivery.ok) {
+      console.warn('process-payment: welcome email falló (sigo):', emailDelivery.error);
+    }
+  }
+
   return json({
     ok: true,
     user_id: userId,
@@ -431,5 +570,8 @@ serve(async (req: Request) => {
     payment_method,
     external_ref,
     invite_skipped: inviteSkippedReason || undefined,
+    welcome_email:  emailDelivery
+      ? (emailDelivery.ok ? 'sent' : `failed: ${emailDelivery.error}`)
+      : 'not_needed',
   });
 });
