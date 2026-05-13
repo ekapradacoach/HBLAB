@@ -64,18 +64,21 @@ async function sendWelcomeEmail(opts: {
   email: string;
   fullName?: string;
   courseTitle: string;
-  tempPassword: string;
+  magicLink: string;        // Etapa X.20: reemplaza tempPassword. URL del magic link
+                            // generado con auth.admin.generateLink({ type:'magiclink' }).
+                            // El click autentica al alumno y lo redirige a set-password.html.
 }): Promise<{ ok: boolean; error?: string }> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
   if (!RESEND_API_KEY) {
     return { ok: false, error: 'RESEND_API_KEY no configurado en env' };
   }
-  const setPasswordUrl = 'https://ekapradacoach.github.io/HBLAB/set-password.html';
-  const loginUrl       = 'https://ekapradacoach.github.io/HBLAB/login.html';
-  const safeName = (opts.fullName || '').trim() || 'alumna/o';
+  const safeName  = (opts.fullName || '').trim() || 'alumna/o';
   const safeTitle = (opts.courseTitle || '(tu curso)').replace(/</g, '&lt;');
 
-  // HTML email-safe (inline styles, table layout — sin grids/flex modernos)
+  // HTML email-safe (inline styles, table layout — sin grids/flex modernos).
+  // Sin contraseña temporal visible: el alumno hace click en el botón y queda
+  // autenticado vía magic link → la página set-password.html detecta la sesión
+  // y le ofrece elegir su contraseña.
   const html = `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#1E2A3A;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A;padding:32px 16px;">
@@ -85,14 +88,14 @@ async function sendWelcomeEmail(opts: {
           <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;">¡Bienvenida/o a <span style="color:#C8E600">HB Lab</span>!</h1>
           <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, gracias por sumarte. Tu compra del curso <strong style="color:#FFFFFF">${safeTitle}</strong> está confirmada y ya podés acceder.</p>
 
-          <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Tu contraseña temporal</p>
-          <div style="background:rgba(200,230,0,0.08);border:1px solid rgba(200,230,0,0.32);border-radius:8px;padding:14px 18px;margin:0 0 20px;font-family:'Courier New',monospace;font-size:18px;color:#C8E600;font-weight:700;letter-spacing:0.06em;">${opts.tempPassword}</div>
+          <p style="margin:0 0 16px;font-size:14px;color:#94A3B8;line-height:1.55;">Para activar tu cuenta y elegir tu contraseña personal, hacé click acá abajo:</p>
 
-          <p style="margin:0 0 12px;font-size:14px;color:#94A3B8;line-height:1.55;">Usá esa contraseña con tu email <strong style="color:#FFFFFF">${opts.email}</strong> para ingresar:</p>
-          <p style="margin:0 0 28px;"><a href="${loginUrl}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:12px 26px;border-radius:8px;font-size:15px;">Ingresar a HB Lab →</a></p>
+          <p style="margin:0 0 28px;"><a href="${opts.magicLink}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:8px;font-size:15px;">Crear mi contraseña →</a></p>
 
-          <p style="margin:24px 0 8px;font-size:13px;color:#94A3B8;line-height:1.55;">Cuando ingreses por primera vez te recomendamos cambiar la contraseña temporal por una propia. Lo podés hacer acá:</p>
-          <p style="margin:0 0 24px;"><a href="${setPasswordUrl}" style="color:#9B6FDE;text-decoration:underline;font-size:14px;">${setPasswordUrl}</a></p>
+          <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;line-height:1.55;">¿El botón no funciona? Copiá y pegá este link en tu navegador:</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#9B6FDE;word-break:break-all;line-height:1.4;">${opts.magicLink}</p>
+
+          <p style="margin:0 0 6px;font-size:13px;color:#94A3B8;line-height:1.55;">El link expira en 1 hora. Si vence, podés pedir uno nuevo desde la pantalla de login con "Olvidaste tu contraseña" usando este email: <strong style="color:#FFFFFF">${opts.email}</strong>.</p>
 
           <hr style="border:none;border-top:1px solid #2f3e52;margin:28px 0;">
           <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.5;">Si tenés alguna pregunta, respondé este email o escribinos a ekapradacoach@gmail.com.</p>
@@ -536,14 +539,47 @@ serve(async (req: Request) => {
     return errOut('No se pudo registrar el acceso al curso: ' + ucErr.message, 500);
   }
 
-  // ── 6) Etapa X.19: enviar email de bienvenida si el usuario es nuevo ──
-  // Solo cuando createUser arriba devolvió un id real (tempPassword set).
-  // Para usuarios pre-existentes saltamos esto — ya tienen su password.
-  // Si el envío falla, NO abortamos: el acceso al curso ya quedó registrado;
-  // el admin puede reenviar el email manualmente desde el panel.
+  // ── 6) Etapa X.20: email de bienvenida con MAGIC LINK (sin contraseña visible) ──
+  // Solo cuando createUser arriba devolvió un id real (tempPassword set, alumno
+  // nuevo creado en este request). Para usuarios pre-existentes saltamos esto —
+  // ya tienen su password y no necesitan activación. Si algo falla en este paso,
+  // NO abortamos: el acceso al curso ya quedó registrado, el admin puede reenviar
+  // el email manualmente desde el panel.
+  //
+  // Antes (Etapa X.19) el email incluía la contraseña temporal y un link a login.
+  // Ahora (Etapa X.20) generamos un magic link con auth.admin.generateLink y se
+  // lo enviamos al alumno: al hacer click queda autenticado y aterriza en
+  // set-password.html, donde elige su contraseña personal. La temp password
+  // sigue existiendo solo a nivel BD (necesaria para createUser); el alumno
+  // nunca la ve.
   let emailDelivery: { ok: boolean; error?: string } | null = null;
+  let magicLinkSkipped: string | null = null;
   if (tempPassword) {
-    // Resolver title del curso para el subject + body del email
+    // 6.a) Generar el magic link
+    let magicLink: string | null = null;
+    try {
+      const { data: linkData, error: linkErr } = await sbAdmin.auth.admin.generateLink({
+        type:  'magiclink',
+        email,
+        options: {
+          redirectTo: 'https://hblabarg.com/set-password.html',
+        },
+      });
+      if (linkErr) {
+        console.warn('process-payment: generateLink falló:', linkErr);
+        magicLinkSkipped = 'generateLink error: ' + linkErr.message;
+      } else if (linkData?.properties?.action_link) {
+        magicLink = linkData.properties.action_link;
+      } else {
+        console.warn('process-payment: generateLink sin action_link en response');
+        magicLinkSkipped = 'generateLink sin action_link';
+      }
+    } catch (e: any) {
+      console.warn('process-payment: generateLink excepción:', e?.message || e);
+      magicLinkSkipped = 'generateLink exception: ' + (e?.message || e);
+    }
+
+    // 6.b) Resolver title del curso (para el subject + body del email)
     let courseTitle = '(tu curso)';
     try {
       const { data: c } = await sbAdmin
@@ -551,15 +587,20 @@ serve(async (req: Request) => {
       if (c?.title) courseTitle = c.title;
     } catch (e) { /* fallback al placeholder */ }
 
-    const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
-    emailDelivery = await sendWelcomeEmail({
-      email,
-      fullName: fullName || undefined,
-      courseTitle,
-      tempPassword,
-    });
-    if (!emailDelivery.ok) {
-      console.warn('process-payment: welcome email falló (sigo):', emailDelivery.error);
+    // 6.c) Enviar el email vía Resend — solo si tenemos magic link
+    if (magicLink) {
+      const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
+      emailDelivery = await sendWelcomeEmail({
+        email,
+        fullName: fullName || undefined,
+        courseTitle,
+        magicLink,
+      });
+      if (!emailDelivery.ok) {
+        console.warn('process-payment: welcome email falló (sigo):', emailDelivery.error);
+      }
+    } else {
+      console.warn('process-payment: skip welcome email — sin magic link para', email);
     }
   }
 
@@ -569,9 +610,10 @@ serve(async (req: Request) => {
     course_id,
     payment_method,
     external_ref,
-    invite_skipped: inviteSkippedReason || undefined,
-    welcome_email:  emailDelivery
+    invite_skipped:    inviteSkippedReason || undefined,
+    magic_link_skipped: magicLinkSkipped || undefined,
+    welcome_email:     emailDelivery
       ? (emailDelivery.ok ? 'sent' : `failed: ${emailDelivery.error}`)
-      : 'not_needed',
+      : (tempPassword ? 'skipped_no_magic_link' : 'not_needed'),
   });
 });
