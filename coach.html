@@ -810,6 +810,59 @@
       display: flex; justify-content: flex-end; gap: 8px;
       margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border);
     }
+
+    /* ─────────────────────────────────────────────────
+       Etapa X.21 — Optimización mobile (viewport ≤ 600px)
+       Sin cambios en JS ni en estructura HTML, solo CSS.
+    ───────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      /* Navbar: email truncado, badge y logout no se comprimen.
+         El botón "Cerrar sesión" ya existe en .nav-right (línea 839) — solo aseguramos
+         que se vea entero y no se rompa el layout cuando el email es largo. */
+      .nav-right { gap: 8px; flex-wrap: nowrap; min-width: 0; }
+      .nav-email {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .badge-role { flex-shrink: 0; }
+      .btn-logout {
+        flex-shrink: 0;
+        display: inline-flex !important;   /* asegurar visibilidad en mobile */
+        padding: 6px 10px;
+        font-size: 0.78rem;
+      }
+
+      /* Tabs: scroll horizontal con inercia táctil */
+      .tabs-inner {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .tabs-inner::-webkit-scrollbar { display: none; }
+      .tab-btn { flex-shrink: 0; }
+
+      /* Tab Ganancias — selector mes/año en columna */
+      .gains-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .gains-select, .btn-gains-load { width: 100%; max-width: none; }
+
+      /* Tab Ganancias — tabla con scroll horizontal y ocultar columna "Comisión".
+         Estructura: 1=Curso 2=Ventas 3=Ingresos 4=Comisión 5=Tu ganancia */
+      #tab-ganancias .card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .gains-table th:nth-child(4),
+      .gains-table td:nth-child(4) { display: none; }
+    }
   </style>
 </head>
 <body>

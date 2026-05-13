@@ -122,6 +122,26 @@ Tipografía: **Inter** (UI) + **Playfair Display** (acentos cursiva).
 
 ---
 
+## Mobile (Etapa X.21 — viewport ≤ 600px)
+
+Optimización CSS sin tocar lógica ni HTML estructural en `admin.html` y `coach.html`. Todos los media queries usan `@media (max-width: 600px)`.
+
+**`admin.html`**:
+- **Tabs**: `.tabs-inner` con `overflow-x: auto`, `white-space: nowrap`, `-webkit-overflow-scrolling: touch`, scrollbar oculta (Firefox `scrollbar-width:none` + WebKit `::-webkit-scrollbar { display:none }`). Cada `.tab-btn` con `flex-shrink: 0` para no comprimirse.
+- **Tablas**: `.data-table-wrap` cambia a `overflow-x: auto; overflow-y: hidden` en mobile (override del `overflow:hidden` de Etapa X.4 — el dropdown ⋮ no se ve afectado porque usa `position: fixed` desde X.4). Tab Cursos esconde con `display: none` las columnas Slug (nth-child 2), Precio USD (nth-child 4) y Creado (nth-child 7), scoped a `#panel-cursos .data-table` para no romper otras tablas con distinta estructura de columnas.
+- **Notif dropdown**: `.notif-dropdown` con `max-width: calc(100vw - 32px)`, `right: 0 !important; left: auto !important` para que no se salga del viewport con emails largos.
+- **Stats grid**: `.stats-grid { grid-template-columns: 1fr !important }` (1 columna en mobile, override de `auto-fill` desktop).
+
+**`coach.html`**:
+- **Navbar**: `.nav-right` con `gap: 8px; flex-wrap: nowrap; min-width: 0`. `.nav-email` truncado a `max-width: 120px` con elipsis y `flex-shrink: 1`. `.badge-role` y `.btn-logout` con `flex-shrink: 0` para no comprimirse. El botón "Cerrar sesión" (preexistente en `.nav-right` línea 839) se fuerza visible en mobile con `display: inline-flex !important` y padding/fontsize reducidos para que entre todo en la barra angosta.
+- **Tabs**: mismo fix que admin (scroll horizontal con inercia, scrollbar oculta, tab-btn `flex-shrink: 0`).
+- **Selectores mes/año (Tab Ganancias)**: `.gains-controls` cambia a `flex-direction: column; align-items: stretch; gap: 8px`. `.gains-select` y `.btn-gains-load` con `width: 100%` para ocupar todo el ancho.
+- **Tabla ganancias**: `#tab-ganancias .card` con `overflow-x: auto` para scroll lateral del table dentro del card wrapper. Columna "Comisión" (nth-child 4) escondida con `display: none`.
+
+Todos los bloques quedan al final del `<style>` de cada archivo, agrupados bajo el comentario `Etapa X.21 — Optimización mobile`. Ningún rule afecta desktop ni breakpoints más anchos.
+
+---
+
 ## Patrones y convenciones críticas
 
 ### Helper HTML-escape

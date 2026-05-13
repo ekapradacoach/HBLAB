@@ -460,6 +460,53 @@
       .panel-header { flex-direction: column; }
     }
 
+    /* ─────────────────────────────────────────────────
+       Etapa X.21 — Optimización mobile (viewport ≤ 600px)
+       Sin cambios en JS ni en estructura HTML, solo CSS.
+    ───────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      /* Tabs: scroll horizontal con inercia táctil */
+      .tabs-inner {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;             /* Firefox */
+      }
+      .tabs-inner::-webkit-scrollbar { display: none; }   /* WebKit */
+      .tab-btn { flex-shrink: 0; }
+
+      /* Data tables: wrapper con scroll horizontal en mobile.
+         (Override del overflow:hidden de Etapa X.4 — el dropdown ⋮ usa
+         position:fixed, no se ve afectado). */
+      .data-table-wrap {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Tab Cursos — ocultar columnas secundarias (Slug, Precio USD, Creado).
+         Posiciones en la tabla: 1=Título 2=Slug 3=ARS 4=USD 5=Estado 6=Ventas 7=Creado 8=Acc. */
+      #panel-cursos .data-table th:nth-child(2),
+      #panel-cursos .data-table td:nth-child(2),
+      #panel-cursos .data-table th:nth-child(4),
+      #panel-cursos .data-table td:nth-child(4),
+      #panel-cursos .data-table th:nth-child(7),
+      #panel-cursos .data-table td:nth-child(7) {
+        display: none;
+      }
+
+      /* Notificaciones dropdown — anchor a la derecha, max-width adaptado al viewport
+         para no salirse de pantalla con los emails largos. */
+      .notif-dropdown {
+        max-width: calc(100vw - 32px);
+        right: 0 !important;
+        left: auto !important;
+      }
+
+      /* Tab Gestión — stats grid colapsa a 1 columna en mobile */
+      .stats-grid { grid-template-columns: 1fr !important; }
+    }
+
     /* ════════════════════════════════════════════════
        TAB LANDING — centro de control visual (Sesión 54)
     ════════════════════════════════════════════════ */
