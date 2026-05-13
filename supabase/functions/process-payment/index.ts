@@ -110,9 +110,9 @@ async function sendWelcomeEmail(opts: {
         'Content-Type':  'application/json',
       },
       body: JSON.stringify({
-        from:    'onboarding@resend.dev',
+        from:    'HB Lab <noreply@hblabarg.com>',
         to:      opts.email,
-        subject: `Acceso a HB Lab — ${opts.courseTitle}`,
+        subject: `🎉 Tu acceso a HB Lab — ${opts.courseTitle}`,
         html,
       }),
     });

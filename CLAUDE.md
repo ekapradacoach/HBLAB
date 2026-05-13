@@ -463,7 +463,7 @@ Problema en producción: `auth.admin.inviteUserByEmail` depende del SMTP que Sup
 1. **Creamos el usuario directamente** con `auth.admin.createUser({ email, email_confirm: true, password: tempPassword, user_metadata: { full_name, name } })`. La password temporal se genera localmente con `generateTempPassword()` (12 chars alfanuméricos random vía `crypto.getRandomValues`). `email_confirm: true` deja al alumno listo para loguear sin pasar por confirmación adicional.
 2. **Si `createUser` falla con "already exists"** (race condition): re-lookup en `profiles` por email, recuperar el id, **no enviar email** (el usuario ya tenía cuenta).
 3. **El UPSERT en `user_courses` corre siempre** (igual que en X.18).
-4. **Email de bienvenida vía Resend API** (DESPUÉS del UPSERT): `fetch POST https://api.resend.com/emails` con header `Authorization: Bearer ${RESEND_API_KEY}`. Body con `from: 'onboarding@resend.dev'`, `to: email del alumno`, `subject: 'Acceso a HB Lab — {courseTitle}'`, y `html` con un template inline-styled (email-safe, sin grids/flex):
+4. **Email de bienvenida vía Resend API** (DESPUÉS del UPSERT): `fetch POST https://api.resend.com/emails` con header `Authorization: Bearer ${RESEND_API_KEY}`. Body con `from: 'HB Lab <noreply@hblabarg.com>'` (Etapa X.19.1 — dominio propio verificado en Resend; reemplazó al `onboarding@resend.dev` sandbox), `to: email del alumno`, `subject: '🎉 Tu acceso a HB Lab — {courseTitle}'`, y `html` con un template inline-styled (email-safe, sin grids/flex):
    - Encabezado "¡Bienvenida/o a **HB Lab**!" (HB Lab en lime).
    - Saludo personalizado con `full_name` si está disponible (fallback "alumna/o").
    - Confirmación del curso comprado en bold.
@@ -476,7 +476,7 @@ Problema en producción: `auth.admin.inviteUserByEmail` depende del SMTP que Sup
 - `generateTempPassword(length = 12)`: genera string aleatorio uniforme con `crypto.getRandomValues` sobre charset alfanumérico (A-Z, a-z, 0-9).
 - `sendWelcomeEmail({ email, fullName?, courseTitle, tempPassword })`: arma el HTML, hace fetch a Resend, devuelve `{ ok, error? }`. NO lanza — los errores quedan en el log.
 
-**Secret nuevo requerido en Supabase**: `RESEND_API_KEY` (Edge Functions → Manage secrets). Get del dashboard de Resend.com → API Keys. Mientras esté en sandbox, Resend solo permite enviar a la dirección verificada del owner — al pasar a producción hay que verificar un dominio propio (`hblab.com` o el que se use) y cambiar `from: 'onboarding@resend.dev'` por algo como `from: 'hola@hblab.com'`.
+**Secret nuevo requerido en Supabase**: `RESEND_API_KEY` (Edge Functions → Manage secrets). Get del dashboard de Resend.com → API Keys. **El dominio `hblabarg.com` ya está verificado en Resend** (Etapa X.19.1), por eso el `from` ahora es `'HB Lab <noreply@hblabarg.com>'` con display name humano. El sandbox `onboarding@resend.dev` quedó atrás.
 
 **Response shape** ahora incluye `welcome_email: 'sent' | 'failed: ...' | 'not_needed'` además del `invite_skipped` ya existente.
 
