@@ -453,7 +453,8 @@
       .nav-email { display: none; }
       .form-grid { grid-template-columns: 1fr; }
       .form-group.col2 { grid-column: span 1; }
-      .data-table th:nth-child(n+4), .data-table td:nth-child(n+4) { display: none; }
+      /* (Etapa X.23) la regla que ocultaba cols 4+ (`.data-table th:nth-child(n+4)... display:none`)
+         se eliminó — ahora las tablas hacen scroll horizontal en mobile en vez de esconder columnas. */
       .charts-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 480px) {
@@ -461,10 +462,10 @@
     }
 
     /* ─────────────────────────────────────────────────
-       Etapa X.21 — Optimización mobile (viewport ≤ 600px)
-       Etapa X.22 — Correcciones: notificaciones fixed, columnas
-                    de acciones SIEMPRE visibles en mobile.
-       Sin cambios en JS ni en estructura HTML, solo CSS.
+       Etapa X.23 — Mobile: scroll horizontal en TODAS las tablas,
+                    sin ocultar columnas. Reemplaza el approach de
+                    Etapas X.21+X.22 que escondía cols con display:none.
+       Solo CSS @media (max-width: 600px). Sin cambios en JS ni HTML.
     ───────────────────────────────────────────────── */
     @media (max-width: 600px) {
       /* Tabs: scroll horizontal con inercia táctil */
@@ -477,16 +478,31 @@
       .tabs-inner::-webkit-scrollbar { display: none; }   /* WebKit */
       .tab-btn { flex-shrink: 0; }
 
-      /* Data tables: wrapper con scroll horizontal en mobile.
-         (Override del overflow:hidden de Etapa X.4 — el dropdown ⋮ usa
-         position:fixed, no se ve afectado). */
-      .data-table-wrap {
+      /* ── Tablas: scroll horizontal universal ─────────────────
+         Toda tabla con clase que contenga "table-wrap" o "tabla"
+         hace scroll horizontal en mobile. La regla `min-width: 600px`
+         sobre <table> fuerza que la tabla mantenga su ancho intrínseco
+         (cabe todo el contenido sin recortar columnas) — el wrapper
+         scrollea cuando el viewport es más angosto.
+         Ningún display:none — todas las columnas siguen visibles. */
+      .data-table-wrap,
+      [class*="table-wrap"],
+      [class*="tabla"] {
         overflow-x: auto;
-        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
       }
+      .data-table,
+      table.data-table {
+        min-width: 600px;
+        font-size: 13px;
+      }
+      .data-table td,
+      .data-table th {
+        white-space: nowrap;
+        padding: 8px 10px;
+      }
 
-      /* ── Notificaciones dropdown (Etapa X.22) ────────────────
+      /* ── Notificaciones dropdown ────────────────────────────
          Position fixed para que NO se salga de pantalla con
          emails/textos largos. Anclado a top:70px (debajo del navbar)
          y márgenes laterales 8px en ambos lados → ocupa todo el ancho
@@ -499,74 +515,6 @@
         width: auto !important;
         max-width: none !important;
         z-index: 9999 !important;
-      }
-
-      /* ── Tab Cursos (Etapa X.22) ─────────────────────────────
-         Mostrar SOLO: Título (1) + Precio ARS (3) + Acciones (8).
-         Ocultar: Slug (2), Precio USD (4), Estado (5), Ventas (6), Creado (7).
-         La columna 8 (Acciones) NUNCA se oculta. */
-      #panel-cursos .data-table th:nth-child(2),
-      #panel-cursos .data-table td:nth-child(2),
-      #panel-cursos .data-table th:nth-child(4),
-      #panel-cursos .data-table td:nth-child(4),
-      #panel-cursos .data-table th:nth-child(5),
-      #panel-cursos .data-table td:nth-child(5),
-      #panel-cursos .data-table th:nth-child(6),
-      #panel-cursos .data-table td:nth-child(6),
-      #panel-cursos .data-table th:nth-child(7),
-      #panel-cursos .data-table td:nth-child(7) {
-        display: none;
-      }
-      /* Acciones (col 8): nunca ocultar, sin wrap, ancho mínimo para el botón ⋮ */
-      #panel-cursos .data-table th:nth-child(8),
-      #panel-cursos .data-table td:nth-child(8) {
-        white-space: nowrap;
-        min-width: 40px;
-      }
-
-      /* ── Tab Alumnos (Etapa X.22) ────────────────────────────
-         Estructura: 1=Nombre 2=Email 3=Rol 4=Cursos 5=Registrado 6=Acciones.
-         Mostrar SOLO: Email (2) + Rol (3) + Acciones (6).
-         Ocultar: Nombre (1), Cursos (4), Registrado (5).
-         Email truncado para no romper el layout con emails largos. */
-      #panel-alumnos .data-table th:nth-child(1),
-      #panel-alumnos .data-table td:nth-child(1),
-      #panel-alumnos .data-table th:nth-child(4),
-      #panel-alumnos .data-table td:nth-child(4),
-      #panel-alumnos .data-table th:nth-child(5),
-      #panel-alumnos .data-table td:nth-child(5) {
-        display: none;
-      }
-      #panel-alumnos .data-table td:nth-child(2) {
-        max-width: 160px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      /* Acciones (col 6): nunca ocultar */
-      #panel-alumnos .data-table th:nth-child(6),
-      #panel-alumnos .data-table td:nth-child(6) {
-        white-space: nowrap;
-        min-width: 40px;
-      }
-
-      /* ── Tab Gestión — tabla de ventas (Etapa X.22) ──────────
-         Wrapper de la tabla de ventas: el `<div class="data-table-wrap">`
-         de la sub-sección Ventas (tabla con tbody #tbody-ventas).
-         Estructura de columnas: 1=Fecha 2=Alumno 3=Curso 4=Monto 5=Moneda 6=Método.
-         Mostrar AL MENOS: Alumno (2) + Curso (3) + Monto (4).
-         Ocultar: Fecha (1), Moneda (5), Método (6). */
-      .data-table-wrap:has(#tbody-ventas) {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      .data-table:has(#tbody-ventas) th:nth-child(1),
-      .data-table:has(#tbody-ventas) td:nth-child(1),
-      .data-table:has(#tbody-ventas) th:nth-child(5),
-      .data-table:has(#tbody-ventas) td:nth-child(5),
-      .data-table:has(#tbody-ventas) th:nth-child(6),
-      .data-table:has(#tbody-ventas) td:nth-child(6) {
-        display: none;
       }
 
       /* Tab Gestión — stats grid colapsa a 1 columna en mobile */

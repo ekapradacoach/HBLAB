@@ -122,11 +122,37 @@ Tipografía: **Inter** (UI) + **Playfair Display** (acentos cursiva).
 
 ---
 
-## Mobile (Etapas X.21 + X.22 — viewport ≤ 600px)
+## Mobile (Etapas X.21 → X.23 — viewport ≤ 600px)
 
-**Regla general** (Etapa X.22): la columna de **acciones** (botones ⋮ / editar / eliminar / toggle) **nunca se oculta en mobile**. Es la columna más importante para el admin. Cualquier rule de `display: none` que la afecte está mal — siempre verificar la posición de la columna de acciones antes de aplicar.
+**Regla general (Etapa X.23 — actualiza X.22)**: las tablas del admin **NUNCA ocultan columnas** en mobile. El approach correcto es **scroll horizontal sobre el wrapper**, manteniendo todas las columnas visibles a su ancho natural. El usuario hace swipe lateral para ver las que no entran en pantalla. Esto reemplaza la estrategia anterior (X.21+X.22) que escondía columnas con `display: none` y resultaba en información perdida y columnas de acciones a veces escondidas.
 
-Cuando se oculta el resto de columnas dejando solo 2-3 visibles + acciones, agregar al `th`/`td` de acciones: `white-space: nowrap; min-width: 40px` para que el botón ⋮ no se comprima ni se rompa.
+**Implementación canónica del scroll** (admin.html):
+
+```css
+@media (max-width: 600px) {
+  /* Wrappers que contienen tablas hacen scroll horizontal */
+  .data-table-wrap,
+  [class*="table-wrap"],
+  [class*="tabla"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* La tabla mantiene su ancho intrínseco mínimo de 600px → fuerza scroll */
+  .data-table { min-width: 600px; font-size: 13px; }
+  /* Cells sin wrap y con padding compacto */
+  .data-table td, .data-table th { white-space: nowrap; padding: 8px 10px; }
+}
+```
+
+Esto se aplica a TODAS las tablas del admin: Cursos (8 cols), Alumnos (6 cols), Coaches (3 cols), Cupones (7 cols), Ventas (6 cols), Coaches ventas (3 cols), Ad spend (5 cols), Lanzamientos. Todas visibles con scroll, ninguna columna escondida.
+
+**Reglas eliminadas en X.23**:
+- `.data-table th:nth-child(n+4), .data-table td:nth-child(n+4) { display: none }` que vivía en el `@media (max-width: 768px)` original (pre-X.21).
+- Todos los bloques `#panel-cursos .data-table th:nth-child(N) { display: none }` de X.21 y X.22 (cols Slug, Precio USD, Estado, Ventas, Creado).
+- Todos los bloques `#panel-alumnos .data-table th:nth-child(N) { display: none }` de X.22 (cols Nombre, Cursos, Registrado).
+- Todos los bloques `.data-table:has(#tbody-ventas) th:nth-child(N) { display: none }` de X.22 (cols Fecha, Moneda, Método).
+- Las reglas de truncado en el email de Alumnos (`max-width: 160px; overflow: hidden; text-overflow: ellipsis`) — ya no se necesita truncar porque el email se ve completo gracias al scroll.
+- Las reglas `min-width: 40px` específicas para columnas de acciones — ya no se necesitan porque toda celda hereda `white-space: nowrap` del rule global.
 
 ---
 
@@ -134,14 +160,18 @@ Cuando se oculta el resto de columnas dejando solo 2-3 visibles + acciones, agre
 
 Optimización CSS sin tocar lógica ni HTML estructural en `admin.html` y `coach.html`. Todos los media queries usan `@media (max-width: 600px)`.
 
-**`admin.html`**:
+**`admin.html`** (Etapa X.23):
 - **Tabs**: `.tabs-inner` con `overflow-x: auto`, `white-space: nowrap`, `-webkit-overflow-scrolling: touch`, scrollbar oculta (Firefox `scrollbar-width:none` + WebKit `::-webkit-scrollbar { display:none }`). Cada `.tab-btn` con `flex-shrink: 0` para no comprimirse.
-- **Tablas — wrappers**: `.data-table-wrap` cambia a `overflow-x: auto; overflow-y: hidden` en mobile (override del `overflow:hidden` de Etapa X.4 — el dropdown ⋮ no se ve afectado porque usa `position: fixed` desde X.4). El wrapper específico de la tabla de ventas (`.data-table-wrap:has(#tbody-ventas)`) también recibe `overflow-x: auto; -webkit-overflow-scrolling: touch` explícito por si la cantidad de columnas excede el viewport.
-- **Tab Cursos (Etapa X.22)** — estructura: `1=Título 2=Slug 3=Precio ARS 4=Precio USD 5=Estado 6=Ventas 7=Creado 8=Acciones`. En mobile se muestran SOLO las 3 columnas críticas: **Título (1), Precio ARS (3), Acciones (8)**. Las columnas 2, 4, 5, 6, 7 quedan con `display: none`. La columna 8 (Acciones) recibe además `white-space: nowrap; min-width: 40px` para que el botón ⋮ no se comprima. Scoped a `#panel-cursos .data-table` para no romper otras tablas.
-- **Tab Alumnos (Etapa X.22)** — estructura: `1=Nombre 2=Email 3=Rol 4=Cursos 5=Registrado 6=Acciones`. En mobile se muestran SOLO **Email (2), Rol (3), Acciones (6)**. Las columnas 1, 4, 5 quedan con `display: none`. La col 2 (Email) recibe `max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap` para truncar emails largos con elipsis. La col 6 (Acciones) recibe `white-space: nowrap; min-width: 40px`. Scoped a `#panel-alumnos .data-table`.
-- **Tab Gestión — Tabla de ventas (Etapa X.22)** — estructura: `1=Fecha 2=Alumno 3=Curso 4=Monto 5=Moneda 6=Método`. En mobile se muestran AL MENOS **Alumno (2), Curso (3), Monto (4)**. Las columnas 1, 5, 6 quedan con `display: none`. La tabla de ventas no tiene columna de acciones (solo lectura), así que no aplica la regla de la col última. Scoped a `.data-table:has(#tbody-ventas)` para no afectar el resto de tablas en el mismo panel (lanzamientos, ad spend, etc.).
-- **Notif dropdown (Etapa X.22)**: `.notif-dropdown` se reposiciona con `position: fixed !important; top: 70px !important; left: 8px !important; right: 8px !important; width: auto !important; max-width: none !important; z-index: 9999 !important`. Esto ancla el panel debajo del navbar y le da 8px de margen lateral en ambos lados → ocupa todo el ancho útil del viewport sin recortarse. Reemplazó la regla de X.21 que usaba `max-width: calc(100vw - 32px)` con `right: 0`, que se cortaba con emails largos.
-- **Stats grid**: `.stats-grid { grid-template-columns: 1fr !important }` (1 columna en mobile, override de `auto-fill` desktop).
+- **Tablas — scroll horizontal universal**: el bloque CSS canónico (`.data-table-wrap` / `.data-table` / `td/th`) descrito arriba aplica a las 8 tablas del admin sin excepción. Ninguna tabla esconde columnas. El swipe lateral en el wrapper revela las cols que no caben.
+  - **Tab Cursos** (8 cols: Título, Slug, Precio ARS, Precio USD, Estado, Ventas, Creado, Acciones) — todas visibles con scroll.
+  - **Tab Alumnos** (6 cols: Nombre, Email, Rol, Cursos asignados, Registrado, Acciones) — todas visibles con scroll.
+  - **Tab Coaches** (3 cols) — entran sin scroll en la mayoría de viewports.
+  - **Tab Cupones** (7 cols) — todas visibles con scroll.
+  - **Tab Gestión — Ventas** (6 cols: Fecha, Alumno, Curso, Monto, Moneda, Método) — todas visibles con scroll.
+  - **Tab Gestión — Ventas por coach**, **Ad spend**, **Lanzamientos** — todas visibles con scroll.
+- **Notif dropdown**: `.notif-dropdown` se reposiciona con `position: fixed !important; top: 70px !important; left: 8px !important; right: 8px !important; width: auto !important; max-width: none !important; z-index: 9999 !important`. Ancla el panel debajo del navbar con 8px de margen lateral → ocupa el ancho útil completo sin recortarse con emails largos.
+- **Stats grid**: `.stats-grid { grid-template-columns: 1fr !important }` (1 columna en mobile).
+- **Override del overflow de Etapa X.4**: `.data-table-wrap` tenía `overflow: hidden` para clippear el `border-radius`. El nuevo `overflow-x: auto` (sin `overflow-y`) reemplaza eso en mobile y el border-radius sigue funcionando porque las celdas no se desbordan vertical. El dropdown ⋮ no se ve afectado porque usa `position: fixed` desde X.4.
 
 **`coach.html`**:
 - **Navbar**: `.nav-right` con `gap: 8px; flex-wrap: nowrap; min-width: 0`. `.nav-email` truncado a `max-width: 120px` con elipsis y `flex-shrink: 1`. `.badge-role` y `.btn-logout` con `flex-shrink: 0` para no comprimirse. El botón "Cerrar sesión" (preexistente en `.nav-right` línea 839) se fuerza visible en mobile con `display: inline-flex !important` y padding/fontsize reducidos para que entre todo en la barra angosta.
