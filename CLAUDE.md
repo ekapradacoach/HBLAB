@@ -678,6 +678,77 @@ Cuando se haga el deploy via "Via Editor", la flag `verify_jwt` puede configurar
 
 ---
 
+## Infraestructura de email (Etapa X.19 — consolidado)
+
+**Proveedor**: [Resend](https://resend.com). Reemplaza al SMTP default de Supabase que tenía problemas de configuración para enviar invites desde Edge Functions ("Error sending invite email" / rate limit).
+
+**Dominio propio**: `hblabarg.com` — comprado en **Namecheap**. Se usa exclusivamente para correos transaccionales del backend (NO para web hosting — el frontend sigue en `https://ekapradacoach.github.io/HBLAB/` por GitHub Pages, y la migración a `hblab.com` que aparece en los `canonical` sigue siendo placeholder de SEO).
+
+**DNS configurado en Namecheap → Advanced DNS** (registros provistos por Resend → Domains → Add Domain):
+
+| Tipo | Host | Valor | Estado |
+|------|------|-------|--------|
+| `MX` | `send` | `feedback-smtp.us-east-1.amazonses.com` (priority 10) | configurado |
+| `TXT` | `send` | `v=spf1 include:amazonses.com ~all` | ⏳ pendiente propagación |
+| `TXT` | `resend._domainkey` | (clave pública DKIM larga) | ✅ verificado |
+| `TXT` | `_dmarc` | `v=DMARC1; p=none;` | configurado (opcional) |
+
+**Estado de verificación en Resend** (a la fecha):
+- **DKIM**: ✅ verificado — Resend ya puede firmar los emails con la clave privada, y los servidores receptores validan la firma contra el `TXT resend._domainkey` publicado.
+- **SPF**: ⏳ pendiente — el registro `TXT send` con `v=spf1 include:amazonses.com ~all` está cargado en Namecheap pero Resend todavía no lo validó. La propagación DNS puede tardar hasta 48hs. Revisar en Resend → Domains → `hblabarg.com` → Refresh. **Sin SPF verificado, algunos receptores (Gmail estricto, Outlook corporativo) pueden marcar los emails como spam o rechazarlos.** Mientras tanto, los emails siguen saliendo (DKIM válido alcanza para entregar en la mayoría de los casos) pero la deliverability no es óptima.
+
+**Configuración en Supabase**:
+
+1. **Project Settings → Auth → SMTP Settings** (para emails de auth — confirmation, password reset, magic link):
+   - **Host**: `smtp.resend.com`
+   - **Port**: `465` (TLS) o `587` (STARTTLS)
+   - **Username**: `resend`
+   - **Password**: `RESEND_API_KEY` (el mismo API key de Resend.com → API Keys)
+   - **Sender email**: `noreply@hblabarg.com`
+   - **Sender name**: `HB Lab`
+   - **Enable Custom SMTP**: ON
+2. **Edge Functions → Manage Secrets**:
+   - `RESEND_API_KEY` — el mismo API key, expuesto a `process-payment` para que pueda hacer `fetch` directo a la API de Resend (independiente del SMTP).
+3. **Email Templates**: revisar que el "Invite user" template apunte al flujo nuevo (el botón debería linkear a `set-password.html` vía `redirectTo`). Tras la migración a `createUser` en `process-payment`, el invite template ya no se usa para el flujo de compra — pero sigue siendo el que se dispara desde `invite-coach` (admin → agregar coach).
+
+**Flujo de email tras una compra confirmada** (Etapa X.19):
+1. MP/PayPal/Coupon envía webhook → `process-payment` resuelve `course_id` y `user_id`.
+2. Si el alumno **es nuevo**: `auth.admin.createUser({ email, email_confirm: true, password: tempPassword })` (no usa el SMTP de Supabase para nada — solo crea el row en `auth.users` localmente).
+3. **`process-payment` envía el email de bienvenida** vía `fetch POST https://api.resend.com/emails` con `Authorization: Bearer ${RESEND_API_KEY}`. Body:
+   - `from: 'HB Lab <noreply@hblabarg.com>'`
+   - `to: <email del alumno>`
+   - `subject: '🎉 Tu acceso a HB Lab — {courseTitle}'`
+   - `html`: template inline-styled con la contraseña temporal + link a `login.html` + link a `set-password.html` para cambiarla.
+4. Resend acepta el request, firma con DKIM, despacha vía SES → llega al alumno.
+
+**Trigger `handle_new_user` actualizado** (SQL ya ejecutado en Supabase): ahora persiste también el `email` en `public.profiles` además del `full_name`. Esto habilita el lookup primario en `profiles.email` que hace `process-payment` (paso 4.a de Etapa X.19), evita depender de `auth.admin.listUsers` (paginado, no escala) y permite que el Tab Alumnos del admin muestre el email sin queries cruzadas a `auth.users`.
+
+```sql
+-- Versión vigente del trigger (referencia, ya ejecutado):
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name'),
+    NEW.email
+  )
+  ON CONFLICT (id) DO UPDATE
+    SET email     = EXCLUDED.email,
+        full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+**⏳ Pendientes de la infraestructura de email**:
+- **Verificar SPF en Resend** cuando termine de propagar el DNS (revisar Resend → Domains cada 12hs hasta verde, max 48hs desde el alta del registro). Una vez verificado, la deliverability sube significativamente.
+- **Backfill de `profiles.email`** para usuarios pre-existentes que se registraron antes del trigger nuevo: ejecutar `UPDATE public.profiles p SET email = u.email FROM auth.users u WHERE p.id = u.id AND p.email IS NULL;` para llenar los huecos. Después de esto, todos los lookups por email del backend pueden confiar 100% en `profiles`.
+- **(Opcional)** Agregar un registro `TXT _dmarc` más estricto (`v=DMARC1; p=quarantine; rua=mailto:...`) una vez que SPF esté verificado y el flujo esté estable, para protección anti-phishing.
+
+---
+
 ## SQL pendiente de ejecutar en Supabase
 
 ```sql
