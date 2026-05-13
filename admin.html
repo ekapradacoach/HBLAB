@@ -462,6 +462,8 @@
 
     /* ─────────────────────────────────────────────────
        Etapa X.21 — Optimización mobile (viewport ≤ 600px)
+       Etapa X.22 — Correcciones: notificaciones fixed, columnas
+                    de acciones SIEMPRE visibles en mobile.
        Sin cambios en JS ni en estructura HTML, solo CSS.
     ───────────────────────────────────────────────── */
     @media (max-width: 600px) {
@@ -484,23 +486,87 @@
         -webkit-overflow-scrolling: touch;
       }
 
-      /* Tab Cursos — ocultar columnas secundarias (Slug, Precio USD, Creado).
-         Posiciones en la tabla: 1=Título 2=Slug 3=ARS 4=USD 5=Estado 6=Ventas 7=Creado 8=Acc. */
+      /* ── Notificaciones dropdown (Etapa X.22) ────────────────
+         Position fixed para que NO se salga de pantalla con
+         emails/textos largos. Anclado a top:70px (debajo del navbar)
+         y márgenes laterales 8px en ambos lados → ocupa todo el ancho
+         útil del viewport menos 16px. */
+      .notif-dropdown {
+        position: fixed !important;
+        top: 70px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: none !important;
+        z-index: 9999 !important;
+      }
+
+      /* ── Tab Cursos (Etapa X.22) ─────────────────────────────
+         Mostrar SOLO: Título (1) + Precio ARS (3) + Acciones (8).
+         Ocultar: Slug (2), Precio USD (4), Estado (5), Ventas (6), Creado (7).
+         La columna 8 (Acciones) NUNCA se oculta. */
       #panel-cursos .data-table th:nth-child(2),
       #panel-cursos .data-table td:nth-child(2),
       #panel-cursos .data-table th:nth-child(4),
       #panel-cursos .data-table td:nth-child(4),
+      #panel-cursos .data-table th:nth-child(5),
+      #panel-cursos .data-table td:nth-child(5),
+      #panel-cursos .data-table th:nth-child(6),
+      #panel-cursos .data-table td:nth-child(6),
       #panel-cursos .data-table th:nth-child(7),
       #panel-cursos .data-table td:nth-child(7) {
         display: none;
       }
+      /* Acciones (col 8): nunca ocultar, sin wrap, ancho mínimo para el botón ⋮ */
+      #panel-cursos .data-table th:nth-child(8),
+      #panel-cursos .data-table td:nth-child(8) {
+        white-space: nowrap;
+        min-width: 40px;
+      }
 
-      /* Notificaciones dropdown — anchor a la derecha, max-width adaptado al viewport
-         para no salirse de pantalla con los emails largos. */
-      .notif-dropdown {
-        max-width: calc(100vw - 32px);
-        right: 0 !important;
-        left: auto !important;
+      /* ── Tab Alumnos (Etapa X.22) ────────────────────────────
+         Estructura: 1=Nombre 2=Email 3=Rol 4=Cursos 5=Registrado 6=Acciones.
+         Mostrar SOLO: Email (2) + Rol (3) + Acciones (6).
+         Ocultar: Nombre (1), Cursos (4), Registrado (5).
+         Email truncado para no romper el layout con emails largos. */
+      #panel-alumnos .data-table th:nth-child(1),
+      #panel-alumnos .data-table td:nth-child(1),
+      #panel-alumnos .data-table th:nth-child(4),
+      #panel-alumnos .data-table td:nth-child(4),
+      #panel-alumnos .data-table th:nth-child(5),
+      #panel-alumnos .data-table td:nth-child(5) {
+        display: none;
+      }
+      #panel-alumnos .data-table td:nth-child(2) {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Acciones (col 6): nunca ocultar */
+      #panel-alumnos .data-table th:nth-child(6),
+      #panel-alumnos .data-table td:nth-child(6) {
+        white-space: nowrap;
+        min-width: 40px;
+      }
+
+      /* ── Tab Gestión — tabla de ventas (Etapa X.22) ──────────
+         Wrapper de la tabla de ventas: el `<div class="data-table-wrap">`
+         de la sub-sección Ventas (tabla con tbody #tbody-ventas).
+         Estructura de columnas: 1=Fecha 2=Alumno 3=Curso 4=Monto 5=Moneda 6=Método.
+         Mostrar AL MENOS: Alumno (2) + Curso (3) + Monto (4).
+         Ocultar: Fecha (1), Moneda (5), Método (6). */
+      .data-table-wrap:has(#tbody-ventas) {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .data-table:has(#tbody-ventas) th:nth-child(1),
+      .data-table:has(#tbody-ventas) td:nth-child(1),
+      .data-table:has(#tbody-ventas) th:nth-child(5),
+      .data-table:has(#tbody-ventas) td:nth-child(5),
+      .data-table:has(#tbody-ventas) th:nth-child(6),
+      .data-table:has(#tbody-ventas) td:nth-child(6) {
+        display: none;
       }
 
       /* Tab Gestión — stats grid colapsa a 1 columna en mobile */

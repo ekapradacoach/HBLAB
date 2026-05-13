@@ -122,14 +122,25 @@ Tipografía: **Inter** (UI) + **Playfair Display** (acentos cursiva).
 
 ---
 
-## Mobile (Etapa X.21 — viewport ≤ 600px)
+## Mobile (Etapas X.21 + X.22 — viewport ≤ 600px)
+
+**Regla general** (Etapa X.22): la columna de **acciones** (botones ⋮ / editar / eliminar / toggle) **nunca se oculta en mobile**. Es la columna más importante para el admin. Cualquier rule de `display: none` que la afecte está mal — siempre verificar la posición de la columna de acciones antes de aplicar.
+
+Cuando se oculta el resto de columnas dejando solo 2-3 visibles + acciones, agregar al `th`/`td` de acciones: `white-space: nowrap; min-width: 40px` para que el botón ⋮ no se comprima ni se rompa.
+
+---
+
+
 
 Optimización CSS sin tocar lógica ni HTML estructural en `admin.html` y `coach.html`. Todos los media queries usan `@media (max-width: 600px)`.
 
 **`admin.html`**:
 - **Tabs**: `.tabs-inner` con `overflow-x: auto`, `white-space: nowrap`, `-webkit-overflow-scrolling: touch`, scrollbar oculta (Firefox `scrollbar-width:none` + WebKit `::-webkit-scrollbar { display:none }`). Cada `.tab-btn` con `flex-shrink: 0` para no comprimirse.
-- **Tablas**: `.data-table-wrap` cambia a `overflow-x: auto; overflow-y: hidden` en mobile (override del `overflow:hidden` de Etapa X.4 — el dropdown ⋮ no se ve afectado porque usa `position: fixed` desde X.4). Tab Cursos esconde con `display: none` las columnas Slug (nth-child 2), Precio USD (nth-child 4) y Creado (nth-child 7), scoped a `#panel-cursos .data-table` para no romper otras tablas con distinta estructura de columnas.
-- **Notif dropdown**: `.notif-dropdown` con `max-width: calc(100vw - 32px)`, `right: 0 !important; left: auto !important` para que no se salga del viewport con emails largos.
+- **Tablas — wrappers**: `.data-table-wrap` cambia a `overflow-x: auto; overflow-y: hidden` en mobile (override del `overflow:hidden` de Etapa X.4 — el dropdown ⋮ no se ve afectado porque usa `position: fixed` desde X.4). El wrapper específico de la tabla de ventas (`.data-table-wrap:has(#tbody-ventas)`) también recibe `overflow-x: auto; -webkit-overflow-scrolling: touch` explícito por si la cantidad de columnas excede el viewport.
+- **Tab Cursos (Etapa X.22)** — estructura: `1=Título 2=Slug 3=Precio ARS 4=Precio USD 5=Estado 6=Ventas 7=Creado 8=Acciones`. En mobile se muestran SOLO las 3 columnas críticas: **Título (1), Precio ARS (3), Acciones (8)**. Las columnas 2, 4, 5, 6, 7 quedan con `display: none`. La columna 8 (Acciones) recibe además `white-space: nowrap; min-width: 40px` para que el botón ⋮ no se comprima. Scoped a `#panel-cursos .data-table` para no romper otras tablas.
+- **Tab Alumnos (Etapa X.22)** — estructura: `1=Nombre 2=Email 3=Rol 4=Cursos 5=Registrado 6=Acciones`. En mobile se muestran SOLO **Email (2), Rol (3), Acciones (6)**. Las columnas 1, 4, 5 quedan con `display: none`. La col 2 (Email) recibe `max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap` para truncar emails largos con elipsis. La col 6 (Acciones) recibe `white-space: nowrap; min-width: 40px`. Scoped a `#panel-alumnos .data-table`.
+- **Tab Gestión — Tabla de ventas (Etapa X.22)** — estructura: `1=Fecha 2=Alumno 3=Curso 4=Monto 5=Moneda 6=Método`. En mobile se muestran AL MENOS **Alumno (2), Curso (3), Monto (4)**. Las columnas 1, 5, 6 quedan con `display: none`. La tabla de ventas no tiene columna de acciones (solo lectura), así que no aplica la regla de la col última. Scoped a `.data-table:has(#tbody-ventas)` para no afectar el resto de tablas en el mismo panel (lanzamientos, ad spend, etc.).
+- **Notif dropdown (Etapa X.22)**: `.notif-dropdown` se reposiciona con `position: fixed !important; top: 70px !important; left: 8px !important; right: 8px !important; width: auto !important; max-width: none !important; z-index: 9999 !important`. Esto ancla el panel debajo del navbar y le da 8px de margen lateral en ambos lados → ocupa todo el ancho útil del viewport sin recortarse. Reemplazó la regla de X.21 que usaba `max-width: calc(100vw - 32px)` con `right: 0`, que se cortaba con emails largos.
 - **Stats grid**: `.stats-grid { grid-template-columns: 1fr !important }` (1 columna en mobile, override de `auto-fill` desktop).
 
 **`coach.html`**:
