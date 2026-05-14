@@ -3841,10 +3841,19 @@
       const userIds   = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
       const courseIds = [...new Set(rows.map(r => r.course_id).filter(Boolean))];
 
-      // 2) Lookups paralelos: profiles por user_id, courses por course_id
+      // 2) Lookups paralelos: profiles por user_id, courses por course_id.
+      // Etapa X.25 — además de email pedimos full_name como fallback. Hay usuarios
+      // viejos sin email en profiles (el trigger nuevo lo persiste solo desde X.19;
+      // los pre-existentes esperan el backfill anotado como pendiente). Si email es
+      // null/vacío, mostramos el nombre completo del alumno en su lugar.
+      //
+      // NO usamos el embed `profiles(email)` en el SELECT principal porque
+      // user_courses.user_id → auth.users(id), no profiles(id), y PostgREST no
+      // detecta el FK indirecto (Etapa X.16.1 — falla con "Could not find a
+      // relationship between 'user_courses' and 'profiles' in the schema cache").
       const [profilesRes, coursesRes] = await Promise.all([
         userIds.length
-          ? sb.from('profiles').select('id, email').in('id', userIds)
+          ? sb.from('profiles').select('id, email, full_name').in('id', userIds)
           : Promise.resolve({ data: [], error: null }),
         courseIds.length
           ? sb.from('courses').select('id, title').in('id', courseIds)
@@ -3854,21 +3863,30 @@
       if (profilesRes.error) console.warn('loadVentas[profiles]:', profilesRes.error);
       if (coursesRes.error)  console.warn('loadVentas[courses]:',  coursesRes.error);
 
-      const emailByUser = {};
-      (profilesRes.data || []).forEach(p => { emailByUser[p.id] = p.email || ''; });
+      // Mapa id → { email, full_name } para resolver el display name del alumno
+      const infoByUser = {};
+      (profilesRes.data || []).forEach(p => {
+        infoByUser[p.id] = { email: p.email || '', full_name: p.full_name || '' };
+      });
       const titleByCourse = {};
       (coursesRes.data || []).forEach(c => { titleByCourse[c.id] = c.title || ''; });
 
-      // 3) Merge client-side
-      _ventas = rows.map(r => ({
-        enrolled_at:    r.enrolled_at,
-        email:          emailByUser[r.user_id]    || '(sin email)',
-        course_id:      r.course_id || null,
-        course_title:   titleByCourse[r.course_id] || '(curso eliminado)',
-        amount_paid:    Number(r.amount_paid || 0),
-        currency:       r.currency || 'ARS',
-        payment_method: r.payment_method || '—',
-      }));
+      // 3) Merge client-side. El campo `email` ahora contiene la cascada
+      // email → full_name → '(sin datos)' para que el alumno se identifique aunque
+      // profiles.email esté vacío. La columna "Alumno" del header lo refleja bien.
+      _ventas = rows.map(r => {
+        const info = infoByUser[r.user_id] || { email: '', full_name: '' };
+        const display = info.email || info.full_name || '(sin datos)';
+        return {
+          enrolled_at:    r.enrolled_at,
+          email:          display,
+          course_id:      r.course_id || null,
+          course_title:   titleByCourse[r.course_id] || '(curso eliminado)',
+          amount_paid:    Number(r.amount_paid || 0),
+          currency:       r.currency || 'ARS',
+          payment_method: r.payment_method || '—',
+        };
+      });
 
       // Poblar el selector de cursos (únicos)
       const cursoSel = document.getElementById('ventas-filter-curso');
