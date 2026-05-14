@@ -213,28 +213,55 @@ interface NormalizedPayment {
 }
 
 // ─────────────────────────────────────────────────────────────
-// VERIFICACIÓN DE FIRMA — placeholder
+// Etapa X.28 — Helper OAuth de PayPal
 // ─────────────────────────────────────────────────────────────
-// TODO (al integrar pagos reales):
+// Obtiene un access token via /v1/oauth2/token con Basic Auth (client_id:secret).
+// Se usa tanto en verifySignature (para llamar a /verify-webhook-signature) como
+// en la normalización inline del branch PayPal (para hacer GET del order).
+// Stateless: cada request hace su propio fetch — el token expira en ~9h pero no
+// vale la pena cachear en Edge Functions (escalan horizontalmente, no compartirían).
+let _paypalEnv: 'sandbox' | 'live' = (Deno.env.get('PAYPAL_ENV') === 'sandbox') ? 'sandbox' : 'live';
+const PAYPAL_API_BASE = _paypalEnv === 'sandbox'
+  ? 'https://api-m.sandbox.paypal.com'
+  : 'https://api-m.paypal.com';
+
+async function getPayPalAccessToken(): Promise<{ token: string | null; error?: string }> {
+  const clientId = Deno.env.get('PAYPAL_CLIENT_ID');
+  const secret   = Deno.env.get('PAYPAL_CLIENT_SECRET');
+  if (!clientId || !secret) {
+    return { token: null, error: 'PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET no configurados' };
+  }
+  const basic = btoa(`${clientId}:${secret}`);
+  try {
+    const r = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basic}`,
+        'Content-Type':  'application/x-www-form-urlencoded',
+        'Accept':        'application/json',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      return { token: null, error: `PayPal OAuth HTTP ${r.status}: ${txt}` };
+    }
+    const data = await r.json();
+    return { token: data?.access_token || null, error: data?.access_token ? undefined : 'sin access_token en response' };
+  } catch (e: any) {
+    return { token: null, error: 'OAuth excepción: ' + (e?.message || String(e)) };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// VERIFICACIÓN DE FIRMA
+// ─────────────────────────────────────────────────────────────
+// - MercadoPago: TODO — pendiente HMAC-SHA256 con MP_WEBHOOK_SECRET.
+// - PayPal (Etapa X.28): implementado vía /v1/notifications/verify-webhook-signature.
 //
-// Mercado Pago:
-//   - Header: x-signature  (formato "ts=...,v1=...")
-//   - Calcular HMAC-SHA256 sobre `id:{data.id};request-id:{x-request-id};ts:{ts}`
-//     usando MP_WEBHOOK_SECRET. Comparar con v1.
-//   - Docs: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks#editor_8
-//
-// PayPal:
-//   - Headers: paypal-transmission-id, paypal-transmission-time,
-//     paypal-cert-url, paypal-auth-algo, paypal-transmission-sig.
-//   - Llamar a /v1/notifications/verify-webhook-signature con esos headers
-//     + el body raw + PAYPAL_WEBHOOK_ID. Verificar verification_status === 'SUCCESS'.
-//   - Docs: https://developer.paypal.com/api/rest/webhooks/rest/#link-verifywebhooksignature
-//
-// Mientras la verificación no esté implementada, retornamos 401 si la flag
-// PAYMENTS_ALLOW_UNVERIFIED no está set en env. En desarrollo se puede setear
-// `PAYMENTS_ALLOW_UNVERIFIED=1` para bypassear (NUNCA en producción).
+// Flag de bypass `PAYMENTS_ALLOW_UNVERIFIED=1` se mantiene para dev local; en
+// producción debe estar **siempre apagada**.
 async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boolean; provider: string; reason?: string }> {
-  // Detectar proveedor por headers presentes
   const isMP     = !!req.headers.get('x-signature') || !!req.headers.get('X-Signature');
   const isPaypal = !!req.headers.get('paypal-transmission-sig');
 
@@ -243,32 +270,84 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
     return { ok: true, provider: isPaypal ? 'paypal' : (isMP ? 'mercadopago' : 'unknown') };
   }
 
-  // ⚠️ Implementación pendiente — ver bloque TODO arriba.
-  // Cuando se implemente, devolver { ok: true|false, provider, reason }.
-  return { ok: false, provider: isPaypal ? 'paypal' : (isMP ? 'mercadopago' : 'unknown'),
-           reason: 'Verificación de firma no implementada (set PAYMENTS_ALLOW_UNVERIFIED=1 solo en dev).' };
+  // ── PayPal: verificación real (Etapa X.28) ─────────────
+  if (isPaypal) {
+    const WEBHOOK_ID = Deno.env.get('PAYPAL_WEBHOOK_ID');
+    if (!WEBHOOK_ID) {
+      return { ok: false, provider: 'paypal', reason: 'PAYPAL_WEBHOOK_ID no configurado' };
+    }
+
+    const { token, error: tokErr } = await getPayPalAccessToken();
+    if (!token) {
+      return { ok: false, provider: 'paypal', reason: tokErr || 'no se pudo obtener access token' };
+    }
+
+    // El endpoint /verify-webhook-signature espera el body original como `webhook_event`
+    // parseado a objeto JS (no como string).
+    let parsedEvent: any;
+    try {
+      parsedEvent = JSON.parse(rawBody);
+    } catch {
+      return { ok: false, provider: 'paypal', reason: 'body no es JSON válido' };
+    }
+
+    const verifyBody = {
+      auth_algo:         req.headers.get('paypal-auth-algo'),
+      cert_url:          req.headers.get('paypal-cert-url'),
+      transmission_id:   req.headers.get('paypal-transmission-id'),
+      transmission_sig:  req.headers.get('paypal-transmission-sig'),
+      transmission_time: req.headers.get('paypal-transmission-time'),
+      webhook_id:        WEBHOOK_ID,
+      webhook_event:     parsedEvent,
+    };
+
+    try {
+      const r = await fetch(`${PAYPAL_API_BASE}/v1/notifications/verify-webhook-signature`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+          'Accept':        'application/json',
+        },
+        body: JSON.stringify(verifyBody),
+      });
+      if (!r.ok) {
+        const txt = await r.text();
+        return { ok: false, provider: 'paypal', reason: `verify HTTP ${r.status}: ${txt}` };
+      }
+      const data = await r.json();
+      if (data?.verification_status === 'SUCCESS') {
+        return { ok: true, provider: 'paypal' };
+      }
+      return { ok: false, provider: 'paypal', reason: `verification_status=${data?.verification_status || 'desconocido'}` };
+    } catch (e: any) {
+      return { ok: false, provider: 'paypal', reason: 'verify exception: ' + (e?.message || String(e)) };
+    }
+  }
+
+  // ── MP: verificación pendiente ─────────────────────────
+  if (isMP) {
+    return {
+      ok: false, provider: 'mercadopago',
+      reason: 'Verificación HMAC de MP no implementada (set PAYMENTS_ALLOW_UNVERIFIED=1 solo en dev).',
+    };
+  }
+
+  return {
+    ok: false, provider: 'unknown',
+    reason: 'No se detectó proveedor (headers x-signature ni paypal-transmission-sig).',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
 // NORMALIZACIÓN DEL PAYLOAD
 // ─────────────────────────────────────────────────────────────
-// El parser de MP fue REMOVIDO: el webhook real de MP solo trae
-//   { action, data: { id }, type, user_id }
-// — sin email, sin amount, sin external_reference. La normalización
-// se hace inline en el handler (sección 2a) llamando a la API de MP
-// con el payment_id para enriquecer todos los datos. Etapa X.16.
-
-function normalizePayPal(payload: any): NormalizedPayment | null {
-  // PayPal manda CHECKOUT.ORDER.APPROVED o PAYMENT.CAPTURE.COMPLETED.
-  const r        = payload?.resource || payload;
-  const email    = r?.payer?.email_address || r?.purchase_units?.[0]?.payer?.email_address;
-  const courseId = r?.purchase_units?.[0]?.custom_id || r?.custom_id;
-  const amount   = Number(r?.amount?.value ?? r?.purchase_units?.[0]?.amount?.value ?? 0);
-  const currency = (r?.amount?.currency_code || r?.purchase_units?.[0]?.amount?.currency_code || 'USD').toUpperCase();
-  const externalRef = r?.id ? String(r.id) : undefined;
-  if (!email || !courseId) return null;
-  return { email, course_id: courseId, amount, currency, payment_method: 'paypal', external_ref: externalRef };
-}
+// Tanto el parser de MP como el de PayPal se hacen INLINE en el handler.
+//   MP (X.16):    el webhook solo trae { action, data: { id } } — se hace
+//                 GET /v1/payments/{id} para enriquecer.
+//   PayPal (X.28): el webhook trae { resource: { id } } — se hace GET
+//                 /v2/checkout/orders/{id} para enriquecer y validar status.
+// No queda ningún parser standalone; todo vive en la sección 2a/2b del handler.
 
 // ─────────────────────────────────────────────────────────────
 // HANDLER
@@ -464,10 +543,82 @@ serve(async (req: Request) => {
       // (Follow-up Etapa X.14): incrementar coupons.uses_count si extRef.coupon_code
       // está set y el cupón existe. No bloquea el flujo del pago.
     } else if (sigInfo.provider === 'paypal') {
-      normalized = normalizePayPal(payload);
-      if (!normalized) {
-        return errOut('Payload PayPal no reconocido o incompleto.');
+      // ── 2b) PayPal webhook (Etapa X.28) ──────────────────
+      // El webhook trae { resource: { id } } — el `id` puede ser el order_id
+      // (eventos CHECKOUT.ORDER.*) o un capture_id (PAYMENT.CAPTURE.*). Para el
+      // caso CAPTURE.COMPLETED, el order_id real vive en
+      //   resource.supplementary_data.related_ids.order_id
+      // Tomamos el primero disponible.
+      const orderId =
+        payload?.resource?.supplementary_data?.related_ids?.order_id ||
+        payload?.resource?.id;
+
+      if (!orderId) {
+        console.warn('process-payment[PayPal]: webhook sin order_id, payload:', payload);
+        return json({ ok: true, skipped: true, reason: 'sin order_id' });
       }
+
+      // Access token (reuso el helper de verifySignature)
+      const { token, error: tokErr } = await getPayPalAccessToken();
+      if (!token) {
+        console.error('process-payment[PayPal]: token error:', tokErr);
+        return errOut('No se pudo obtener access token de PayPal: ' + (tokErr || 'unknown'), 502);
+      }
+
+      // GET /v2/checkout/orders/{id} para obtener detalles completos
+      let order: any;
+      try {
+        const r = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept':        'application/json',
+          },
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(`PayPal /v2/checkout/orders/${orderId} → HTTP ${r.status}: ${txt}`);
+        }
+        order = await r.json();
+      } catch (e: any) {
+        console.error('process-payment[PayPal]: fetch order falló:', e);
+        return errOut('No se pudo consultar la orden en PayPal: ' + (e.message || e), 502);
+      }
+
+      // Validar status: procesar si order.status === 'COMPLETED' O si
+      // intent === 'CAPTURE' Y alguna capture[0] está COMPLETED.
+      const orderStatus = order?.status || '';
+      const isCompleted = orderStatus === 'COMPLETED';
+      const hasCapture  = order?.intent === 'CAPTURE' &&
+        (order?.purchase_units || []).some((u: any) =>
+          (u?.payments?.captures || []).some((c: any) => (c?.status || '') === 'COMPLETED')
+        );
+      if (!isCompleted && !hasCapture) {
+        console.log(`process-payment[PayPal]: order ${orderId} status=${orderStatus}, intent=${order?.intent} → skip`);
+        return json({ ok: true, skipped: true, reason: `status=${orderStatus}`, order_id: orderId });
+      }
+
+      // Extraer datos del order response
+      const unit       = order?.purchase_units?.[0] || {};
+      const ppEmail    = (order?.payer?.email_address || '').trim().toLowerCase();
+      const ppCourseId = (unit?.custom_id || '').trim();   // UUID del curso (seteado por create-paypal-order)
+      const ppAmount   = Number(unit?.amount?.value || 0);
+      const ppCurrency = (unit?.amount?.currency_code || 'USD').toUpperCase();
+      const ppGiven    = (order?.payer?.name?.given_name || '').trim() || undefined;
+      const ppSurname  = (order?.payer?.name?.surname    || '').trim() || undefined;
+
+      if (!ppEmail)    return errOut('webhook PayPal: payer sin email_address.');
+      if (!ppCourseId) return errOut('webhook PayPal: purchase_units[0].custom_id vacío (esperaba course_id UUID).');
+
+      normalized = {
+        email:          ppEmail,
+        course_id:      ppCourseId,
+        amount:         ppAmount,
+        currency:       ppCurrency,
+        payment_method: 'paypal',
+        external_ref:   String(order.id || orderId),
+        nombre:         ppGiven,
+        apellido:       ppSurname,
+      };
     } else {
       return errOut(`Payload no reconocido (provider=${sigInfo.provider}).`);
     }

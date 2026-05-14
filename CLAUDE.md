@@ -529,6 +529,54 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.28 — Integración PayPal real (reemplaza placeholder):**
+
+Hasta esta etapa el branch PayPal de `process-payment` parseaba el payload del webhook directamente y la verificación de firma siempre fallaba con `PAYMENTS_ALLOW_UNVERIFIED=1` como bypass para dev. Ahora la integración usa la API real de PayPal igual que el branch MP.
+
+**Helper nuevo: `getPayPalAccessToken()`** — al tope del archivo (sección OAuth helpers):
+- Lee secrets `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` de `Deno.env`.
+- Calcula `Basic ${btoa(client_id:secret)}` y hace `POST /v1/oauth2/token` con `grant_type=client_credentials`.
+- Retorna `{ token, error? }`. Stateless por request (las Edge Functions escalan horizontalmente, no compartirían cache).
+- Detecta entorno con `Deno.env.get('PAYPAL_ENV')`: `'sandbox'` → `https://api-m.sandbox.paypal.com`, default `'live'` → `https://api-m.paypal.com`. La constante `PAYPAL_API_BASE` se exporta a las dos funciones que la usan.
+
+**`verifySignature` para PayPal**: rama nueva si el request trae el header `paypal-transmission-sig`:
+1. Lee `PAYPAL_WEBHOOK_ID` del env. Si falta → 401 con motivo.
+2. Llama `getPayPalAccessToken()`. Si falla → 401 con motivo.
+3. Parsea `rawBody` a JSON (el `webhook_event` del verify endpoint espera el payload como objeto, no string).
+4. POST a `${PAYPAL_API_BASE}/v1/notifications/verify-webhook-signature` con `Authorization: Bearer ${token}` y body `{ auth_algo, cert_url, transmission_id, transmission_sig, transmission_time, webhook_id, webhook_event }` (los primeros 5 leídos del request original con `req.headers.get('paypal-...')`).
+5. Si la response trae `verification_status === 'SUCCESS'` → `{ ok: true, provider: 'paypal' }`. Si no → reason con el status recibido.
+6. Cualquier excepción (red, parse) → `ok: false` con detalle en `reason`.
+
+**Branch PayPal en el handler (paso 2b)**:
+1. `orderId` se resuelve de `payload.resource.supplementary_data.related_ids.order_id` (eventos `PAYMENT.CAPTURE.*` lo traen ahí) con fallback a `payload.resource.id` (eventos `CHECKOUT.ORDER.*`). Si ninguno está → 200 con `skipped: true`.
+2. `getPayPalAccessToken()` otra vez (la verificación y la consulta del order son llamadas independientes; reusar el token entre ellas requeriría passing through varios layers — más simple un fetch extra).
+3. `GET ${PAYPAL_API_BASE}/v2/checkout/orders/{orderId}` con `Authorization: Bearer ${token}`. Si falla → 502.
+4. **Skip si no está aprobado**: el order se considera aprobado si:
+   - `order.status === 'COMPLETED'`, **O**
+   - `order.intent === 'CAPTURE'` Y algún `purchase_units[].payments.captures[].status === 'COMPLETED'`.
+   - Cualquier otro estado → 200 con `skipped: true, reason: 'status=...'` para que PayPal no reintente.
+5. Extracción inline (sin pasar por `normalizePayPal`, que fue eliminada):
+   - `email = order.payer.email_address`.toLowerCase().
+   - `course_id = order.purchase_units[0].custom_id` — debe ser el UUID del curso, seteado por `create-paypal-order` al crear la order.
+   - `amount = order.purchase_units[0].amount.value` (number).
+   - `currency = order.purchase_units[0].amount.currency_code` (default `USD`).
+   - `nombre = order.payer.name.given_name`, `apellido = order.payer.name.surname` — para que `process-payment` los pase como `data.full_name` al `createUser` si el alumno es nuevo (mismo flujo que MP).
+   - `external_ref = order.id`.
+6. Si falta `email` o `course_id` → 400 con detalle.
+7. El resto del flujo (paso 3 cliente service role, paso 4 lookup profiles, paso 5 UPSERT user_courses, paso 5.5 email de confirmación, paso 6 magic link welcome email) **es idéntico al de MP** — el `payment_method: 'paypal'` se diferencia solo en el campo del UPSERT.
+
+**Eliminada**: la función `normalizePayPal(payload)` standalone que parseaba el webhook crudo. Reemplazada por el flujo inline arriba. Ahora ningún proveedor tiene parser standalone — todo vive en el handler (MP en paso 2a, PayPal en paso 2b).
+
+**Secrets requeridos en Supabase → Edge Functions → Manage Secrets** (los 3 primeros confirmados como ya configurados por el usuario):
+- `PAYPAL_CLIENT_ID` — Client ID de la app PayPal Business.
+- `PAYPAL_CLIENT_SECRET` — Secret correspondiente.
+- `PAYPAL_WEBHOOK_ID` — ID del webhook configurado en PayPal Developer Dashboard → Webhooks. Debe apuntar a `https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment` y suscribirse a `CHECKOUT.ORDER.APPROVED` y `PAYMENT.CAPTURE.COMPLETED`.
+- `PAYPAL_ENV` (opcional) — `'sandbox'` para testing, default `'live'` para producción. Si se omite → live.
+
+**Pendiente del lado frontend** (no cubierto en esta etapa, queda para sesión siguiente): `create-paypal-order` Edge Function que el frontend (`checkout.html` rama USD) llama para crear la order vía `POST /v2/checkout/orders` antes de redirigir al `approval_url`. Hoy `checkout.html` aún redirige a `#paypal-pending` para el flujo USD. El branch del webhook `process-payment` está listo y esperando — apenas exista la order real, el flujo se cierra completo.
+
+**Re-deploy manual requerido** en Supabase Dashboard → Edge Functions → process-payment → Code → pegar el archivo actualizado (885 líneas) → Deploy updates. Verificar que los 3 secrets estén configurados en Manage Secrets antes del primer pago de prueba (idealmente con `PAYPAL_ENV=sandbox` primero).
+
 **Etapa X.27 — Email de CONFIRMACIÓN para alumnos existentes:**
 
 Problema previo: cuando un alumno con cuenta ya creada compraba un curso adicional, el flujo X.20 lo manejaba bien técnicamente (no le pedía contraseña ni le mandaba magic link), pero **no recibía ningún email de aviso**. El curso aparecía mágicamente en su dashboard la próxima vez que entrara, sin notificación previa. UX poco clara — si tarda en entrar al dashboard, no se entera que el pago se procesó.
@@ -756,7 +804,7 @@ Alumno tiene acceso a un curso SOLO SI:
 - **`create-preference`** — `verify_jwt = false`. POST `{ slug, email, nombre, apellido, amount, coupon_code }`. Resuelve el `course` por slug (con service role para bypassear RLS), llama a `https://api.mercadopago.com/checkout/preferences` con `MP_ACCESS_TOKEN`, devuelve `{ ok, init_point, sandbox_init_point, preference_id }` al cliente. El cliente redirige a `init_point`. El webhook de MP llega luego a `process-payment`. Etapa X.13.
 - **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal **+ entry point del cupón 100% off** (Etapa X.14). Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev). Tres branches según el provider:
   - **MP** (Etapa X.16 — fix crítico): el webhook real de MP solo trae `{ action, data: { id }, type, user_id }` — NO incluye email/amount/external_reference. Por eso process-payment ahora hace `GET https://api.mercadopago.com/v1/payments/{data.id}` con `Authorization: Bearer ${MP_ACCESS_TOKEN}` para enriquecer el pago. Si `payment.status !== 'approved'` (pending, in_process, rejected, etc.) → retorna `{ ok: true, skipped: true, reason: 'status=...' }` con HTTP 200 para que MP no reintente. Si está aprobado, parsea `payment.external_reference` (JSON con `{ slug, email, nombre, apellido, coupon_code, course_id }` que `create-preference` armó al crear la preference), resuelve `course_id` por slug y arma el `NormalizedPayment`. Si el webhook llega sin `data.id` (eventos secundarios tipo test/refund) responde 200 con `skipped: true` también, sin error.
-  - **PayPal**: usa `normalizePayPal(payload)` legacy — pendiente de integración real.
+  - **PayPal** (Etapa X.28 — integración real): igual que MP, el webhook real de PayPal solo trae `{ resource: { id }, ... }`. Process-payment hace `GET ${PAYPAL_API_BASE}/v2/checkout/orders/{orderId}` con `Authorization: Bearer ${access_token}` (obtenido via `getPayPalAccessToken()` → OAuth2 con Basic Auth `client_id:secret` contra `/v1/oauth2/token`). El `orderId` viene de `payload.resource.supplementary_data.related_ids.order_id` (eventos CAPTURE.*) o fallback a `payload.resource.id` (eventos CHECKOUT.ORDER.*). Solo procesa si `order.status === 'COMPLETED'` O `order.intent === 'CAPTURE'` con `captures[].status === 'COMPLETED'` — sino skip silencioso con 200. Extrae: `email = order.payer.email_address`, `course_id = order.purchase_units[0].custom_id` (UUID del curso seteado por `create-paypal-order`), `amount = unit.amount.value`, `currency = unit.amount.currency_code`, `nombre = order.payer.name.given_name`, `apellido = order.payer.name.surname`. La verificación de firma (`verifySignature`) llama a `/v1/notifications/verify-webhook-signature` con los 5 headers (`paypal-transmission-id/-time/-cert-url/-auth-algo/-transmission-sig`) + `webhook_id = PAYPAL_WEBHOOK_ID` + `webhook_event` (payload parseado a objeto). Solo si `verification_status === 'SUCCESS'` continúa.
   - **Coupon**: si el body trae `provider: 'coupon'`, salta la verificación de firma, resuelve `course_id` por `slug` con service role, valida el cupón contra la tabla `coupons` (existencia + activo + vencimiento + max_uses + course_id match), y procesa el acceso con el mismo flujo (`payment_method='coupon'`, `amount_paid=0`, `external_ref='coupon:{CODE}'`).
 
   En los 3 branches: resuelve `user_id` por email con la siguiente cascada (Etapa X.19 — reemplazo de invite por createUser + Resend):
