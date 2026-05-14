@@ -129,6 +129,76 @@ async function sendWelcomeEmail(opts: {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Etapa X.27 — Email de CONFIRMACIÓN para alumnos existentes
+// ─────────────────────────────────────────────────────────────
+// Cuando un alumno que YA tiene cuenta compra un curso adicional, no le mandamos
+// el welcome email (que tiene magic link para crear contraseña). En su lugar,
+// le mandamos una confirmación simple que le dice "el acceso ya está activo"
+// y un botón al dashboard. Sin magic link, sin contraseña visible.
+async function sendConfirmationEmail(opts: {
+  email: string;
+  fullName?: string;
+  courseTitle: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+  if (!RESEND_API_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY no configurado en env' };
+  }
+  const safeName    = (opts.fullName || '').trim() || 'alumna/o';
+  const safeTitle   = (opts.courseTitle || '(tu curso)').replace(/</g, '&lt;');
+  const dashboardUrl = 'https://hblabarg.com/dashboard.html';
+
+  // HTML email-safe — mismo estilo visual inline que sendWelcomeEmail.
+  // Sin magic link, sin contraseña, solo CTA al dashboard.
+  const html = `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#1E2A3A;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:560px;background:#243042;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
+        <tr><td>
+          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;">✅ Nuevo curso activado en <span style="color:#C8E600">HB Lab</span></h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, tu acceso al curso <strong style="color:#FFFFFF">${safeTitle}</strong> ya está activo. Entrá a tu dashboard para empezar.</p>
+
+          <p style="margin:0 0 28px;"><a href="${dashboardUrl}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:8px;font-size:15px;">Ir al dashboard →</a></p>
+
+          <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;line-height:1.55;">¿El botón no funciona? Copiá y pegá este link en tu navegador:</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#9B6FDE;word-break:break-all;line-height:1.4;">${dashboardUrl}</p>
+
+          <p style="margin:0;font-size:13px;color:#94A3B8;line-height:1.55;">Ingresá con tu email <strong style="color:#FFFFFF">${opts.email}</strong> y la contraseña que ya configuraste.</p>
+
+          <hr style="border:none;border-top:1px solid #2f3e52;margin:28px 0;">
+          <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.5;">Si tenés alguna pregunta, respondé este email o escribinos a ekapradacoach@gmail.com.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    'HB Lab <noreply@hblabarg.com>',
+        to:      opts.email,
+        subject: `✅ Nuevo curso activado — ${opts.courseTitle}`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: `Resend HTTP ${res.status}: ${txt}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 // ── Tipos del payload normalizado ─────────────────────────
 interface NormalizedPayment {
   email:          string;
@@ -539,6 +609,45 @@ serve(async (req: Request) => {
     return errOut('No se pudo registrar el acceso al curso: ' + ucErr.message, 500);
   }
 
+  // ── 5.5) Etapa X.27 — Email de CONFIRMACIÓN para alumnos existentes ──────
+  // Si llegamos acá con `inviteSkippedReason` set Y `tempPassword` null, es porque
+  // el lookup en profiles encontró al usuario (paso 4.a) y NO se creó cuenta nueva.
+  // Le mandamos un email de confirmación simple (sin magic link, sin contraseña)
+  // con el botón al dashboard. Si Resend falla, se loguea warning y se sigue —
+  // el acceso al curso ya quedó registrado en user_courses.
+  let confirmationDelivery: { ok: boolean; error?: string } | null = null;
+  if (inviteSkippedReason && !tempPassword) {
+    // Resolver title del curso para el subject + body del email
+    let courseTitleConf = '(tu curso)';
+    try {
+      const { data: c } = await sbAdmin
+        .from('courses').select('title').eq('id', course_id).maybeSingle();
+      if (c?.title) courseTitleConf = c.title;
+    } catch (e) { /* fallback al placeholder */ }
+
+    // Resolver full_name del comprador desde profiles (los datos `nombre`/`apellido`
+    // del extRef pueden no estar — para usuarios ya existentes el extRef del pago
+    // tiene los datos del comprador actual, pero también podemos usar el nombre
+    // guardado en profiles que es más confiable).
+    let fullNameConf = [nombre, apellido].filter(Boolean).join(' ').trim();
+    if (!fullNameConf) {
+      try {
+        const { data: p } = await sbAdmin
+          .from('profiles').select('full_name').eq('id', userId).maybeSingle();
+        if (p?.full_name) fullNameConf = p.full_name;
+      } catch (e) { /* sin fullName, el template usa "alumna/o" */ }
+    }
+
+    confirmationDelivery = await sendConfirmationEmail({
+      email,
+      fullName: fullNameConf || undefined,
+      courseTitle: courseTitleConf,
+    });
+    if (!confirmationDelivery.ok) {
+      console.warn('process-payment: confirmation email falló (sigo):', confirmationDelivery.error);
+    }
+  }
+
   // ── 6) Etapa X.20: email de bienvenida con MAGIC LINK (sin contraseña visible) ──
   // Solo cuando createUser arriba devolvió un id real (tempPassword set, alumno
   // nuevo creado en este request). Para usuarios pre-existentes saltamos esto —
@@ -610,10 +719,16 @@ serve(async (req: Request) => {
     course_id,
     payment_method,
     external_ref,
-    invite_skipped:    inviteSkippedReason || undefined,
+    invite_skipped:     inviteSkippedReason || undefined,
     magic_link_skipped: magicLinkSkipped || undefined,
-    welcome_email:     emailDelivery
+    welcome_email:      emailDelivery
       ? (emailDelivery.ok ? 'sent' : `failed: ${emailDelivery.error}`)
       : (tempPassword ? 'skipped_no_magic_link' : 'not_needed'),
+    // Etapa X.27 — email de confirmación para alumnos existentes comprando otro curso.
+    // 'sent' / 'failed: ...' si se envió o intentó; 'not_needed' si era usuario nuevo
+    // (en ese caso el welcome_email de arriba cubre el aviso).
+    confirmation_email: confirmationDelivery
+      ? (confirmationDelivery.ok ? 'sent' : `failed: ${confirmationDelivery.error}`)
+      : 'not_needed',
   });
 });

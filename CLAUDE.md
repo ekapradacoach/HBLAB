@@ -529,6 +529,40 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.27 — Email de CONFIRMACIÓN para alumnos existentes:**
+
+Problema previo: cuando un alumno con cuenta ya creada compraba un curso adicional, el flujo X.20 lo manejaba bien técnicamente (no le pedía contraseña ni le mandaba magic link), pero **no recibía ningún email de aviso**. El curso aparecía mágicamente en su dashboard la próxima vez que entrara, sin notificación previa. UX poco clara — si tarda en entrar al dashboard, no se entera que el pago se procesó.
+
+**Solución**: nueva función `sendConfirmationEmail({ email, fullName, courseTitle })` que se dispara cuando se detecta el caso "usuario existente compró otro curso". Sin magic link, sin contraseña visible — solo un aviso con CTA al dashboard.
+
+**Disparador**: en `process-payment`, en el **paso 5.5** (entre el UPSERT exitoso y el bloque del welcome email), condicional `if (inviteSkippedReason && !tempPassword)`. Las dos condiciones a la vez identifican exactamente al caso "usuario existente":
+- `inviteSkippedReason` está set → el lookup primario en `profiles.email` (paso 4.a) encontró al usuario, o el `createUser` retornó "already exists".
+- `!tempPassword` → no se creó cuenta nueva en este request (si fuera nuevo, `tempPassword` estaría set y el welcome email del paso 6 cubriría el aviso).
+
+**Contenido del email**:
+- **Subject**: `✅ Nuevo curso activado — {courseTitle}`.
+- **From**: `HB Lab <noreply@hblabarg.com>` (mismo que welcome email).
+- **Body** (HTML inline-styled, mismo estilo dark que welcome email):
+  - Header: "✅ Nuevo curso activado en HB Lab".
+  - Saludo: "Hola {fullName || 'alumna/o'}, tu acceso al curso **{courseTitle}** ya está activo. Entrá a tu dashboard para empezar."
+  - **CTA principal**: botón lime "Ir al dashboard →" linkeando a `https://hblabarg.com/dashboard.html`.
+  - Fallback con el URL en texto plano por si el botón no renderea.
+  - Recordatorio: "Ingresá con tu email {email} y la contraseña que ya configuraste."
+  - Footer común: "Si tenés alguna pregunta, respondé este email o escribinos a ekapradacoach@gmail.com".
+
+**Resolución del `fullName`**: prioriza los datos del extRef del pago (`nombre + apellido`), y si están vacíos hace lookup en `profiles.full_name` por el `userId` ya resuelto. Si tampoco hay nada → el template usa "alumna/o" como placeholder.
+
+**Resolución del `courseTitle`**: SELECT `courses.title.eq('id', course_id).maybeSingle()` (mismo patrón que el welcome email del paso 6.b).
+
+**Response shape extendido** — `confirmation_email` agregado al objeto de respuesta:
+- `'sent'` — Resend aceptó el envío.
+- `'failed: ...'` — Resend retornó error (rate limit, dominio no verificado, etc.). Logueado en console.warn.
+- `'not_needed'` — el caso no aplica (era usuario nuevo y el welcome_email del paso 6 cubre el aviso).
+
+Si Resend falla, **NO aborta el handler** — el acceso al curso ya quedó registrado en `user_courses` (paso 5). El admin puede reenviar manualmente desde el panel.
+
+**Re-deploy manual requerido** en Supabase Dashboard → Edge Functions → process-payment → Code → pegar el archivo actualizado (734 líneas) → Deploy updates. **No requiere secrets nuevos** — usa el mismo `RESEND_API_KEY` que el welcome email.
+
 **Etapa X.20 — Magic link en el email (reemplaza contraseña temporal visible):**
 
 Problema en X.19: el email incluía la contraseña temporal en texto plano dentro del cuerpo. Riesgo de seguridad obvio (cualquiera con acceso al inbox del alumno la lee), y UX subóptima (el alumno tenía que copiarla y pegarla en login.html). Además dejaba la temp password viviendo en BD por siempre hasta que el alumno la cambiara manualmente.
@@ -735,7 +769,8 @@ Alumno tiene acceso a un curso SOLO SI:
        - **6.a Generar magic link**: `sbAdmin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: 'https://hblabarg.com/set-password.html' } })`. El response trae `data.properties.action_link` con la URL larga que autentica al alumno y lo redirige a `set-password.html`. Si falla → `console.warn` + guarda motivo en `magicLinkSkipped`, NO aborta.
        - **6.b Resolver course title**: SELECT mínima `courses.title.eq('id', course_id).maybeSingle()`.
        - **6.c Enviar email**: `fetch POST https://api.resend.com/emails` con `Authorization: Bearer ${RESEND_API_KEY}`. Body: `{ from: 'HB Lab <noreply@hblabarg.com>', to: email, subject: '🎉 Tu acceso a HB Lab — {courseTitle}', html: <plantilla dark con CTA "Crear mi contraseña →" linkeando al magic link + link de fallback en texto plano + nota de expiración 1h> }`. **La contraseña temporal NO aparece en el email** — el alumno hace click en el botón, queda autenticado vía magic link y aterriza en `set-password.html` donde elige su contraseña personal. Si Resend falla → `console.warn`, NO aborta.
-    7. La response final incluye `invite_skipped` (motivo del skip si el usuario ya existía), `magic_link_skipped` (motivo si la generación de magic link falló) y `welcome_email` (`'sent'` / `'failed: ...'` / `'skipped_no_magic_link'` / `'not_needed'`) para debugging.
+    7. **Email de CONFIRMACIÓN para usuarios existentes (Etapa X.27)**: después del UPSERT y antes del bloque del welcome email, si `inviteSkippedReason && !tempPassword` (el lookup en profiles encontró al usuario y NO se creó cuenta nueva), se envía un email simple via Resend con `subject: '✅ Nuevo curso activado — {courseTitle}'` y un CTA al dashboard (`https://hblabarg.com/dashboard.html`). Sin magic link, sin contraseña visible. Usa la misma `RESEND_API_KEY`. Resolución del `fullName`: prioriza datos del extRef del pago, fallback a `profiles.full_name`.
+    8. La response final incluye `invite_skipped` (motivo del skip si el usuario ya existía), `magic_link_skipped` (motivo si la generación de magic link falló), `welcome_email` (`'sent'` / `'failed: ...'` / `'skipped_no_magic_link'` / `'not_needed'`) y `confirmation_email` (`'sent'` / `'failed: ...'` / `'not_needed'`) para debugging.
 
 **⚠️ Estado actual: PENDIENTE de deploy.** El código está listo en el repo pero las funciones no están desplegadas todavía. El CLI de Supabase tiene problemas en Windows, así que el deploy se hace **manualmente desde el dashboard**:
 
