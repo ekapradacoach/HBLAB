@@ -3808,7 +3808,7 @@
     // Cache local + filtros en memoria por curso, mes, moneda + export CSV.
     // ══════════════════════════════════════════════
     let _ventas             = [];   // cache de filas crudas
-    let _ventasFilterCurso  = '';   // course_id (UUID) o ''
+    let _ventasFilterCurso  = '';   // course_title (string) o '' — desde X.26, el RPC get_ventas no expone course_id
     let _ventasFilterMes    = '';   // 'YYYY-MM' o ''
     let _ventasFilterMoneda = '';   // 'ARS' | 'USD' | ''
 
@@ -3817,87 +3817,58 @@
       if (!tbody) return;
       tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Cargando...</td></tr>`;
 
-      // Etapa X.16.1: el JOIN de PostgREST `profiles(email)` falla con
-      //   "Could not find a relationship between 'user_courses' and 'profiles'"
-      // porque user_courses.user_id apunta a auth.users(id), no a profiles(id) —
-      // PostgREST no detecta el FK indirecto. Reemplazado por 3 queries separadas
-      // (user_courses + lookups por user_id y course_id) y merge client-side.
+      // Etapa X.26 — RPC `get_ventas()` SECURITY DEFINER reemplaza las 3 queries
+      // separadas de X.16.1/X.25. El RPC bypassea la RLS de profiles (que bloqueaba
+      // lecturas cruzadas) y retorna las columnas ya enriquecidas:
+      //   enrolled_at · full_name · email · course_title · amount_paid · currency ·
+      //   payment_method · payment_status · status
+      // Como no podemos encadenar modificadores PostgREST sobre sb.rpc(), filtramos
+      // por payment_status='paid' y ordenamos por enrolled_at desc en JS.
+      const { data, error } = await sb.rpc('get_ventas');
 
-      // 1) Filas crudas de user_courses
-      const { data: ucData, error: ucErr } = await sb
-        .from('user_courses')
-        .select('id, user_id, course_id, enrolled_at, amount_paid, currency, payment_method')
-        .eq('payment_status', 'paid')
-        .order('enrolled_at', { ascending: false });
-
-      if (ucErr) {
-        console.error('loadVentas[user_courses]:', ucErr);
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Error al cargar ventas: ${ucErr.message}</td></tr>`;
+      if (error) {
+        console.error('loadVentas[get_ventas]:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Error al cargar ventas: ${error.message}</td></tr>`;
         _ventas = [];
         return;
       }
 
-      const rows = ucData || [];
-      const userIds   = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
-      const courseIds = [...new Set(rows.map(r => r.course_id).filter(Boolean))];
-
-      // 2) Lookups paralelos: profiles por user_id, courses por course_id.
-      // Etapa X.25 — además de email pedimos full_name como fallback. Hay usuarios
-      // viejos sin email en profiles (el trigger nuevo lo persiste solo desde X.19;
-      // los pre-existentes esperan el backfill anotado como pendiente). Si email es
-      // null/vacío, mostramos el nombre completo del alumno en su lugar.
-      //
-      // NO usamos el embed `profiles(email)` en el SELECT principal porque
-      // user_courses.user_id → auth.users(id), no profiles(id), y PostgREST no
-      // detecta el FK indirecto (Etapa X.16.1 — falla con "Could not find a
-      // relationship between 'user_courses' and 'profiles' in the schema cache").
-      const [profilesRes, coursesRes] = await Promise.all([
-        userIds.length
-          ? sb.from('profiles').select('id, email, full_name').in('id', userIds)
-          : Promise.resolve({ data: [], error: null }),
-        courseIds.length
-          ? sb.from('courses').select('id, title').in('id', courseIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      if (profilesRes.error) console.warn('loadVentas[profiles]:', profilesRes.error);
-      if (coursesRes.error)  console.warn('loadVentas[courses]:',  coursesRes.error);
-
-      // Mapa id → { email, full_name } para resolver el display name del alumno
-      const infoByUser = {};
-      (profilesRes.data || []).forEach(p => {
-        infoByUser[p.id] = { email: p.email || '', full_name: p.full_name || '' };
+      const rows = (data || []).filter(r => (r.payment_status || '').toLowerCase() === 'paid');
+      // Ordenamos client-side por fecha desc (la RPC puede no garantizar orden)
+      rows.sort((a, b) => {
+        const ta = a.enrolled_at ? new Date(a.enrolled_at).getTime() : 0;
+        const tb = b.enrolled_at ? new Date(b.enrolled_at).getTime() : 0;
+        return tb - ta;
       });
-      const titleByCourse = {};
-      (coursesRes.data || []).forEach(c => { titleByCourse[c.id] = c.title || ''; });
 
-      // 3) Merge client-side. El campo `email` ahora contiene la cascada
-      // email → full_name → '(sin datos)' para que el alumno se identifique aunque
-      // profiles.email esté vacío. La columna "Alumno" del header lo refleja bien.
+      // Map al shape interno de _ventas. El campo `email` mantiene la cascada
+      // de X.25: email → full_name → '(sin datos)' para identificar al alumno
+      // incluso si profiles.email está vacío para usuarios viejos pre-X.19.
+      // course_id queda null (el RPC no lo devuelve); el filtro de curso
+      // compara por course_title — ver _filteredVentas.
       _ventas = rows.map(r => {
-        const info = infoByUser[r.user_id] || { email: '', full_name: '' };
-        const display = info.email || info.full_name || '(sin datos)';
+        const display = r.email || r.full_name || '(sin datos)';
         return {
           enrolled_at:    r.enrolled_at,
           email:          display,
-          course_id:      r.course_id || null,
-          course_title:   titleByCourse[r.course_id] || '(curso eliminado)',
+          course_id:      null,
+          course_title:   r.course_title || '(curso eliminado)',
           amount_paid:    Number(r.amount_paid || 0),
           currency:       r.currency || 'ARS',
           payment_method: r.payment_method || '—',
         };
       });
 
-      // Poblar el selector de cursos (únicos)
+      // Poblar el selector de cursos por TÍTULO (X.26: la RPC get_ventas no
+      // devuelve course_id, así que el filtro de curso ahora matchea por title).
       const cursoSel = document.getElementById('ventas-filter-curso');
       if (cursoSel) {
-        const seen = new Map();
-        _ventas.forEach(v => { if (v.course_id && !seen.has(v.course_id)) seen.set(v.course_id, v.course_title); });
+        const titulosSet = new Set();
+        _ventas.forEach(v => { if (v.course_title) titulosSet.add(v.course_title); });
+        const titulos = Array.from(titulosSet).sort((a, b) => a.localeCompare(b, 'es'));
         const current = cursoSel.value;
         cursoSel.innerHTML = '<option value="">Todos los cursos</option>' +
-          Array.from(seen.entries())
-            .sort((a,b) => a[1].localeCompare(b[1], 'es'))
-            .map(([id, title]) => `<option value="${id}">${escapeAttr(title)}</option>`).join('');
+          titulos.map(t => `<option value="${escapeAttr(t)}">${escapeAttr(t)}</option>`).join('');
         if (current) cursoSel.value = current;
       }
 
@@ -3928,7 +3899,8 @@
 
     function _filteredVentas() {
       return _ventas.filter(v => {
-        if (_ventasFilterCurso  && v.course_id !== _ventasFilterCurso) return false;
+        // X.26: matcheo por course_title (la RPC get_ventas no devuelve course_id).
+        if (_ventasFilterCurso  && v.course_title !== _ventasFilterCurso) return false;
         if (_ventasFilterMes    && (v.enrolled_at || '').slice(0, 7) !== _ventasFilterMes) return false;
         if (_ventasFilterMoneda && v.currency !== _ventasFilterMoneda) return false;
         return true;
@@ -4110,9 +4082,10 @@
       const byCourse = {};
       _ventas.forEach(v => {
         if (v.currency && v.currency !== 'ARS') return;   // ranking solo ARS
-        const key = v.course_id || '__sin_id__';
+        // X.26: agrupamos por course_title (la RPC get_ventas no devuelve course_id).
+        const key = v.course_title || '(sin título)';
         if (!byCourse[key]) {
-          byCourse[key] = { title: v.course_title, count: 0, revenue: 0 };
+          byCourse[key] = { title: key, count: 0, revenue: 0 };
         }
         byCourse[key].count++;
         byCourse[key].revenue += Number(v.amount_paid || 0);
