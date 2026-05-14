@@ -15,6 +15,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
+  <!-- PayPal JS SDK (Etapa X.29) — client_id público (sin secret), USD, intent=capture -->
+  <script src="https://www.paypal.com/sdk/js?client-id=AcRIf9eRcMlbnVK6xVxYDjtBeLcQC43bnEx_Z82v42Aq1wV2U2SRGK9-KaQI8hMEXgwUQebOWBC0nA53&currency=USD&intent=capture" defer></script>
+
   <style>
     :root {
       --bg:           #1E2A3A;
@@ -322,6 +325,10 @@
         <button class="btn-continue" id="btn-continue" disabled onclick="goToPayment()">
           Continuar al pago →
         </button>
+
+        <!-- PayPal Buttons container (Etapa X.29). Oculto hasta que goToPayment() lo active en el branch USD. -->
+        <div id="paypal-button-container" style="display:none; margin-top:14px;"></div>
+        <div id="paypal-error" style="display:none; margin-top:10px; padding:10px 14px; background:rgba(252,129,129,0.08); border:1px solid rgba(252,129,129,0.32); border-radius:8px; color:var(--red); font-size:0.86rem;"></div>
 
         <div class="redirect-msg" id="redirect-msg">
           <p>🔒 Redirigiendo al medio de pago… Una vez aprobado el pago recibirás un email con tus accesos.</p>
@@ -730,9 +737,144 @@
           btn.textContent = 'Continuar al pago →';
         }
       } else {
-        // ── PayPal — placeholder (Etapa X.13 cubre solo ARS/MP) ──
-        setTimeout(() => { window.location.href = '#paypal-pending'; }, 1200);
+        // ── PayPal (Etapa X.29) — botones JS SDK ──────────
+        // El click en "Continuar al pago →" en moneda USD oculta el botón propio
+        // y monta los botones oficiales de PayPal en #paypal-button-container.
+        // Luego el alumno hace click en el botón PayPal, se abre el popup oficial,
+        // confirma el pago, y onApprove redirige a checkout-success.html.
+        // El webhook /v2/checkout/orders/{id} → process-payment ya está listo (X.28)
+        // y procesa el acceso al curso server-side (UPSERT user_courses + emails).
+        try {
+          btn.style.display = 'none';
+          document.getElementById('redirect-msg').classList.remove('show');
+          mountPayPalButtons({ nombre, apellido, email });
+        } catch (e) {
+          console.error('goToPayment USD error:', e);
+          showPayPalError('No se pudo iniciar PayPal: ' + (e.message || e));
+          btn.style.display = '';
+          btn.disabled = false;
+          btn.textContent = 'Continuar al pago →';
+        }
       }
+    }
+
+    /* ══════════════════════════════════════════════════
+       Etapa X.29 — PayPal Buttons SDK
+       Monta el botón oficial de PayPal en #paypal-button-container.
+       - createOrder: fetch a la Edge Function `create-paypal-order` que
+         usa client_id+secret server-side y devuelve { order_id }.
+       - onApprove: SDK captura la order vía actions.order.capture() (no expone
+         secrets). Tras capture exitoso, redirige a checkout-success.html.
+       - El webhook PayPal → process-payment (Etapa X.28) registra el acceso
+         al curso en user_courses + manda los emails. Funcionan en paralelo
+         (el redirect es UX inmediata; el webhook cierra el flujo server-side).
+    ══════════════════════════════════════════════════ */
+    let _paypalMounted = false;
+
+    function showPayPalError(msg) {
+      const el = document.getElementById('paypal-error');
+      if (!el) return;
+      el.textContent = '❌ ' + msg;
+      el.style.display = '';
+    }
+
+    function clearPayPalError() {
+      const el = document.getElementById('paypal-error');
+      if (el) { el.textContent = ''; el.style.display = 'none'; }
+    }
+
+    function mountPayPalButtons({ nombre, apellido, email }) {
+      if (typeof paypal === 'undefined') {
+        showPayPalError('El SDK de PayPal no está disponible. Recargá la página.');
+        return;
+      }
+      const wrap = document.getElementById('paypal-button-container');
+      if (!wrap) return;
+      wrap.style.display = '';
+
+      if (_paypalMounted) return;  // ya montados — no duplicar
+      _paypalMounted = true;
+
+      paypal.Buttons({
+        style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
+
+        // ── 1) Crear orden vía Edge Function ───────────
+        // No usamos actions.order.create del lado cliente porque expondría
+        // datos sensibles del comprador. La Edge Function autentica con
+        // PAYPAL_CLIENT_SECRET y devuelve el order_id.
+        createOrder: async () => {
+          clearPayPalError();
+          const fnUrl = 'https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/create-paypal-order';
+          const res = await fetch(fnUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
+            },
+            body: JSON.stringify({
+              course_id: _course.id,
+              amount:    _finalPrice,
+              nombre,
+              apellido,
+              email,
+            }),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`create-paypal-order ${res.status}: ${txt}`);
+          }
+          const data = await res.json();
+          if (!data?.order_id) throw new Error('La Edge Function no devolvió order_id.');
+          return data.order_id;
+        },
+
+        // ── 2) Capturar la orden tras aprobación ───────
+        // actions.order.capture() usa la sesión autenticada del comprador en
+        // PayPal (no expone secrets). Tras capture exitoso → redirect a success.
+        onApprove: async (data, actions) => {
+          clearPayPalError();
+          try {
+            const details = await actions.order.capture();
+            // Sanity check: el status debería ser COMPLETED.
+            if (details?.status !== 'COMPLETED') {
+              console.warn('PayPal onApprove: capture status no COMPLETED:', details);
+            }
+            // El webhook PAYMENT.CAPTURE.COMPLETED dispara process-payment
+            // server-side. Acá solo redirigimos al success por UX inmediata.
+            window.location.href = 'checkout-success.html';
+          } catch (e) {
+            console.error('PayPal onApprove error:', e);
+            showPayPalError('Hubo un problema al confirmar el pago: ' + (e.message || e));
+            // Permitir reintentar mostrando el botón propio
+            const btn = document.getElementById('btn-continue');
+            if (btn) { btn.style.display = ''; btn.disabled = false; btn.textContent = 'Continuar al pago →'; }
+            document.getElementById('paypal-button-container').style.display = 'none';
+            _paypalMounted = false;
+          }
+        },
+
+        // ── 3) Errores del SDK / cancelación ───────────
+        onError: (err) => {
+          console.error('PayPal SDK onError:', err);
+          showPayPalError('Hubo un error con PayPal. Intentá de nuevo o probá con otra moneda.');
+          const btn = document.getElementById('btn-continue');
+          if (btn) { btn.style.display = ''; btn.disabled = false; btn.textContent = 'Continuar al pago →'; }
+          document.getElementById('paypal-button-container').style.display = 'none';
+          _paypalMounted = false;
+        },
+
+        onCancel: () => {
+          // Buyer cerró el popup. Restablecer la UI para reintentar.
+          const btn = document.getElementById('btn-continue');
+          if (btn) { btn.style.display = ''; btn.disabled = false; btn.textContent = 'Continuar al pago →'; }
+          document.getElementById('paypal-button-container').style.display = 'none';
+          _paypalMounted = false;
+        },
+      }).render('#paypal-button-container').catch(err => {
+        console.error('PayPal render error:', err);
+        showPayPalError('No se pudo cargar PayPal. Probá recargar la página.');
+        _paypalMounted = false;
+      });
     }
   </script>
 

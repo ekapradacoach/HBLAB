@@ -529,6 +529,44 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.29 — Botones PayPal SDK en checkout.html + Edge Function `create-paypal-order`:**
+
+Cierra el flujo USD end-to-end. Hasta X.28 el backend (`process-payment`) ya manejaba el webhook `PAYMENT.CAPTURE.COMPLETED` real de PayPal, pero el frontend seguía cayendo al placeholder `#paypal-pending`. Esta etapa monta los **PayPal Buttons** oficiales en `checkout.html` y agrega la Edge Function que crea la order del lado servidor.
+
+**Por qué dos lados (frontend + server)**: el `PAYPAL_CLIENT_SECRET` no puede vivir en el cliente. Por eso la **creación** de la order (que requiere OAuth con el secret) se hace en `create-paypal-order` Edge Function. La **captura** post-aprobación sí se puede hacer client-side vía `actions.order.capture()` del SDK — usa la sesión autenticada del comprador (popup PayPal), no el secret de la app.
+
+**Frontend (`checkout.html`)**:
+- SDK en `<head>`: `<script src="https://www.paypal.com/sdk/js?client-id=AcRIf9eRcMlbnVK6xVxYDjtBeLcQC43bnEx_Z82v42Aq1wV2U2SRGK9-KaQI8hMEXgwUQebOWBC0nA53&currency=USD&intent=capture" defer></script>`. El client-id es **público** (a diferencia del secret) — se puede leer del Dashboard PayPal Developer → My Apps.
+- HTML nuevo bajo el `btn-continue`: `<div id="paypal-button-container" style="display:none; margin-top:14px;"></div>` + `<div id="paypal-error">` para errores inline en rojo.
+- `goToPayment()` rama USD reemplaza el placeholder por: oculta `btn-continue`, limpia `#redirect-msg`, llama `mountPayPalButtons({ nombre, apellido, email })`.
+- `mountPayPalButtons` (guard global `_paypalMounted` evita doble render):
+  - **`createOrder`**: `fetch POST https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/create-paypal-order` con body `{ course_id: _course.id, amount: _finalPrice, nombre, apellido, email }`. Espera `{ ok: true, order_id }`. Retorna el `order_id` al SDK.
+  - **`onApprove(data, actions)`**: `await actions.order.capture()` (lado cliente — usa la sesión del popup PayPal). Luego redirige a `checkout-success.html`. **No espera al webhook**: el webhook `PAYMENT.CAPTURE.COMPLETED` corre en paralelo del lado servidor y registra el `user_courses` + manda emails (X.27/X.28). El alumno ya ve la pantalla de éxito mientras eso ocurre.
+  - **`onError(err)`**: `showPayPalError(...)`, restaura `btn-continue` para reintentar, loguea por consola.
+  - **`onCancel(data)`**: silencioso — solo restaura `btn-continue`. El alumno cerró el popup, no es error.
+- Helpers: `showPayPalError(msg)` (muestra `#paypal-error` rojo), `clearPayPalError()` (oculta).
+
+**Diseño dual-track**: el redirect a `checkout-success.html` da feedback **inmediato** al alumno; el webhook PayPal → `process-payment` registra el acceso server-side de forma **idempotente** (UPSERT `user_courses` con `onConflict`). Si el webhook tarda unos segundos, el alumno ya está en la pantalla de éxito; cuando entre al dashboard el curso aparece. Si el webhook fallara, el admin puede asignar manualmente — el cobro en PayPal igual quedó hecho.
+
+**Edge Function `create-paypal-order/index.ts`** (~180 líneas, ver `supabase/functions/create-paypal-order/index.ts`):
+- `verify_jwt = false` — la página de checkout es pública.
+- POST `{ course_id, amount, nombre, apellido, email }`. Valida `course_id`, `email`, `amount > 0`, `amount < 999999`.
+- OAuth via `getPayPalAccessToken()` (espejo del de process-payment): `Basic ${btoa(client_id:secret)}` contra `/v1/oauth2/token`.
+- Body de la order: `intent: 'CAPTURE'`, `purchase_units[0]: { amount: { currency_code: 'USD', value: amount.toFixed(2) }, custom_id: course_id, description: 'Acceso al curso en HB Lab' }`. **`custom_id` es crítico** — `process-payment` lo lee al recibir el webhook para resolver qué curso comprar.
+- `application_context`: `brand_name: 'HB Lab'`, `user_action: 'PAY_NOW'`, `shipping_preference: 'NO_SHIPPING'`.
+- `payer.name` y `payer.email_address` opcionales — pre-poblan el popup PayPal pero el comprador puede usar otra cuenta.
+- POST a `/v2/checkout/orders` con `Bearer ${token}`. Retorna `{ ok: true, order_id, status: 'CREATED' }`.
+
+**Configuración `supabase/config.toml`**: agregado `[functions.create-paypal-order] verify_jwt = false`.
+
+**Pre-requisitos antes del primer pago real**:
+1. Secrets en Supabase → Edge Functions → Manage Secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_ENV` opcional (default `live`).
+2. Deploy manual de `create-paypal-order` via Dashboard → Edge Functions → New function → "Via Editor" → pegar `supabase/functions/create-paypal-order/index.ts` → Deploy.
+3. Webhook configurado en PayPal Developer Dashboard → Webhooks apuntando a `https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment` con eventos `CHECKOUT.ORDER.APPROVED` y `PAYMENT.CAPTURE.COMPLETED`.
+4. `process-payment` ya desplegado con el branch PayPal de X.28.
+
+---
+
 **Etapa X.28 — Integración PayPal real (reemplaza placeholder):**
 
 Hasta esta etapa el branch PayPal de `process-payment` parseaba el payload del webhook directamente y la verificación de firma siempre fallaba con `PAYMENTS_ALLOW_UNVERIFIED=1` como bypass para dev. Ahora la integración usa la API real de PayPal igual que el branch MP.
@@ -798,10 +836,11 @@ Alumno tiene acceso a un curso SOLO SI:
 
 ## Edge Functions de Supabase
 
-**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay tres funciones listas en el repo:
+**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay cuatro funciones listas en el repo:
 
 - **`invite-coach`** — `verify_jwt = true`. POST `{ email, role }`. Verifica que el caller sea admin (lee JWT del Authorization), llama `auth.admin.inviteUserByEmail(email, { redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html' })` con la service role key, hace UPSERT en `profiles.role`. Retorna `{ ok, user_id, email, role }`. El `redirectTo` (Etapa X.17.1) garantiza que el botón del email apunte a `set-password.html` independiente del Site URL.
 - **`create-preference`** — `verify_jwt = false`. POST `{ slug, email, nombre, apellido, amount, coupon_code }`. Resuelve el `course` por slug (con service role para bypassear RLS), llama a `https://api.mercadopago.com/checkout/preferences` con `MP_ACCESS_TOKEN`, devuelve `{ ok, init_point, sandbox_init_point, preference_id }` al cliente. El cliente redirige a `init_point`. El webhook de MP llega luego a `process-payment`. Etapa X.13.
+- **`create-paypal-order`** — `verify_jwt = false`. POST `{ course_id, amount, nombre, apellido, email }`. Espejo de `create-preference` para PayPal. Hace OAuth2 con `PAYPAL_CLIENT_ID:PAYPAL_CLIENT_SECRET` contra `${PAYPAL_API_BASE}/v1/oauth2/token`, luego `POST /v2/checkout/orders` con `intent: 'CAPTURE'`, `purchase_units[0]: { amount: { currency_code: 'USD', value: amount.toFixed(2) }, custom_id: course_id }`, y `payer: { name, email_address }` si fueron provistos. Retorna `{ ok, order_id, status }`. El SDK PayPal del cliente recibe el `order_id`, abre el popup oficial, y al aprobar dispara el webhook `PAYMENT.CAPTURE.COMPLETED` → process-payment. Etapa X.29. Secrets requeridos: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` (opcional, default `live`).
 - **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal **+ entry point del cupón 100% off** (Etapa X.14). Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev). Tres branches según el provider:
   - **MP** (Etapa X.16 — fix crítico): el webhook real de MP solo trae `{ action, data: { id }, type, user_id }` — NO incluye email/amount/external_reference. Por eso process-payment ahora hace `GET https://api.mercadopago.com/v1/payments/{data.id}` con `Authorization: Bearer ${MP_ACCESS_TOKEN}` para enriquecer el pago. Si `payment.status !== 'approved'` (pending, in_process, rejected, etc.) → retorna `{ ok: true, skipped: true, reason: 'status=...' }` con HTTP 200 para que MP no reintente. Si está aprobado, parsea `payment.external_reference` (JSON con `{ slug, email, nombre, apellido, coupon_code, course_id }` que `create-preference` armó al crear la preference), resuelve `course_id` por slug y arma el `NormalizedPayment`. Si el webhook llega sin `data.id` (eventos secundarios tipo test/refund) responde 200 con `skipped: true` también, sin error.
   - **PayPal** (Etapa X.28 — integración real): igual que MP, el webhook real de PayPal solo trae `{ resource: { id }, ... }`. Process-payment hace `GET ${PAYPAL_API_BASE}/v2/checkout/orders/{orderId}` con `Authorization: Bearer ${access_token}` (obtenido via `getPayPalAccessToken()` → OAuth2 con Basic Auth `client_id:secret` contra `/v1/oauth2/token`). El `orderId` viene de `payload.resource.supplementary_data.related_ids.order_id` (eventos CAPTURE.*) o fallback a `payload.resource.id` (eventos CHECKOUT.ORDER.*). Solo procesa si `order.status === 'COMPLETED'` O `order.intent === 'CAPTURE'` con `captures[].status === 'COMPLETED'` — sino skip silencioso con 200. Extrae: `email = order.payer.email_address`, `course_id = order.purchase_units[0].custom_id` (UUID del curso seteado por `create-paypal-order`), `amount = unit.amount.value`, `currency = unit.amount.currency_code`, `nombre = order.payer.name.given_name`, `apellido = order.payer.name.surname`. La verificación de firma (`verifySignature`) llama a `/v1/notifications/verify-webhook-signature` con los 5 headers (`paypal-transmission-id/-time/-cert-url/-auth-algo/-transmission-sig`) + `webhook_id = PAYPAL_WEBHOOK_ID` + `webhook_event` (payload parseado a objeto). Solo si `verification_status === 'SUCCESS'` continúa.

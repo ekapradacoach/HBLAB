@@ -1,0 +1,178 @@
+// supabase/functions/create-paypal-order/index.ts
+//
+// Etapa X.29 — Edge Function: crear una order de PayPal con el server-side
+// secret (PAYPAL_CLIENT_SECRET) y devolver el order_id al frontend.
+//
+// El frontend (`checkout.html` rama USD) la llama desde el callback `createOrder`
+// del PayPal Buttons SDK. El secret NUNCA llega al cliente — la Edge Function
+// hace OAuth contra /v1/oauth2/token y luego POST /v2/checkout/orders con el
+// access token.
+//
+// Tras la aprobación del comprador (popup PayPal), `onApprove` del SDK captura
+// la order con `actions.order.capture()` (no requiere secret — usa la sesión
+// del comprador). El webhook PAYMENT.CAPTURE.COMPLETED dispara process-payment
+// (Etapa X.28) que registra el acceso en user_courses + manda emails.
+//
+// Despliegue manual: Supabase Dashboard → Edge Functions → New function →
+// `create-paypal-order` → Via Editor → pegar este archivo → Deploy.
+// Secrets requeridos: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV (opcional).
+// `verify_jwt = false` — la página de checkout es pública.
+
+// @ts-ignore — Deno std
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+
+// ── Helpers ───────────────────────────────────────────────
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'access-control-allow-origin':  '*',
+      'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+      'access-control-allow-methods': 'POST, OPTIONS',
+    },
+  });
+const errOut = (msg: string, status = 400) => json({ error: msg }, status);
+
+// ── PayPal env / API base ─────────────────────────────────
+const _paypalEnv: 'sandbox' | 'live' = (Deno.env.get('PAYPAL_ENV') === 'sandbox') ? 'sandbox' : 'live';
+const PAYPAL_API_BASE = _paypalEnv === 'sandbox'
+  ? 'https://api-m.sandbox.paypal.com'
+  : 'https://api-m.paypal.com';
+
+// ── OAuth helper (espejo del de process-payment) ──────────
+async function getPayPalAccessToken(): Promise<{ token: string | null; error?: string }> {
+  const clientId = Deno.env.get('PAYPAL_CLIENT_ID');
+  const secret   = Deno.env.get('PAYPAL_CLIENT_SECRET');
+  if (!clientId || !secret) {
+    return { token: null, error: 'PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET no configurados en env' };
+  }
+  const basic = btoa(`${clientId}:${secret}`);
+  try {
+    const r = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basic}`,
+        'Content-Type':  'application/x-www-form-urlencoded',
+        'Accept':        'application/json',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      return { token: null, error: `OAuth HTTP ${r.status}: ${txt}` };
+    }
+    const data = await r.json();
+    return { token: data?.access_token || null, error: data?.access_token ? undefined : 'sin access_token en response' };
+  } catch (e: any) {
+    return { token: null, error: 'OAuth excepción: ' + (e?.message || String(e)) };
+  }
+}
+
+// ── Handler ───────────────────────────────────────────────
+interface CreateOrderRequest {
+  course_id?: string;
+  amount?:    number | string;
+  nombre?:    string;
+  apellido?:  string;
+  email?:     string;
+}
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return json({ ok: true });
+  if (req.method !== 'POST')    return errOut('Método no permitido. Usar POST.', 405);
+
+  // ── 1) Parsear body ───────────────────────────────────
+  let body: CreateOrderRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return errOut('Body inválido: se esperaba JSON.');
+  }
+
+  const courseId = (body.course_id || '').trim();
+  const amount   = Number(body.amount || 0);
+  const nombre   = (body.nombre   || '').trim();
+  const apellido = (body.apellido || '').trim();
+  const email    = (body.email    || '').trim().toLowerCase();
+
+  // ── 2) Validaciones ───────────────────────────────────
+  if (!courseId)         return errOut('course_id es obligatorio.');
+  if (!email)            return errOut('email es obligatorio.');
+  if (!(amount > 0))     return errOut('amount debe ser un número mayor a 0.');
+  if (amount > 999999)   return errOut('amount fuera de rango.');
+
+  // ── 3) Obtener access token de PayPal ─────────────────
+  const { token, error: tokErr } = await getPayPalAccessToken();
+  if (!token) {
+    console.error('create-paypal-order: OAuth falló —', tokErr);
+    return errOut('No se pudo autenticar contra PayPal: ' + (tokErr || 'unknown'), 502);
+  }
+
+  // ── 4) Construir el body de la order ──────────────────
+  // PayPal exige `value` como string con 2 decimales para USD.
+  const amountStr = amount.toFixed(2);
+
+  // El nombre del comprador es opcional. PayPal lo usa para pre-poblar el
+  // formulario del popup; igual el alumno puede cambiarlo. El email también
+  // es opcional pero útil para que process-payment lo recupere desde el
+  // webhook (en payer.email_address). Si el alumno usa otra cuenta PayPal,
+  // PayPal devolverá el email de esa cuenta — nosotros leemos lo que venga.
+  const orderBody: any = {
+    intent: 'CAPTURE',
+    purchase_units: [
+      {
+        amount: {
+          currency_code: 'USD',
+          value:         amountStr,
+        },
+        custom_id: courseId,              // UUID del curso → process-payment lo lee
+        description: 'Acceso al curso en HB Lab',
+      },
+    ],
+    application_context: {
+      brand_name:       'HB Lab',
+      user_action:      'PAY_NOW',
+      shipping_preference: 'NO_SHIPPING',
+    },
+  };
+
+  if (nombre || apellido) {
+    orderBody.payer = orderBody.payer || {};
+    orderBody.payer.name = {};
+    if (nombre)   orderBody.payer.name.given_name = nombre;
+    if (apellido) orderBody.payer.name.surname    = apellido;
+  }
+  if (email) {
+    orderBody.payer = orderBody.payer || {};
+    orderBody.payer.email_address = email;
+  }
+
+  // ── 5) POST /v2/checkout/orders ───────────────────────
+  try {
+    const r = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+      },
+      body: JSON.stringify(orderBody),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error('create-paypal-order: PayPal API falló —', r.status, txt);
+      return errOut(`PayPal /v2/checkout/orders → HTTP ${r.status}: ${txt}`, 502);
+    }
+    const data = await r.json();
+    const orderId = data?.id;
+    if (!orderId) {
+      console.error('create-paypal-order: PayPal response sin id —', data);
+      return errOut('PayPal no devolvió order_id.', 502);
+    }
+    return json({ ok: true, order_id: orderId, status: data?.status || 'CREATED' });
+  } catch (e: any) {
+    console.error('create-paypal-order: excepción —', e);
+    return errOut('No se pudo crear la order: ' + (e?.message || String(e)), 500);
+  }
+});

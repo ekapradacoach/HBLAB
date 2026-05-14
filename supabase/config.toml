@@ -47,3 +47,6 @@ verify_jwt = true   # exige JWT válido en el header Authorization (admin token)
 
 [functions.process-payment]
 verify_jwt = false  # webhook público de MP/PayPal — la firma se valida adentro
+
+[functions.create-paypal-order]
+verify_jwt = false  # llamada desde checkout.html (público, sin login) — usa anon key
