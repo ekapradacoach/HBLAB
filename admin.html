@@ -387,6 +387,79 @@
 
     /* ── Stats cards (tab Gestión) ──────────────── */
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; margin-bottom: 36px; }
+
+    /* Etapa X.24 — KPIs financieros del mes actual (Tab Gestión) */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .kpi-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--lime);
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      color: var(--gray-text);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .kpi-delta { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
+    .kpi-delta.up   { color: #4ade80; }
+    .kpi-delta.down { color: #f87171; }
+    .kpi-delta.flat { color: var(--gray-text); }
+
+    /* Etapa X.24 — ranking de cursos */
+    .ranking-list {
+      display: flex; flex-direction: column; gap: 8px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 14px 18px; margin-top: 14px;
+    }
+    .ranking-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 0; border-bottom: 1px solid rgba(47,62,82,0.4);
+      font-size: 0.88rem;
+    }
+    .ranking-row:last-child { border-bottom: none; }
+    .ranking-pos {
+      width: 24px; flex-shrink: 0; font-weight: 800;
+      color: var(--gray-text); text-align: right;
+    }
+    .ranking-row.gold    .ranking-pos { color: var(--lime); }
+    .ranking-row.silver  .ranking-pos { color: var(--violet-light); }
+    .ranking-title { flex: 1; min-width: 0; font-weight: 600; }
+    .ranking-stat  { font-size: 0.78rem; color: var(--gray-text); white-space: nowrap; }
+    .ranking-amount {
+      font-weight: 800; color: var(--lime);
+      white-space: nowrap; min-width: 100px; text-align: right;
+    }
+    .ranking-empty { color: var(--gray-text); font-style: italic; font-size: 0.86rem; padding: 6px 0; }
+
+    /* Etapa X.24 — separador de mes dentro de la tabla de ventas */
+    .ventas-month-sep td {
+      background: rgba(123,79,190,0.08);
+      color: var(--violet-light);
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 8px 12px;
+      border-top: 1px solid rgba(123,79,190,0.2);
+      border-bottom: 1px solid rgba(123,79,190,0.2);
+    }
     .stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 22px; }
     .stat-card::before { content: ''; display: block; height: 3px; background: linear-gradient(90deg, var(--lime), var(--violet)); border-radius: 100px; margin-bottom: 14px; }
     .stat-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-text); margin-bottom: 6px; }
@@ -519,6 +592,11 @@
 
       /* Tab Gestión — stats grid colapsa a 1 columna en mobile */
       .stats-grid { grid-template-columns: 1fr !important; }
+
+      /* Etapa X.24 — KPIs en mobile: 2 columnas */
+      .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      .kpi-value { font-size: 1.3rem; }
+      .kpi-delta { font-size: 1.15rem; }
     }
 
     /* ════════════════════════════════════════════════
@@ -1437,6 +1515,26 @@
 
         <div id="alert-gestion" class="alert"></div>
 
+        <!-- Etapa X.24 — KPIs financieros del mes actual -->
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-value" id="kpi-ingresos-mes">—</div>
+            <div class="kpi-label">💰 Ingresos del mes (ARS)</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-delta flat" id="kpi-delta-mes">—</div>
+            <div class="kpi-label">📈 vs mes anterior</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value" id="kpi-ventas-mes">—</div>
+            <div class="kpi-label">🎟 Ventas del mes</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value" id="kpi-ticket-mes">—</div>
+            <div class="kpi-label">🎯 Ticket promedio</div>
+          </div>
+        </div>
+
         <!-- Tarjetas resumen -->
         <div class="stats-grid">
           <div class="stat-card">
@@ -1512,6 +1610,14 @@
             <span style="color:var(--gray-text);">·</span>
             <strong id="ventas-total-count">0 ventas</strong>
           </div>
+
+          <!-- Etapa X.24 — Ranking de cursos (calculado desde _ventas en memoria) -->
+          <div style="margin-top:20px;">
+            <h4 style="font-size:0.95rem;font-weight:700;margin:0 0 8px;color:var(--white);">🏆 Ranking de cursos por ingresos (ARS)</h4>
+            <div class="ranking-list" id="ranking-cursos-list">
+              <div class="ranking-empty">Aún no hay ventas registradas.</div>
+            </div>
+          </div>
         </div>
 
         <!-- Resultado neto -->
@@ -1528,6 +1634,11 @@
           <div class="resultado-neto-row deduccion">
             <span>− Inversión publicitaria</span>
             <span id="rn-adspend">—</span>
+          </div>
+          <!-- Etapa X.24 — ROI publicitario (ingresos - ad_spend) / ad_spend × 100 -->
+          <div class="resultado-neto-row">
+            <span>ROI publicitario</span>
+            <span id="rn-roi">—</span>
           </div>
           <div class="resultado-neto-divider"></div>
           <div class="resultado-neto-final">
@@ -3791,6 +3902,10 @@
       }
 
       renderVentas();
+      // Etapa X.24 — KPIs del mes + ranking de cursos se computan desde _ventas
+      // (no hace falta query extra; ya tenemos los datos en memoria).
+      renderKPIs();
+      renderRankingCursos();
     }
 
     function _filteredVentas() {
@@ -3825,7 +3940,24 @@
         ? filtered
         : filtered.slice(0, VENTAS_PREVIEW);
 
-      tbody.innerHTML = visible.map(v => {
+      // Etapa X.24 — separador de mes: cuando está expandido y hay ventas de
+      // distintos meses, insertar una fila separadora "── MAYO 2026 ──" cada
+      // vez que cambia el mes. Solo en modo expandido para no romper el preview.
+      const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      let lastMonth = null;
+      const rowsHtml = visible.map(v => {
+        // Insertar separador si cambia el mes (solo en expandido)
+        let sepHtml = '';
+        if (_ventasExpanded && v.enrolled_at) {
+          const ym = v.enrolled_at.slice(0, 7);  // 'YYYY-MM'
+          if (ym !== lastMonth) {
+            const [y, m] = ym.split('-');
+            const label = `── ${MESES_NOMBRE[parseInt(m, 10) - 1] || m} ${y} ──`;
+            sepHtml = `<tr class="ventas-month-sep"><td colspan="6">${escapeAttr(label)}</td></tr>`;
+            lastMonth = ym;
+          }
+        }
+
         const fecha = v.enrolled_at
           ? new Date(v.enrolled_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' })
           : '—';
@@ -3839,7 +3971,7 @@
           coupon:      '🎟 Cupón',
           manual:      '✋ Manual',
         })[metodo] || metodo;
-        return `
+        return `${sepHtml}
           <tr>
             <td style="white-space:nowrap;color:var(--gray-text);font-size:0.84rem;">${fecha}</td>
             <td style="font-size:0.86rem;">${escapeAttr(v.email)}</td>
@@ -3849,6 +3981,7 @@
             <td style="font-size:0.84rem;">${escapeAttr(methodLabel)}</td>
           </tr>`;
       }).join('');
+      tbody.innerHTML = rowsHtml;
 
       _renderVentasTotals(filtered);
       _renderVentasToggle(filtered.length);
@@ -3888,6 +4021,104 @@
       if (arsEl) arsEl.textContent = `$${totARS.toLocaleString('es-AR')} ARS`;
       if (usdEl) usdEl.textContent = `USD ${totUSD.toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
       if (cntEl) cntEl.textContent = `${filtered.length} venta${filtered.length !== 1 ? 's' : ''}`;
+    }
+
+    // ══════════════════════════════════════════════
+    // Etapa X.24 — KPIs financieros del mes actual
+    // Se calculan desde _ventas (ya cargado en memoria). Solo ARS.
+    // ══════════════════════════════════════════════
+    function renderKPIs() {
+      const ingresosEl = document.getElementById('kpi-ingresos-mes');
+      const deltaEl    = document.getElementById('kpi-delta-mes');
+      const ventasEl   = document.getElementById('kpi-ventas-mes');
+      const ticketEl   = document.getElementById('kpi-ticket-mes');
+      if (!ingresosEl || !deltaEl || !ventasEl || !ticketEl) return;
+
+      // Bounds del mes actual y el anterior (ISO start-of-month)
+      const now           = new Date();
+      const currentStart  = new Date(now.getFullYear(), now.getMonth(),     1);
+      const prevStart     = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const nextStart     = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      const filterByRange = (start, end) => _ventas.filter(v => {
+        if (!v.enrolled_at) return false;
+        if (v.currency && v.currency !== 'ARS') return false;     // KPI solo ARS
+        const dt = new Date(v.enrolled_at);
+        return dt >= start && dt < end;
+      });
+
+      const currentMonth = filterByRange(currentStart, nextStart);
+      const prevMonth    = filterByRange(prevStart,    currentStart);
+
+      const ingresosCur = currentMonth.reduce((s, v) => s + v.amount_paid, 0);
+      const ingresosPrev = prevMonth.reduce((s, v) => s + v.amount_paid, 0);
+      const ventasCur   = currentMonth.length;
+      const ticketCur   = ventasCur > 0 ? ingresosCur / ventasCur : 0;
+
+      ingresosEl.textContent = `$${ingresosCur.toLocaleString('es-AR')}`;
+      ventasEl.textContent   = `${ventasCur}`;
+      ticketEl.textContent   = ventasCur > 0 ? `$${Math.round(ticketCur).toLocaleString('es-AR')}` : '—';
+
+      // Delta % vs mes anterior. Si mes anterior = 0 y mes actual > 0 → mostrar "Nuevo"
+      // en lime. Si ambos = 0 → "—" gris. Si ambos > 0 → ((cur - prev) / prev) × 100.
+      let deltaText, deltaClass;
+      if (ingresosPrev === 0 && ingresosCur === 0) {
+        deltaText = '—';   deltaClass = 'flat';
+      } else if (ingresosPrev === 0) {
+        deltaText = '+Nuevo';   deltaClass = 'up';
+      } else {
+        const pct = ((ingresosCur - ingresosPrev) / ingresosPrev) * 100;
+        const rounded = Math.round(pct);
+        if (rounded > 0) {
+          deltaText = `▲ +${rounded}%`;   deltaClass = 'up';
+        } else if (rounded < 0) {
+          deltaText = `▼ ${rounded}%`;    deltaClass = 'down';
+        } else {
+          deltaText = '0%';               deltaClass = 'flat';
+        }
+      }
+      deltaEl.textContent = deltaText;
+      deltaEl.className   = `kpi-delta ${deltaClass}`;
+    }
+
+    // ══════════════════════════════════════════════
+    // Etapa X.24 — Ranking de cursos por ingresos (ARS)
+    // Agrupa _ventas por course_id, suma amount_paid (solo ARS), ordena desc.
+    // ══════════════════════════════════════════════
+    function renderRankingCursos() {
+      const wrap = document.getElementById('ranking-cursos-list');
+      if (!wrap) return;
+
+      const byCourse = {};
+      _ventas.forEach(v => {
+        if (v.currency && v.currency !== 'ARS') return;   // ranking solo ARS
+        const key = v.course_id || '__sin_id__';
+        if (!byCourse[key]) {
+          byCourse[key] = { title: v.course_title, count: 0, revenue: 0 };
+        }
+        byCourse[key].count++;
+        byCourse[key].revenue += Number(v.amount_paid || 0);
+      });
+
+      const ranked = Object.values(byCourse)
+        .filter(r => r.revenue > 0 || r.count > 0)
+        .sort((a, b) => b.revenue - a.revenue);
+
+      if (!ranked.length) {
+        wrap.innerHTML = `<div class="ranking-empty">Aún no hay ventas registradas en ARS.</div>`;
+        return;
+      }
+
+      wrap.innerHTML = ranked.map((r, i) => {
+        const cls = i === 0 ? 'gold' : (i === 1 ? 'silver' : '');
+        return `
+          <div class="ranking-row ${cls}">
+            <span class="ranking-pos">${i + 1}.</span>
+            <span class="ranking-title">${escapeAttr(r.title)}</span>
+            <span class="ranking-stat">${r.count} venta${r.count !== 1 ? 's' : ''}</span>
+            <span class="ranking-amount">$${Math.round(r.revenue).toLocaleString('es-AR')}</span>
+          </div>`;
+      }).join('');
     }
 
     function filterVentas() {
@@ -4266,6 +4497,24 @@
       document.getElementById('rn-ingresos').textContent   = fmtARS(totalARS);
       document.getElementById('rn-comisiones').textContent = fmtARS(totalComisiones);
       document.getElementById('rn-adspend').textContent    = fmtARS(totalAdSpend);
+
+      // Etapa X.24 — ROI publicitario: (ingresos - ad_spend) / ad_spend × 100
+      // Lime si positivo, rojo si negativo, gris "—" si no hay ad_spend.
+      const roiEl = document.getElementById('rn-roi');
+      if (roiEl) {
+        if (totalAdSpend <= 0) {
+          roiEl.textContent = '—';
+          roiEl.style.color = 'var(--gray-text)';
+          roiEl.style.fontStyle = 'italic';
+        } else {
+          const roi = ((totalARS - totalAdSpend) / totalAdSpend) * 100;
+          const rounded = Math.round(roi);
+          roiEl.textContent = `${rounded >= 0 ? '+' : ''}${rounded}%`;
+          roiEl.style.color = roi >= 0 ? 'var(--lime)' : 'var(--red)';
+          roiEl.style.fontStyle = 'normal';
+          roiEl.style.fontWeight = '800';
+        }
+      }
 
       const totalEl = document.getElementById('rn-total');
       totalEl.textContent = fmtARS(ganancia);
