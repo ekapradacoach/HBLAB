@@ -20,6 +20,8 @@
 
 // @ts-ignore — Deno std
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+// @ts-ignore — supabase-js para Deno
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // ── Helpers ───────────────────────────────────────────────
 const json = (body: unknown, status = 200) =>
@@ -71,11 +73,12 @@ async function getPayPalAccessToken(): Promise<{ token: string | null; error?: s
 
 // ── Handler ───────────────────────────────────────────────
 interface CreateOrderRequest {
-  course_id?: string;
-  amount?:    number | string;
-  nombre?:    string;
-  apellido?:  string;
-  email?:     string;
+  course_id?:    string;
+  amount?:       number | string;
+  nombre?:       string;
+  apellido?:     string;
+  email?:        string;
+  coupon_code?:  string | null;
 }
 
 serve(async (req: Request) => {
@@ -90,17 +93,87 @@ serve(async (req: Request) => {
     return errOut('Body inválido: se esperaba JSON.');
   }
 
-  const courseId = (body.course_id || '').trim();
-  const amount   = Number(body.amount || 0);
-  const nombre   = (body.nombre   || '').trim();
-  const apellido = (body.apellido || '').trim();
-  const email    = (body.email    || '').trim().toLowerCase();
+  const courseId   = (body.course_id || '').trim();
+  const amount     = Number(body.amount || 0);
+  const nombre     = (body.nombre   || '').trim();
+  const apellido   = (body.apellido || '').trim();
+  const email      = (body.email    || '').trim().toLowerCase();
+  const couponCode = body.coupon_code || null;
 
   // ── 2) Validaciones ───────────────────────────────────
   if (!courseId)         return errOut('course_id es obligatorio.');
   if (!email)            return errOut('email es obligatorio.');
   if (!(amount > 0))     return errOut('amount debe ser un número mayor a 0.');
   if (amount > 999999)   return errOut('amount fuera de rango.');
+
+  // ── 2.5) Validar precio server-side contra `courses.price_usd` ──
+  // No confiamos en el `amount` del cliente. Reconstruimos el precio desde
+  // la BD (con service role para bypassear RLS) y validamos que coincida.
+  // Si hay coupon_code, calculamos el descuento server-side igual que en
+  // create-preference (paridad de lógica entre los dos endpoints).
+  const SUPABASE_URL          = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
+    console.error('create-paypal-order: faltan SUPABASE_URL/SERVICE_ROLE');
+    return errOut('Configuración del servidor incompleta (Supabase).', 500);
+  }
+  const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: course, error: courseErr } = await sbAdmin
+    .from('courses')
+    .select('id, price_usd, is_active')
+    .eq('id', courseId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (courseErr) {
+    console.error('create-paypal-order: course lookup error:', courseErr);
+    return errOut('Error consultando el curso: ' + courseErr.message, 500);
+  }
+  if (!course) return errOut('Curso no encontrado o inactivo.', 404);
+
+  const basePriceUsd = Number(course.price_usd || 0);
+  if (!(basePriceUsd > 0)) {
+    console.error('create-paypal-order: course sin price_usd válido', course);
+    return errOut('Curso sin precio USD configurado.', 500);
+  }
+
+  let expectedPrice = basePriceUsd;
+  if (couponCode) {
+    const code = String(couponCode).trim().toUpperCase();
+    const { data: coupon, error: cpErr } = await sbAdmin
+      .from('coupons')
+      .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
+      .eq('code', code)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (cpErr) {
+      console.error('create-paypal-order: coupon lookup error:', cpErr);
+      return errOut('Error consultando el cupón.', 500);
+    }
+    if (!coupon) return errOut('Cupón inválido o inactivo.', 400);
+    if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+      return errOut('Cupón vencido.', 400);
+    }
+    if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
+      return errOut('Cupón agotado.', 400);
+    }
+    if (coupon.course_id && coupon.course_id !== course.id) {
+      return errOut('El cupón no aplica a este curso.', 400);
+    }
+    if (coupon.discount_pct && Number(coupon.discount_pct) > 0) {
+      expectedPrice = basePriceUsd * (1 - Number(coupon.discount_pct) / 100);
+    } else if (coupon.discount_fixed && Number(coupon.discount_fixed) > 0) {
+      // discount_fixed está expresado en ARS — no aplica a pagos USD.
+      return errOut('Este cupón solo aplica a pagos en ARS.', 400);
+    }
+    expectedPrice = Math.max(0, Math.round(expectedPrice * 100) / 100);
+  }
+
+  if (Math.abs(amount - expectedPrice) > 0.01) {
+    console.error('create-paypal-order: amount mismatch', { amount, expectedPrice, basePriceUsd, couponCode });
+    return errOut('Monto inválido.', 400);
+  }
 
   // ── 3) Obtener access token de PayPal ─────────────────
   const { token, error: tokErr } = await getPayPalAccessToken();
@@ -111,7 +184,7 @@ serve(async (req: Request) => {
 
   // ── 4) Construir el body de la order ──────────────────
   // PayPal exige `value` como string con 2 decimales para USD.
-  const amountStr = amount.toFixed(2);
+  const amountStr = expectedPrice.toFixed(2);
 
   // El nombre del comprador es opcional. PayPal lo usa para pre-poblar el
   // formulario del popup; igual el alumno puede cambiarlo. El email también

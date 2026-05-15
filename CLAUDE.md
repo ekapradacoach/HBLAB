@@ -529,6 +529,35 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.30 — Validación server-side del monto en `create-preference` y `create-paypal-order`:**
+
+Hueco de seguridad cubierto en esta etapa: el `amount` (precio final post-cupón) viajaba desde el cliente en el body del fetch a las dos Edge Functions que arman la order de pago. Un atacante con DevTools podía interceptar el fetch, cambiar `amount` a $1, y comprar el curso a precio simbólico — el front confiaba en sí mismo. El webhook `process-payment` después lo registraba como pago aprobado porque MP/PayPal cobraban lo que decía la preference/order. **Fix**: ambas funciones reconstruyen el precio del lado servidor desde `courses.price_ars` / `courses.price_usd` y validan que el `amount` del body coincida.
+
+**Lógica compartida** (espejo de `validateCoupon()` en `checkout.html`):
+1. SELECT del curso (`courses.is_active=true`) con service role para tener `basePrice` (price_ars o price_usd según endpoint). Si falta o es 0 → 500.
+2. Si el body trae `coupon_code`: SELECT en `coupons` con `is_active=true`. Valida en cascada: existe, no vencido (`valid_until`), no agotado (`max_uses` vs `uses_count`), `course_id` matchea (o es null = todos). Si alguno falla → 400 con mensaje específico.
+3. Aplica descuento: `discount_pct` → `basePrice * (1 - pct/100)`; `discount_fixed` → `basePrice - fixed` (cap 0).
+4. Redondea a 2 decimales: `Math.round(price * 100) / 100`.
+5. Compara `amount` del cliente contra `expectedPrice` con tolerancia:
+   - **`create-preference` (ARS)**: tolerancia `±1 ARS` (redondeos del front en pesos enteros).
+   - **`create-paypal-order` (USD)**: tolerancia `±0.01 USD` (precio USD se redondea a 2 decimales sí o sí).
+6. Si no matchea → `errOut('Monto inválido.', 400)`. Si matchea → usa **`expectedPrice` server-side** en el payload (NO el `amount` del cliente — defensa en profundidad).
+
+**Diferencias entre los dos endpoints**:
+- `create-preference` resuelve el curso por `slug` (ya lo hacía); `create-paypal-order` lo resuelve por `course_id` (UUID, ya lo recibía del front).
+- `create-paypal-order` necesitó **agregar** `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (auto-inyectados) + `import { createClient }`. `create-preference` ya los tenía desde X.13.
+- `discount_fixed` se considera **ARS-only**. En `create-paypal-order`, si el cupón es de tipo `discount_fixed`, retorna 400 con `"Este cupón solo aplica a pagos en ARS."` (consistente con el front, que en validateCoupon ya bloqueaba esa combinación).
+
+**Tipo del body** ahora incluye `coupon_code?: string | null` en `create-paypal-order` (ya estaba en `create-preference`).
+
+**Por qué la tolerancia y no `===` estricto**: el front redondea con `Math.round(price * 100) / 100`, pero JS tiene bugs de punto flotante conocidos (e.g. `0.1 + 0.2 !== 0.3`). En ARS los precios son enteros, así que `±1` cubre cualquier redondeo razonable; en USD `±0.01` permite la diferencia de 1 centavo si hubiera alguna sutileza de floating point. Cero impacto en el caso legítimo (el front siempre redondea), bloquea cualquier delta significativa.
+
+**`process-payment` sin cambios**: la verificación final del monto cobrado real ya la hace MP/PayPal contra la preference/order. Si en el futuro queremos doble-verificación (comparar `payment.transaction_amount` con `courses.price_*` server-side), se agregaría ahí. Por ahora basta con bloquear la creación de la preference/order con monto adulterado.
+
+**Re-deploy manual requerido de las DOS funciones** en Supabase Dashboard → Edge Functions → cada función → Code → pegar el archivo actualizado → Deploy updates. No requiere secrets nuevos.
+
+---
+
 **Etapa X.29 — Botones PayPal SDK en checkout.html + Edge Function `create-paypal-order`:**
 
 Cierra el flujo USD end-to-end. Hasta X.28 el backend (`process-payment`) ya manejaba el webhook `PAYMENT.CAPTURE.COMPLETED` real de PayPal, pero el frontend seguía cayendo al placeholder `#paypal-pending`. Esta etapa monta los **PayPal Buttons** oficiales en `checkout.html` y agrega la Edge Function que crea la order del lado servidor.

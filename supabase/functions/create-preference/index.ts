@@ -102,6 +102,54 @@ serve(async (req: Request) => {
   }
   if (!course) return errOut('Curso no encontrado o inactivo.', 404);
 
+  // ── 3.5) Calcular precio final server-side y validar contra `amount` ──
+  // No confiamos en el `amount` que mande el cliente — un atacante podría
+  // editar el body antes del fetch y comprar a $1. Reconstruimos el precio
+  // desde la fuente de verdad (BD) y exigimos que coincida (tolerancia ±1 ARS
+  // para redondeos del front).
+  const basePrice = Number(course.price_ars || 0);
+  if (!(basePrice > 0)) {
+    console.error('create-preference: course sin price_ars válido', course);
+    return errOut('Curso sin precio configurado.', 500);
+  }
+
+  let expectedPrice = basePrice;
+  if (couponCode) {
+    const code = String(couponCode).trim().toUpperCase();
+    const { data: coupon, error: cpErr } = await sbAdmin
+      .from('coupons')
+      .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
+      .eq('code', code)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (cpErr) {
+      console.error('create-preference: coupon lookup error:', cpErr);
+      return errOut('Error consultando el cupón.', 500);
+    }
+    if (!coupon) return errOut('Cupón inválido o inactivo.', 400);
+    if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+      return errOut('Cupón vencido.', 400);
+    }
+    if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
+      return errOut('Cupón agotado.', 400);
+    }
+    if (coupon.course_id && coupon.course_id !== course.id) {
+      return errOut('El cupón no aplica a este curso.', 400);
+    }
+    if (coupon.discount_pct && Number(coupon.discount_pct) > 0) {
+      expectedPrice = basePrice * (1 - Number(coupon.discount_pct) / 100);
+    } else if (coupon.discount_fixed && Number(coupon.discount_fixed) > 0) {
+      // discount_fixed sólo aplica a ARS (este endpoint es ARS — OK).
+      expectedPrice = Math.max(0, basePrice - Number(coupon.discount_fixed));
+    }
+    expectedPrice = Math.max(0, Math.round(expectedPrice * 100) / 100);
+  }
+
+  if (Math.abs(amount - expectedPrice) > 1) {
+    console.error('create-preference: amount mismatch', { amount, expectedPrice, basePrice, couponCode });
+    return errOut('Monto inválido.', 400);
+  }
+
   // ── 4) Construir el payload de la preference ────────────
   // external_reference llega como string en el webhook; codificamos los
   // datos del comprador para que process-payment los pueda recuperar
@@ -116,7 +164,7 @@ serve(async (req: Request) => {
     items: [{
       title:       course.title,
       quantity:    1,
-      unit_price:  amount,
+      unit_price:  expectedPrice,
       currency_id: 'ARS',
     }],
     payer: {
