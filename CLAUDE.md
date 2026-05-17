@@ -529,6 +529,41 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+**Etapa X.31 — Verificación HMAC-SHA256 real del webhook de Mercado Pago:**
+
+Hasta ahora el branch MP de `verifySignature()` retornaba siempre `{ ok: false, reason: 'no implementada' }` y el handler dependía de `PAYMENTS_ALLOW_UNVERIFIED=1` (bypass) para que el flujo funcionara en producción. Esto significaba que **cualquier persona en internet podía POSTear un payload falso a `/functions/v1/process-payment` y disparar el flujo de "pago aprobado"** — el secret crítico estaba sin validar.
+
+**Fix**: implementación real del HMAC-SHA256 de MP según [docs](https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks).
+
+**Flujo** (en `verifySignature` cuando `isMP === true`):
+1. Lee `MP_WEBHOOK_SECRET` del env. Si falta → 401 con motivo.
+2. Lee headers `x-signature` y `x-request-id`. Ambos obligatorios.
+3. Parsea `x-signature` (formato `ts=<unix>,v1=<hex>` — orden de campos puede variar, MP a veces los manda al revés). Split por coma → split por `=` → extrae `ts` y `v1`.
+4. Parsea `rawBody` a JSON, extrae `data.id` (el payment_id que MP manda en el webhook).
+5. Construye el **manifest** canónico exacto que MP usa: `` `id:${dataId};request-id:${xRequestId};ts:${ts};` `` — con el punto-y-coma final (importante, MP lo incluye).
+6. HMAC-SHA256 vía Web Crypto API: `crypto.subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' })` → `crypto.subtle.sign('HMAC', key, manifest)`.
+7. Convierte el `ArrayBuffer` a hex lowercase (`Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')`).
+8. Compara contra el `v1` del header (lowercase en ambos extremos, defensivo). Match → `{ ok: true, provider: 'mercadopago' }`. Mismatch → log con `console.warn` (manifest_len, dataId, ts, expected_v1, got_hex para debugging) + `{ ok: false, reason: 'firma MP inválida' }`.
+
+**Casos de error específicos** (cada uno con su `reason` para debugging en el log de la Edge Function):
+- `'MP_WEBHOOK_SECRET no configurado'` — secret faltante.
+- `'header x-signature ausente'` / `'header x-request-id ausente'` — headers críticos.
+- `'x-signature mal formado (faltan ts o v1)'` — parseo falló.
+- `'body no es JSON válido'` — rawBody no parseable.
+- `'data.id ausente en el payload'` — webhook secundario sin payment_id (no debería verificarse igual, pero defensivo).
+- `'firma MP inválida'` — el hex calculado no matchea el v1 del header (caso crítico — alguien intenta forjar).
+- `'HMAC exception: ...'` — error de la Web Crypto API.
+
+**Por qué Web Crypto API y no `node:crypto`**: las Edge Functions de Supabase corren en Deno Deploy. `node:crypto` está disponible vía polyfill pero `crypto.subtle.*` es la API nativa y zero-overhead. La firma HMAC-SHA256 de un manifest de ~80 chars toma sub-milisegundo.
+
+**`PAYMENTS_ALLOW_UNVERIFIED=1` se mantiene como bypass** para sandbox/dev local. Verificado: el flag se chequea ANTES del branch isMP, así que con el flag activo la verificación se saltea para ambos proveedores (PayPal y MP). En producción **debe estar apagado** — la única razón legítima de tenerlo activo en prod sería un incidente donde la firma falla por un cambio del lado de MP y necesitamos urgentemente procesar pagos mientras se investiga (escenario raro).
+
+**Comentario del header del archivo** actualizado para reflejar que MP ya está implementado (eliminado el "TODO", reemplazado por descripción de la fórmula del manifest).
+
+**Re-deploy manual requerido** en Supabase Dashboard → Edge Functions → process-payment → Code → pegar el archivo actualizado → Deploy updates. El secret `MP_WEBHOOK_SECRET` ya está cargado (confirmado por el usuario). Verificar tras el primer pago real que el log NO emite `'MP signature mismatch'` — si lo emite, revisar la consistencia del manifest (puede haber diferencias subtiles en cómo MP construye el string, e.g. con/sin `;` final, escapes, etc.).
+
+---
+
 **Etapa X.30 — Validación server-side del monto en `create-preference` y `create-paypal-order`:**
 
 Hueco de seguridad cubierto en esta etapa: el `amount` (precio final post-cupón) viajaba desde el cliente en el body del fetch a las dos Edge Functions que arman la order de pago. Un atacante con DevTools podía interceptar el fetch, cambiar `amount` a $1, y comprar el curso a precio simbólico — el front confiaba en sí mismo. El webhook `process-payment` después lo registraba como pago aprobado porque MP/PayPal cobraban lo que decía la preference/order. **Fix**: ambas funciones reconstruyen el precio del lado servidor desde `courses.price_ars` / `courses.price_usd` y validan que el `amount` del body coincida.

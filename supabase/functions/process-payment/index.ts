@@ -256,7 +256,8 @@ async function getPayPalAccessToken(): Promise<{ token: string | null; error?: s
 // ─────────────────────────────────────────────────────────────
 // VERIFICACIÓN DE FIRMA
 // ─────────────────────────────────────────────────────────────
-// - MercadoPago: TODO — pendiente HMAC-SHA256 con MP_WEBHOOK_SECRET.
+// - MercadoPago (Etapa X.31): HMAC-SHA256 sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
+//   con MP_WEBHOOK_SECRET, comparado contra el `v1=...` del header x-signature.
 // - PayPal (Etapa X.28): implementado vía /v1/notifications/verify-webhook-signature.
 //
 // Flag de bypass `PAYMENTS_ALLOW_UNVERIFIED=1` se mantiene para dev local; en
@@ -325,12 +326,75 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
     }
   }
 
-  // ── MP: verificación pendiente ─────────────────────────
+  // ── MP: verificación real HMAC-SHA256 (Etapa X.31) ─────
+  // Doc: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks#editor_4
+  // El header `x-signature` viene como `ts=<unix>,v1=<hex>` (orden de campos puede variar).
+  // La firma se calcula como HMAC-SHA256(`id:<data.id>;request-id:<x-request-id>;ts:<ts>`, MP_WEBHOOK_SECRET).
   if (isMP) {
-    return {
-      ok: false, provider: 'mercadopago',
-      reason: 'Verificación HMAC de MP no implementada (set PAYMENTS_ALLOW_UNVERIFIED=1 solo en dev).',
-    };
+    const SECRET = Deno.env.get('MP_WEBHOOK_SECRET');
+    if (!SECRET) {
+      return { ok: false, provider: 'mercadopago', reason: 'MP_WEBHOOK_SECRET no configurado' };
+    }
+
+    const xSignature = req.headers.get('x-signature') || req.headers.get('X-Signature') || '';
+    const xRequestId = req.headers.get('x-request-id') || req.headers.get('X-Request-Id') || '';
+    if (!xSignature) {
+      return { ok: false, provider: 'mercadopago', reason: 'header x-signature ausente' };
+    }
+    if (!xRequestId) {
+      return { ok: false, provider: 'mercadopago', reason: 'header x-request-id ausente' };
+    }
+
+    // Parsear `ts=...,v1=...` (separados por coma, posibles espacios alrededor).
+    let ts = '', v1 = '';
+    for (const part of xSignature.split(',')) {
+      const [k, ...rest] = part.split('=');
+      const key = (k || '').trim();
+      const val = rest.join('=').trim();
+      if (key === 'ts') ts = val;
+      else if (key === 'v1') v1 = val;
+    }
+    if (!ts || !v1) {
+      return { ok: false, provider: 'mercadopago', reason: 'x-signature mal formado (faltan ts o v1)' };
+    }
+
+    // Parsear payload para sacar data.id (el payment_id que envía MP).
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return { ok: false, provider: 'mercadopago', reason: 'body no es JSON válido' };
+    }
+    const dataId = payload?.data?.id;
+    if (!dataId) {
+      return { ok: false, provider: 'mercadopago', reason: 'data.id ausente en el payload' };
+    }
+
+    // Construir el string canónico — formato exacto de MP.
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+    try {
+      const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+      );
+      const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest));
+      const hex = Array.from(new Uint8Array(sigBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Comparación lower-case en ambos extremos (MP devuelve lowercase pero defensivo).
+      if (hex.toLowerCase() === v1.toLowerCase()) {
+        return { ok: true, provider: 'mercadopago' };
+      }
+      console.warn('MP signature mismatch', { manifest_len: manifest.length, dataId, ts, expected_v1: v1, got_hex: hex });
+      return { ok: false, provider: 'mercadopago', reason: 'firma MP inválida' };
+    } catch (e: any) {
+      return { ok: false, provider: 'mercadopago', reason: 'HMAC exception: ' + (e?.message || String(e)) };
+    }
   }
 
   return {
