@@ -271,37 +271,50 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
     return { ok: true, provider: isPaypal ? 'paypal' : (isMP ? 'mercadopago' : 'unknown') };
   }
 
-  // ── PayPal: verificación real (Etapa X.28) ─────────────
+  // ── PayPal: verificación real (Etapa X.28 + ajustes X.32) ─
   if (isPaypal) {
     const WEBHOOK_ID = Deno.env.get('PAYPAL_WEBHOOK_ID');
     if (!WEBHOOK_ID) {
       return { ok: false, provider: 'paypal', reason: 'PAYPAL_WEBHOOK_ID no configurado' };
     }
 
-    const { token, error: tokErr } = await getPayPalAccessToken();
-    if (!token) {
-      return { ok: false, provider: 'paypal', reason: tokErr || 'no se pudo obtener access token' };
+    // 1) Validar que TODOS los headers críticos estén presentes.
+    const ppTransmissionId   = req.headers.get('paypal-transmission-id');
+    const ppTransmissionTime = req.headers.get('paypal-transmission-time');
+    const ppCertUrl          = req.headers.get('paypal-cert-url');
+    const ppAuthAlgo         = req.headers.get('paypal-auth-algo');
+    const ppTransmissionSig  = req.headers.get('paypal-transmission-sig');
+    if (!ppTransmissionId || !ppTransmissionTime || !ppCertUrl || !ppAuthAlgo || !ppTransmissionSig) {
+      return { ok: false, provider: 'paypal', reason: 'headers PayPal incompletos' };
     }
 
-    // El endpoint /verify-webhook-signature espera el body original como `webhook_event`
-    // parseado a objeto JS (no como string).
+    // 2) Obtener access token vía OAuth (helper compartido con create-paypal-order).
+    const { token, error: tokErr } = await getPayPalAccessToken();
+    if (!token) {
+      return { ok: false, provider: 'paypal', reason: 'error verificando firma PayPal: ' + (tokErr || 'no se pudo obtener access token') };
+    }
+
+    // 3) Parsear el body original — el endpoint /verify-webhook-signature espera
+    //    `webhook_event` como objeto JS (no como string).
     let parsedEvent: any;
     try {
       parsedEvent = JSON.parse(rawBody);
     } catch {
-      return { ok: false, provider: 'paypal', reason: 'body no es JSON válido' };
+      return { ok: false, provider: 'paypal', reason: 'error verificando firma PayPal: body no es JSON válido' };
     }
 
     const verifyBody = {
-      auth_algo:         req.headers.get('paypal-auth-algo'),
-      cert_url:          req.headers.get('paypal-cert-url'),
-      transmission_id:   req.headers.get('paypal-transmission-id'),
-      transmission_sig:  req.headers.get('paypal-transmission-sig'),
-      transmission_time: req.headers.get('paypal-transmission-time'),
+      auth_algo:         ppAuthAlgo,
+      cert_url:          ppCertUrl,
+      transmission_id:   ppTransmissionId,
+      transmission_sig:  ppTransmissionSig,
+      transmission_time: ppTransmissionTime,
       webhook_id:        WEBHOOK_ID,
       webhook_event:     parsedEvent,
     };
 
+    // 4) POST a la API real. Usamos PAYPAL_API_BASE que ya conmuta sandbox/live
+    //    según PAYPAL_ENV (default 'live' → https://api-m.paypal.com).
     try {
       const r = await fetch(`${PAYPAL_API_BASE}/v1/notifications/verify-webhook-signature`, {
         method: 'POST',
@@ -314,15 +327,16 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
       });
       if (!r.ok) {
         const txt = await r.text();
-        return { ok: false, provider: 'paypal', reason: `verify HTTP ${r.status}: ${txt}` };
+        return { ok: false, provider: 'paypal', reason: `error verificando firma PayPal: HTTP ${r.status}: ${txt}` };
       }
       const data = await r.json();
       if (data?.verification_status === 'SUCCESS') {
         return { ok: true, provider: 'paypal' };
       }
-      return { ok: false, provider: 'paypal', reason: `verification_status=${data?.verification_status || 'desconocido'}` };
+      console.warn('PayPal signature mismatch', { verification_status: data?.verification_status, transmission_id: ppTransmissionId });
+      return { ok: false, provider: 'paypal', reason: 'firma PayPal inválida' };
     } catch (e: any) {
-      return { ok: false, provider: 'paypal', reason: 'verify exception: ' + (e?.message || String(e)) };
+      return { ok: false, provider: 'paypal', reason: 'error verificando firma PayPal: ' + (e?.message || String(e)) };
     }
   }
 

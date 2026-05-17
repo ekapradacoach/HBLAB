@@ -73,12 +73,13 @@ async function getPayPalAccessToken(): Promise<{ token: string | null; error?: s
 
 // ── Handler ───────────────────────────────────────────────
 interface CreateOrderRequest {
-  course_id?:    string;
-  amount?:       number | string;
-  nombre?:       string;
-  apellido?:     string;
-  email?:        string;
-  coupon_code?:  string | null;
+  course_id?:       string;
+  amount?:          number | string;
+  nombre?:          string;
+  apellido?:        string;
+  email?:           string;
+  coupon_code?:     string | null;
+  turnstile_token?: string;        // Cloudflare Turnstile (Etapa X.32)
 }
 
 serve(async (req: Request) => {
@@ -105,6 +106,26 @@ serve(async (req: Request) => {
   if (!email)            return errOut('email es obligatorio.');
   if (!(amount > 0))     return errOut('amount debe ser un número mayor a 0.');
   if (amount > 999999)   return errOut('amount fuera de rango.');
+
+  // ── 2.1) Verificar Cloudflare Turnstile (Etapa X.32) ──
+  // Defensa anti-bot. Espejo de la verificación en create-preference.
+  const turnstileToken = (body.turnstile_token || '').trim();
+  if (!turnstileToken) return errOut('Verificación de seguridad requerida.', 400);
+  try {
+    const tsRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `secret=${encodeURIComponent(Deno.env.get('TURNSTILE_SECRET_KEY') || '')}&response=${encodeURIComponent(turnstileToken)}`,
+    });
+    const tsData = await tsRes.json();
+    if (!tsData?.success) {
+      console.warn('create-paypal-order: turnstile failed', tsData);
+      return errOut('Verificación de seguridad fallida.', 400);
+    }
+  } catch (e: any) {
+    console.error('create-paypal-order: turnstile exception', e);
+    return errOut('Error verificando captcha: ' + (e?.message || String(e)), 502);
+  }
 
   // ── 2.5) Validar precio server-side contra `courses.price_usd` ──
   // No confiamos en el `amount` del cliente. Reconstruimos el precio desde

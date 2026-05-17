@@ -18,6 +18,9 @@
   <!-- PayPal JS SDK (Etapa X.29) — client_id público (sin secret), USD, intent=capture -->
   <script src="https://www.paypal.com/sdk/js?client-id=AcRIf9eRcMlbnVK6xVxYDjtBeLcQC43bnEx_Z82v42Aq1wV2U2SRGK9-KaQI8hMEXgwUQebOWBC0nA53&currency=USD&intent=capture" defer></script>
 
+  <!-- Cloudflare Turnstile (Etapa X.32) — captcha invisible/managed para checkout -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
   <style>
     :root {
       --bg:           #1E2A3A;
@@ -322,6 +325,10 @@
           </label>
         </div>
 
+        <!-- Cloudflare Turnstile widget (Etapa X.32) -->
+        <div class="cf-turnstile" data-sitekey="0x4AAAAAADRNE3mONBTsORsw" data-theme="dark" id="turnstile-widget" style="margin-bottom:10px;"></div>
+        <div id="turnstile-error" style="display:none; font-size:0.78rem; color:var(--red); margin-bottom:8px;">Por favor completá la verificación de seguridad.</div>
+
         <button class="btn-continue" id="btn-continue" disabled onclick="goToPayment()">
           Continuar al pago →
         </button>
@@ -622,6 +629,20 @@
       btn.disabled = true;
       btn.textContent = 'Procesando…';
 
+      // ── Cloudflare Turnstile (Etapa X.32) ────────────
+      // Obtener el token antes de cualquier fetch. Si falta → mostrar error,
+      // re-habilitar el botón y abortar. El token es single-use y vive ~300s,
+      // suficiente para que el alumno complete el flow (incluido click en
+      // botón PayPal del SDK que dispara createOrder).
+      const turnstileToken = document.querySelector('[name="cf-turnstile-response"]')?.value || '';
+      if (!turnstileToken) {
+        document.getElementById('turnstile-error').style.display = '';
+        btn.disabled = false;
+        btn.textContent = 'Continuar al pago →';
+        return;
+      }
+      document.getElementById('turnstile-error').style.display = 'none';
+
       const nombre   = document.getElementById('ck-nombre').value.trim();
       const apellido = document.getElementById('ck-apellido').value.trim();
       const email    = document.getElementById('ck-email').value.trim().toLowerCase();
@@ -660,15 +681,16 @@
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
             },
             body: JSON.stringify({
-              provider:    'coupon',
+              provider:        'coupon',
               email,
               nombre,
               apellido,
-              slug:        _course.slug,
-              amount:      0,
-              currency:    'ARS',
-              coupon_code: _appliedCoupon?.code || null,
-              status:      'approved',
+              slug:            _course.slug,
+              amount:          0,
+              currency:        'ARS',
+              coupon_code:     _appliedCoupon?.code || null,
+              status:          'approved',
+              turnstile_token: turnstileToken,
             }),
           });
           if (!res.ok) {
@@ -711,12 +733,13 @@
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
             },
             body: JSON.stringify({
-              slug:        _course.slug,
+              slug:            _course.slug,
               email,
               nombre,
               apellido,
-              amount:      _finalPrice,
-              coupon_code: _appliedCoupon?.code || null,
+              amount:          _finalPrice,
+              coupon_code:     _appliedCoupon?.code || null,
+              turnstile_token: turnstileToken,
             }),
           });
 
@@ -747,7 +770,7 @@
         try {
           btn.style.display = 'none';
           document.getElementById('redirect-msg').classList.remove('show');
-          mountPayPalButtons({ nombre, apellido, email });
+          mountPayPalButtons({ nombre, apellido, email, turnstileToken });
         } catch (e) {
           console.error('goToPayment USD error:', e);
           showPayPalError('No se pudo iniciar PayPal: ' + (e.message || e));
@@ -783,7 +806,7 @@
       if (el) { el.textContent = ''; el.style.display = 'none'; }
     }
 
-    function mountPayPalButtons({ nombre, apellido, email }) {
+    function mountPayPalButtons({ nombre, apellido, email, turnstileToken }) {
       if (typeof paypal === 'undefined') {
         showPayPalError('El SDK de PayPal no está disponible. Recargá la página.');
         return;
@@ -812,11 +835,12 @@
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
             },
             body: JSON.stringify({
-              course_id: _course.id,
-              amount:    _finalPrice,
+              course_id:       _course.id,
+              amount:          _finalPrice,
               nombre,
               apellido,
               email,
+              turnstile_token: turnstileToken,
             }),
           });
           if (!res.ok) {

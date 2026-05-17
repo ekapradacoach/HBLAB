@@ -529,6 +529,82 @@ checkout.html (público, sin auth)
        USD  → placeholder (#paypal-pending) — pendiente integración PayPal
 ```
 
+## 🔒 Hardening de seguridad del flujo de pago (Etapas X.30 + X.31 + X.32)
+
+Tres etapas consecutivas que cierran las vulnerabilidades del flujo de pago end-to-end. Antes de este bloque, un atacante podía:
+- **Adulterar el `amount`** del fetch a `create-preference` / `create-paypal-order` y comprar a $1 (no había validación server-side del precio).
+- **Forjar el webhook de MP** y disparar el flujo "pago aprobado" sin pagar (la firma HMAC nunca se verificaba — el flag `PAYMENTS_ALLOW_UNVERIFIED=1` bypass estaba activo).
+- **Spam-atacar los endpoints de pago** con scripts automatizados (sin CAPTCHA), consumiendo budget de MP/PayPal y llenando la BD con preferences basura.
+
+Estado tras X.32 (todo verificado server-side):
+
+| Etapa | Defensa | Endpoints afectados | Secret requerido |
+|-------|---------|---------------------|------------------|
+| **X.30** | Validación del monto contra `courses.price_*` y descuento de cupón calculado server-side. Tolerancia ±1 ARS / ±0.01 USD. | `create-preference`, `create-paypal-order` | — (usa BD) |
+| **X.31** | HMAC-SHA256 real del webhook MP sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;` comparado contra `v1` del header `x-signature`. | `process-payment` (rama MP) | `MP_WEBHOOK_SECRET` |
+| **X.32.A** | Firma webhook PayPal vía `/v1/notifications/verify-webhook-signature` — guard de headers + `reason` strings normalizados. | `process-payment` (rama PayPal) | `PAYPAL_WEBHOOK_ID` |
+| **X.32.B** | Cloudflare Turnstile CAPTCHA en checkout.html + verificación con siteverify del lado servidor. | `create-preference`, `create-paypal-order` | `TURNSTILE_SECRET_KEY` |
+
+Bypass dev `PAYMENTS_ALLOW_UNVERIFIED=1` se mantiene operativo (chequeado antes de las ramas isMP/isPaypal) — **NUNCA dejarlo activo en producción**.
+
+---
+
+**Etapa X.32 — Hardening de seguridad: firma PayPal real + Cloudflare Turnstile en checkout:**
+
+Segundo bloque del paquete de seguridad de la jornada (junto a X.30 y X.31). Cierra dos huecos:
+
+### A) Verificación de firma del webhook PayPal — alineada a la spec
+
+El branch `isPaypal` de `verifySignature()` en `process-payment` ya hacía la llamada a `/v1/notifications/verify-webhook-signature` desde X.28, pero faltaba un guard explícito para headers ausentes y los `reason` strings eran heterogéneos (mezcla de `verify HTTP ...`, `verification_status=...`, `verify exception: ...`). Ajustes:
+
+- **Guard al inicio**: lee los 5 headers críticos (`paypal-transmission-id`, `paypal-transmission-time`, `paypal-cert-url`, `paypal-auth-algo`, `paypal-transmission-sig`) por separado. Si falta cualquiera → `{ ok: false, provider: 'paypal', reason: 'headers PayPal incompletos' }`. Antes se leían inline en el body del fetch y PayPal devolvía un error genérico.
+- **Strings normalizadas**: rechazo de firma → `'firma PayPal inválida'`. Cualquier otra falla (OAuth, parse del body, HTTP error, exception) → prefijo unificado `'error verificando firma PayPal: ...'` + detalle. Hace los logs y las respuestas mucho más legibles.
+- **`console.warn('PayPal signature mismatch', { verification_status, transmission_id })`** agregado en el caso de rechazo — mismo patrón que MP en X.31, para debugging desde el log de la Edge Function.
+
+Sin tocar: `PAYPAL_API_BASE` se mantiene (conmuta sandbox/live según `PAYPAL_ENV`), `getPayPalAccessToken()` helper compartido, bypass `PAYMENTS_ALLOW_UNVERIFIED=1` antes del branch (sigue funcionando para sandbox/dev).
+
+### B) Cloudflare Turnstile (CAPTCHA) en checkout + verificación server-side
+
+Defensa anti-bot/anti-spam contra ataques automatizados al endpoint de pago. Hasta ahora cualquier script podía POSTear a `create-preference` o `create-paypal-order` con datos falsos y consumir el budget de las APIs MP/PayPal (rate limit, costos de transacción, llenado de la BD con preferences basura). Turnstile pone un challenge invisible/managed entre el alumno humano y los Edge Functions.
+
+**Frontend (`checkout.html`)**:
+- SDK cargado en `<head>`: `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`.
+- Widget renderizado justo arriba del botón "Continuar al pago →": `<div class="cf-turnstile" data-sitekey="0x4AAAAAADRNE3mONBTsORsw" data-theme="dark" id="turnstile-widget">`. Tema dark para matchear la paleta de checkout. El `data-sitekey` es **público** (es la counterpart del `TURNSTILE_SECRET_KEY` server-side).
+- Div `#turnstile-error` (oculto por default) debajo del widget para mostrar "Por favor completá la verificación de seguridad." si el alumno aprieta el botón sin completarlo.
+- `goToPayment()` arranca leyendo el token: `document.querySelector('[name="cf-turnstile-response"]')?.value`. Si está vacío → muestra `#turnstile-error`, restaura el botón ("Continuar al pago →"), `return` temprano antes de cualquier fetch.
+- El `turnstile_token` se manda en el body de las **3 ramas** de pago:
+  - **Cupón 100% off** → `process-payment` (provider `'coupon'`).
+  - **ARS** → `create-preference`.
+  - **USD** → `create-paypal-order`. El token se captura en `goToPayment` y se pasa a `mountPayPalButtons({ ..., turnstileToken })`; luego el callback `createOrder` del SDK PayPal lo incluye en el body del fetch. **El token vive ~300s** por default, suficiente margen para que el alumno haga click en el botón oficial de PayPal después.
+
+**Edge Functions (`create-preference` y `create-paypal-order`)** — implementación espejo en ambas:
+1. `turnstile_token?: string` agregado al tipo del body.
+2. **Step de verificación NUEVO** justo después de las validaciones básicas y ANTES de cualquier trabajo pesado (consulta de BD, OAuth con PayPal, llamada a MP):
+   ```ts
+   const turnstileToken = (body.turnstile_token || '').trim();
+   if (!turnstileToken) return errOut('Verificación de seguridad requerida.', 400);
+   const tsRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+     body: `secret=${encodeURIComponent(Deno.env.get('TURNSTILE_SECRET_KEY') || '')}&response=${encodeURIComponent(turnstileToken)}`,
+   });
+   const tsData = await tsRes.json();
+   if (!tsData?.success) return errOut('Verificación de seguridad fallida.', 400);
+   ```
+3. **Excepción del fetch** (red, timeout) → 502 con `'Error verificando captcha: ' + msg`. Log con `console.warn`/`console.error` para debugging.
+
+**Por qué siteverify y no JWT decoding**: la API de Cloudflare es la fuente de verdad — además del `success: true/false` retorna metadata útil (`challenge_ts`, `hostname`, `action`, `cdata`) que podríamos usar en el futuro para policies más finas. El token JWT está firmado por Cloudflare pero no es trivial validarlo offline desde Deno.
+
+**`process-payment` (rama cupón 100% off)**: hoy el `turnstile_token` llega al body pero **no se verifica todavía** del lado server. El flujo de cupón ya tiene defensas server-side independientes (valida `coupons.is_active`, `valid_until`, `max_uses`, `course_id`) — el riesgo de spam es bajo. Si en el futuro el cupón 100% se usa para campañas masivas, conviene agregar la verificación Turnstile acá también (copy-paste del mismo bloque).
+
+**Pre-requisito del lado server**: cargar `TURNSTILE_SECRET_KEY` en Supabase → Edge Functions → Manage Secrets antes del re-deploy. Sin ese secret, la verificación falla silenciosamente y todas las requests retornan 400 — el checkout queda **completamente bloqueado**.
+
+**Site key vs secret key** — recordatorio: `data-sitekey` en el HTML del cliente es público y se puede leer del DOM (es por diseño — Cloudflare necesita identificar al widget). `TURNSTILE_SECRET_KEY` jamás debe aparecer en el frontend; vive solo en los secrets de las Edge Functions.
+
+**Re-deploy manual requerido de las DOS funciones** (`create-preference` y `create-paypal-order`) tras configurar el secret. `process-payment` no toca código en esta sub-etapa pero sí en X.32.A (firma PayPal aligned) → re-deploy también.
+
+---
+
 **Etapa X.31 — Verificación HMAC-SHA256 real del webhook de Mercado Pago:**
 
 Hasta ahora el branch MP de `verifySignature()` retornaba siempre `{ ok: false, reason: 'no implementada' }` y el handler dependía de `PAYMENTS_ALLOW_UNVERIFIED=1` (bypass) para que el flujo funcionara en producción. Esto significaba que **cualquier persona en internet podía POSTear un payload falso a `/functions/v1/process-payment` y disparar el flujo de "pago aprobado"** — el secret crítico estaba sin validar.
