@@ -976,9 +976,10 @@ Alumno tiene acceso a un curso SOLO SI:
 
 ## Edge Functions de Supabase
 
-**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay cuatro funciones listas en el repo:
+**Ubicación:** `hblab/supabase/functions/<name>/index.ts`. Hay cinco funciones listas en el repo:
 
-- **`invite-coach`** — `verify_jwt = true`. POST `{ email, role }`. Verifica que el caller sea admin (lee JWT del Authorization), llama `auth.admin.inviteUserByEmail(email, { redirectTo: 'https://ekapradacoach.github.io/HBLAB/set-password.html' })` con la service role key, hace UPSERT en `profiles.role`. Retorna `{ ok, user_id, email, role }`. El `redirectTo` (Etapa X.17.1) garantiza que el botón del email apunte a `set-password.html` independiente del Site URL.
+- **`invite-coach`** — `verify_jwt = true` (LEGACY — pre-Etapa X.32). POST `{ email, role }`. Verifica que el caller sea admin, llama `auth.admin.inviteUserByEmail(email)` con la service role key, hace UPSERT en `profiles.role`. Requería que el usuario ya estuviera registrado y dependía del SMTP de Supabase (problemas en producción). Reemplazada por `invite-coach-new` para el flujo de "Agregar coach" en admin.html. Se mantiene en el repo por compatibilidad pero no es invocada desde el frontend actual.
+- **`invite-coach-new`** — `verify_jwt = true` (Etapa X.32 — crear coach desde cero). POST `{ email, full_name }` desde admin.html → Tab Coaches → modal "Agregar coach". Verifica que el caller sea admin via JWT. Si el email ya existe en `profiles` → retorna `{ status: 'already_exists' }`. Si no existe: `auth.admin.createUser({ email, email_confirm: true, password: tempPassword, user_metadata: { full_name, name, role: 'coach' } })`, luego UPSERT en `profiles` con `role='coach'` (el trigger handle_new_user crea la fila con `role='student'` por default, por eso forzamos coach). Después genera magic link con `auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: 'https://hblabarg.com/set-password.html' } })` y envía email vía Resend con `subject: '🎓 Tu acceso como Coach a HB Lab'`, template oscuro y CTA "Activar mi cuenta →". Retorna `{ status: 'ok', email, email_sent: bool, email_error? }`. Usa los mismos secrets que `process-payment` (`RESEND_API_KEY` + service role + URL). Pattern de creación + magic link copiado de `sendWelcomeEmail` en `process-payment` para consistencia visual entre el email del alumno y el del coach.
 - **`create-preference`** — `verify_jwt = false`. POST `{ slug, email, nombre, apellido, amount, coupon_code }`. Resuelve el `course` por slug (con service role para bypassear RLS), llama a `https://api.mercadopago.com/checkout/preferences` con `MP_ACCESS_TOKEN`, devuelve `{ ok, init_point, sandbox_init_point, preference_id }` al cliente. El cliente redirige a `init_point`. El webhook de MP llega luego a `process-payment`. Etapa X.13.
 - **`create-paypal-order`** — `verify_jwt = false`. POST `{ course_id, amount, nombre, apellido, email }`. Espejo de `create-preference` para PayPal. Hace OAuth2 con `PAYPAL_CLIENT_ID:PAYPAL_CLIENT_SECRET` contra `${PAYPAL_API_BASE}/v1/oauth2/token`, luego `POST /v2/checkout/orders` con `intent: 'CAPTURE'`, `purchase_units[0]: { amount: { currency_code: 'USD', value: amount.toFixed(2) }, custom_id: course_id }`, y `payer: { name, email_address }` si fueron provistos. Retorna `{ ok, order_id, status }`. El SDK PayPal del cliente recibe el `order_id`, abre el popup oficial, y al aprobar dispara el webhook `PAYMENT.CAPTURE.COMPLETED` → process-payment. Etapa X.29. Secrets requeridos: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` (opcional, default `live`).
 - **`process-payment`** — `verify_jwt = false`. Webhook público de MP/PayPal **+ entry point del cupón 100% off** (Etapa X.14). Verifica firma (placeholder hoy — bloque `TODO` con docs links + flag `PAYMENTS_ALLOW_UNVERIFIED=1` para dev). Tres branches según el provider:
@@ -1036,7 +1037,8 @@ Todos los archivos cierran con `});` (el handler `serve(...)`). Si alguno está 
 ### Configuración asociada en `supabase/config.toml`
 
 ```toml
-[functions.invite-coach]      verify_jwt = true   # exige JWT del admin en Authorization
+[functions.invite-coach]      verify_jwt = true   # exige JWT del admin en Authorization (LEGACY)
+[functions.invite-coach-new]  verify_jwt = true   # crear coach desde cero + magic link (Etapa X.32)
 [functions.create-preference] verify_jwt = false  # llamada desde checkout.html (público)
 [functions.process-payment]   verify_jwt = false  # webhook público — firma valida adentro
 ```
@@ -1171,6 +1173,22 @@ CREATE POLICY "Admin puede eliminar ad_spend" ON public.ad_spend FOR DELETE
 4. **Cursos pregrabados con módulos** — tablas `course_modules` + `course_lessons`, sidebar de navegación
 5. **Personalizar email de confirmación** — Supabase → Authentication → Email Templates
 6. **SEO** — meta tags Open Graph, favicon, Lighthouse
+
+---
+
+## Etapa X.32 — Crear coach desde cero con magic link
+
+Reemplaza el flujo viejo del modal "Agregar coach" en `admin.html`. Antes el admin solo podía asignar el rol coach a alguien ya registrado en la plataforma (RPC `assign_coach_by_email`); ahora puede crear la cuenta directamente ingresando email + nombre, y el sistema le manda un magic link de activación al coach para que elija su contraseña.
+
+**Cambios:**
+
+- **Nueva Edge Function `supabase/functions/invite-coach-new/index.ts`** (`verify_jwt = true`). POST `{ email, full_name }`. Verifica admin via JWT → chequea que el email no exista en `profiles` → `auth.admin.createUser({ email, email_confirm: true, password: tempPassword, user_metadata: { full_name, name, role: 'coach' } })` → UPSERT `profiles` con `role='coach'` → genera magic link con redirect a `set-password.html` → envía email vía Resend con subject `'🎓 Tu acceso como Coach a HB Lab'` y CTA "Activar mi cuenta →". Retorna `{ status: 'ok' | 'already_exists', email, email_sent?, email_error? }`.
+- **`admin.html` modal "Agregar coach"**: ahora pide nombre + email (input `coach-nombre` + input `coach-user-email`). `confirmarAgregarCoach()` reemplaza la RPC `assign_coach_by_email` por un `fetch POST` a `https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/invite-coach-new` con `Authorization: Bearer ${session.access_token}` y `apikey: SUPABASE_ANON_KEY`. Maneja los estados `already_exists` → "Este email ya tiene cuenta en HB Lab", `ok` → "✅ Coach creado. Se envió el email de activación a {email}", error → mensaje de error. Resetea inputs y llama `loadCoaches()` al éxito.
+- **`config.toml`**: agregado `[functions.invite-coach-new] verify_jwt = true`.
+
+**RPC vieja `assign_coach_by_email`**: ya no se invoca desde el frontend pero queda viva en BD por las dudas. La función legacy `invite-coach` también queda en el repo pero no se usa desde admin.html.
+
+**Re-deploy manual requerido** en Supabase Dashboard → Edge Functions → "New function" → Nombre: `invite-coach-new` → "Via Editor" → pegar contenido de `supabase/functions/invite-coach-new/index.ts` → Deploy. Activar "Enforce JWT verification" en Settings. Secrets ya configurados (mismos que `process-payment`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`.
 
 ---
 

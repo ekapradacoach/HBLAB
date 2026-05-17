@@ -1969,17 +1969,21 @@
   <div class="modal-overlay" id="modal-agregar-coach">
     <div class="modal">
       <h3 class="modal-title">Agregar coach</h3>
-      <p class="modal-sub">Ingresá el email del usuario registrado en la plataforma. Se le asignará el rol <em>coach</em>.</p>
+      <p class="modal-sub">Ingresá el nombre completo y email del nuevo coach. Se creará la cuenta y se le enviará un email con un link para activarla y elegir su contraseña.</p>
       <div class="form-group" style="margin-bottom:8px">
-        <label class="form-label">Email del usuario</label>
-        <input class="form-input" id="coach-user-email" type="email" placeholder="usuario@ejemplo.com" />
+        <label class="form-label">Nombre completo</label>
+        <input class="form-input" id="coach-nombre" type="text" placeholder="Juan Pérez" />
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">Email del coach</label>
+        <input class="form-input" id="coach-email-input" type="email" placeholder="coach@ejemplo.com" />
       </div>
       <p style="font-size:0.75rem;color:var(--gray-text)">
-        El usuario debe haberse registrado previamente en la plataforma.
+        El email no debe estar registrado en la plataforma. Se enviará un magic link para activar la cuenta.
       </p>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModal('modal-agregar-coach')">Cancelar</button>
-        <button class="btn-primary" onclick="confirmarAgregarCoach()">Asignar rol coach</button>
+        <button class="btn-primary" onclick="confirmarAgregarCoach()">Crear coach</button>
       </div>
     </div>
   </div>
@@ -3456,51 +3460,42 @@
     }
 
     function openModalAgregarCoach() {
-      document.getElementById('coach-user-email').value = '';
+      document.getElementById('coach-email-input').value = '';
       openModal('modal-agregar-coach');
     }
 
     async function confirmarAgregarCoach() {
-      const email = document.getElementById('coach-user-email').value.trim().toLowerCase();
-      if (!email) return;
+      const email = (document.getElementById('coach-email-input')?.value || '').trim().toLowerCase();
+      const nombre = (document.getElementById('coach-nombre')?.value || '').trim();
+      if (!email) { showAlert('alert-coaches', 'Ingresá un email.', true); return; }
 
-      const btn = document.querySelector('#modal-agregar-coach .btn-primary');
-      btn.disabled = true; btn.textContent = 'Buscando...';
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { showAlert('alert-coaches', 'Sesión expirada. Recargá la página.', true); return; }
 
-      // Usamos RPC con SECURITY DEFINER para bypassear RLS en profiles.
-      // La policy SELECT/UPDATE de profiles solo permite ver/editar el propio perfil,
-      // por lo que desde el cliente (anon key) no se puede leer ni actualizar
-      // el perfil de otro usuario directamente.
-      const { data: rpcResult, error: rpcErr } = await sb
-        .rpc('assign_coach_by_email', { p_email: email });
-
-      btn.disabled = false; btn.textContent = 'Asignar rol coach';
-      closeModal('modal-agregar-coach');
-
-      if (rpcErr) {
-        return showAlert('alert-coaches', `Error al procesar la solicitud: ${rpcErr.message}`);
+      try {
+        const res = await fetch('https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/invite-coach-new', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
+          },
+          body: JSON.stringify({ email, full_name: nombre }),
+        });
+        const data = await res.json();
+        if (data.status === 'already_exists') {
+          showAlert('alert-coaches', 'Este email ya tiene cuenta en HB Lab.', true);
+        } else if (data.status === 'ok') {
+          showAlert('alert-coaches', `✅ Coach creado. Se envió el email de activación a ${email}.`);
+          document.getElementById('coach-email-input').value = '';
+          if (document.getElementById('coach-nombre')) document.getElementById('coach-nombre').value = '';
+          loadCoaches();
+        } else {
+          showAlert('alert-coaches', 'Error: ' + (data.error || JSON.stringify(data)), true);
+        }
+      } catch (e) {
+        showAlert('alert-coaches', 'Error de red: ' + e.message, true);
       }
-
-      // rpc() con función que retorna JSON devuelve el valor directo (no array)
-      const res = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
-
-      if (res?.error === 'not_found') {
-        return showAlert('alert-coaches', `Usuario no encontrado. Verificá que "${email}" esté registrado en la plataforma.`);
-      }
-      if (res?.error === 'unauthorized') {
-        return showAlert('alert-coaches', 'No tenés permisos para realizar esta acción.');
-      }
-      if (res?.status === 'already_coach') {
-        return showAlert('alert-coaches', `${res.full_name || email} ya tiene rol de coach.`, 'success');
-      }
-      if (res?.status === 'ok') {
-        showAlert('alert-coaches', `Rol de coach asignado a ${res.full_name || email}.`, 'success');
-        loadCoaches();
-        return;
-      }
-
-      showAlert('alert-coaches', 'Respuesta inesperada. Revisá la consola.');
-      console.error('assign_coach_by_email respuesta inesperada:', rpcResult);
     }
 
     async function openAsignarCoachCurso(coachId, nombre) {

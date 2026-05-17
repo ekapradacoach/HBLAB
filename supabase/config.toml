@@ -45,6 +45,9 @@ enable_confirmations = true
 [functions.invite-coach]
 verify_jwt = true   # exige JWT válido en el header Authorization (admin token)
 
+[functions.invite-coach-new]
+verify_jwt = true   # admin crea coach desde cero (email + nombre) + magic link
+
 [functions.process-payment]
 verify_jwt = false  # webhook público de MP/PayPal — la firma se valida adentro
 
