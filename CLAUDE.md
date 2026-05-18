@@ -1192,6 +1192,22 @@ Reemplaza el flujo viejo del modal "Agregar coach" en `admin.html`. Antes el adm
 
 ---
 
+## Etapa X.33 — Quitar curso de coach + ocultar ingresos brutos en panel coach
+
+**`admin.html` (Tab Coaches → subtabla de cursos por coach):**
+
+En la `.coach-courses-subtable` se agrega una columna extra al final de cada fila con un botón rojo "Quitar" (mismo estilo `btn-danger` que "Quitar rol", padding compacto 5px 10px y font-size 0.78rem). Llama a `quitarCursoCoach(coachId, courseId)` que pide confirmación nativa y hace `DELETE FROM coach_courses WHERE coach_id = X AND course_id = Y` directo (RLS de `coach_courses` permite al admin DELETE). En éxito → `loadCoaches()` para re-render. La función queda al lado de `quitarRolCoach` en el bloque de coaches.
+
+**`coach.html` (Tab Ganancias):**
+
+Se elimina la columna "Ingresos brutos" de la tabla en `loadGanancias()` — el coach ya no ve el revenue bruto del curso, solo Ventas + Comisión% + Su ganancia. La estructura de columnas pasa de **5 cols** (Curso, Ventas, Ingresos, Comisión, Tu ganancia) a **4 cols** (Curso, Ventas, Comisión, Tu ganancia). Razón: el monto que paga el alumno (`amount_paid`) puede tener cupones aplicados y no representa el ingreso "neto" que ve el coach — confunde más que ayuda.
+
+**Ajuste de regla mobile asociado** (`@media (max-width: 600px)`): la regla que escondía `.gains-table th/td:nth-child(4)` se mueve a `nth-child(3)` para mantener el intent original (ocultar columna "Comisión" en mobile). Con la nueva estructura de 4 cols, `nth-child(3)` es la columna "Comisión" — antes era `nth-child(4)` cuando había 5. Si no se ajustaba, se escondía justo "Tu ganancia" en mobile (catastrófico).
+
+El cálculo interno (`revenue = data.revenue > 0 ? data.revenue : data.count * priceArs` → `commission = revenue * commissionPct / 100`) **no cambia** — la fórmula sigue usando el revenue real para calcular la comisión, solo se omite el revenue del render. El box destacado en lima con "Total de ganancia del mes" sigue igual.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

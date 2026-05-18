@@ -3397,6 +3397,12 @@
                       Guardar
                     </button>
                   </td>
+                  <td>
+                    <button class="btn-danger" style="padding:5px 10px;font-size:0.78rem"
+                      onclick="quitarCursoCoach('${p.id}','${c.courseId}')">
+                      Quitar
+                    </button>
+                  </td>
                 </tr>`).join('')}
             </table>`
           : `<span style="color:var(--gray-text);font-size:0.82rem;">Sin cursos asignados</span>`;
@@ -3561,6 +3567,19 @@
 
     // (Tab Certificados removido en Sesión 52 — la gestión del PNG base ahora vive
     // dentro del Paso 4 del wizard de cada curso, vía cf-cert-file / cf-cert-url.)
+
+    // ══════════════════════════════════════════════
+    // Quitar curso asignado a un coach (Etapa X.33)
+    // ══════════════════════════════════════════════
+    async function quitarCursoCoach(coachId, courseId) {
+      if (!confirm('¿Quitar este curso del coach?')) return;
+      const { error } = await sb.from('coach_courses')
+        .delete()
+        .eq('coach_id', coachId)
+        .eq('course_id', courseId);
+      if (error) { showAlert('alert-coaches', 'Error: ' + error.message, true); return; }
+      loadCoaches();
+    }
 
     // ══════════════════════════════════════════════
     // TAREA 1 — Quitar rol coach

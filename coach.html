@@ -855,13 +855,13 @@
       .gains-select, .btn-gains-load { width: 100%; max-width: none; }
 
       /* Tab Ganancias — tabla con scroll horizontal y ocultar columna "Comisión".
-         Estructura: 1=Curso 2=Ventas 3=Ingresos 4=Comisión 5=Tu ganancia */
+         Estructura (Etapa X.33 — sin "Ingresos brutos"): 1=Curso 2=Ventas 3=Comisión 4=Tu ganancia */
       #tab-ganancias .card {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
       }
-      .gains-table th:nth-child(4),
-      .gains-table td:nth-child(4) { display: none; }
+      .gains-table th:nth-child(3),
+      .gains-table td:nth-child(3) { display: none; }
     }
   </style>
 </head>
@@ -3073,7 +3073,6 @@ async function loadGanancias() {
           <tr>
             <th>Curso</th>
             <th>Ventas del mes</th>
-            <th>Ingresos brutos</th>
             <th>Comisión</th>
             <th>Tu ganancia</th>
           </tr>
@@ -3086,7 +3085,6 @@ async function loadGanancias() {
                 <div class="gains-commission-pct">${r.commissionPct}% comisión</div>
               </td>
               <td>${r.count > 0 ? r.count : '<span style="color:var(--gray-text)">—</span>'}</td>
-              <td>${r.revenue > 0 ? fmtARS(r.revenue) : '<span style="color:var(--gray-text)">$0</span>'}</td>
               <td style="color:var(--violet-light)">${r.commissionPct}%</td>
               <td class="${r.commission > 0 ? 'gains-amount' : 'gains-amount-zero'}">${fmtARS(r.commission)}</td>
             </tr>`).join('')}
