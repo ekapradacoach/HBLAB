@@ -1210,6 +1210,22 @@ El cálculo interno (`revenue = data.revenue > 0 ? data.revenue : data.count * p
 
 ---
 
+## Etapa X.34 — Histórico acumulado en panel coach (Tab Ganancias)
+
+Debajo de la tabla mensual de `loadGanancias()` en `coach.html` se agrega un bloque "Histórico acumulado" que muestra:
+
+- **Ganancia total acumulada** (suma de `amount_paid × commission_pct / 100` para todas las ventas paid+active de los cursos del coach, sin filtro de fecha).
+- **Cantidad total de ventas históricas**.
+- **Texto secundario**: "Desde el inicio hasta hoy".
+
+**Implementación**: tras la query mensual y el render de la tabla, una segunda query `sb.from('user_courses').select('amount_paid, course_id').eq('payment_status','paid').eq('status','active').in('course_id', courseIds)` (sin `gte/lt enrolled_at`) trae todas las ventas históricas de los cursos asignados al coach. Se agrupa por `course_id` con el mismo patrón `salesByCourse`, y se suma `revenue × commissionPct / 100` para cada curso (usando el mismo fallback `revenue > 0 ? revenue : count × priceArs` que la tabla del mes para mantener consistencia cuando `amount_paid` viene en 0).
+
+**Estilo**: nuevo CSS `.gains-historic-box` espejado de `.gains-total-box` (el del mes) pero con **borde violeta** (`rgba(123,79,190,0.45)`) en lugar de lime y monto en `var(--violet)` (`#7B4FBE`) en lugar de `var(--lime)`. Padding un poco más compacto (`24px 32px` vs `28px 32px`) y `margin-top: 24px` para separarlo de la tabla. Reusa `.gains-total-label` y `.gains-total-detail` para no duplicar tipografía.
+
+**Posición en el DOM**: el box histórico se renderiza dentro del mismo `wrap.innerHTML` (`#gains-content`), justo después del `.card` con la tabla. No se modifica el `#gains-total-box` del mes (lime, sigue arriba del wrap) ni el selector mes/año.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

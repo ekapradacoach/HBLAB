@@ -386,6 +386,13 @@
     .gains-total-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gray-text); margin-bottom: 8px; }
     .gains-total-amount { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; color: var(--lime); }
     .gains-total-detail { font-size: 0.8rem; color: var(--gray-text); margin-top: 6px; }
+    /* Etapa X.34 — Histórico acumulado (borde violeta, monto violeta) */
+    .gains-historic-box {
+      background: linear-gradient(135deg, rgba(123,79,190,0.18), rgba(123,79,190,0.04));
+      border: 1px solid rgba(123,79,190,0.45); border-radius: 14px;
+      padding: 24px 32px; text-align: center; margin-top: 24px;
+    }
+    .gains-historic-amount { font-size: 2rem; font-weight: 900; letter-spacing: -0.03em; color: var(--violet); }
     .gains-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     .gains-table th {
       background: rgba(47,62,82,0.5); text-align: left; font-size: 0.73rem; font-weight: 700;
@@ -3066,6 +3073,32 @@ async function loadGanancias() {
   totalAmount.textContent = fmtARS(grandTotal);
   totalDetail.textContent = `${totalVentas} venta${totalVentas !== 1 ? 's' : ''} en ${mesNombre(mes)} ${anio}`;
 
+  // Etapa X.34 — Histórico acumulado (sin filtro de fecha)
+  const { data: histData } = await sb
+    .from('user_courses')
+    .select('amount_paid, course_id')
+    .eq('payment_status', 'paid')
+    .eq('status', 'active')
+    .in('course_id', courseIds);
+
+  const histByCourse = {};
+  (histData || []).forEach(s => {
+    if (!histByCourse[s.course_id]) histByCourse[s.course_id] = { count: 0, revenue: 0 };
+    histByCourse[s.course_id].count++;
+    histByCourse[s.course_id].revenue += Number(s.amount_paid || 0);
+  });
+
+  let histTotalGain   = 0;
+  let histTotalVentas = 0;
+  coachCourseData.forEach(cc => {
+    const priceArs      = Number(cc.courses?.price_ars || 0);
+    const commissionPct = Number(cc.commission_pct || 0);
+    const d             = histByCourse[cc.course_id] || { count: 0, revenue: 0 };
+    const rev           = d.revenue > 0 ? d.revenue : d.count * priceArs;
+    histTotalGain   += rev * commissionPct / 100;
+    histTotalVentas += d.count;
+  });
+
   wrap.innerHTML = `
     <div class="card">
       <table class="gains-table">
@@ -3090,6 +3123,14 @@ async function loadGanancias() {
             </tr>`).join('')}
         </tbody>
       </table>
+    </div>
+
+    <div class="gains-historic-box">
+      <div class="gains-total-label">Histórico acumulado</div>
+      <div class="gains-historic-amount">${fmtARS(histTotalGain)}</div>
+      <div class="gains-total-detail">
+        ${histTotalVentas} venta${histTotalVentas !== 1 ? 's' : ''} totales · Desde el inicio hasta hoy
+      </div>
     </div>
   `;
 }
