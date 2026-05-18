@@ -3573,10 +3573,13 @@
     // ══════════════════════════════════════════════
     async function quitarCursoCoach(coachId, courseId) {
       if (!confirm('¿Quitar este curso del coach?')) return;
-      const { error } = await sb.from('coach_courses')
+      console.log('quitarCursoCoach llamada con:', coachId, courseId);
+      const { data, error } = await sb.from('coach_courses')
         .delete()
         .eq('coach_id', coachId)
-        .eq('course_id', courseId);
+        .eq('course_id', courseId)
+        .select();
+      console.log('resultado DELETE:', data, error);
       if (error) { showAlert('alert-coaches', 'Error: ' + error.message, true); return; }
       loadCoaches();
     }

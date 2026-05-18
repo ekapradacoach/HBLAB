@@ -1206,6 +1206,8 @@ Se elimina la columna "Ingresos brutos" de la tabla en `loadGanancias()` — el 
 
 El cálculo interno (`revenue = data.revenue > 0 ? data.revenue : data.count * priceArs` → `commission = revenue * commissionPct / 100`) **no cambia** — la fórmula sigue usando el revenue real para calcular la comisión, solo se omite el revenue del render. El box destacado en lima con "Total de ganancia del mes" sigue igual.
 
+**Diagnóstico activo en `quitarCursoCoach`**: la función tiene `console.log` antes y después del DELETE + `.select()` encadenado al query para que PostgREST retorne las filas afectadas (`data: [...]`). Esto está en producción mientras se debuggea por qué el DELETE no estaba eliminando la fila. Una vez identificada la causa (probable RLS de `coach_courses` que no permite DELETE al admin desde el cliente), remover los logs y eventualmente migrar a una RPC SECURITY DEFINER si la RLS sigue bloqueando.
+
 ---
 
 ## Usuarios registrados
