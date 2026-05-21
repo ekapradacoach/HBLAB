@@ -80,20 +80,27 @@ async function sendWelcomeEmail(opts: {
   // autenticado vía magic link → la página set-password.html detecta la sesión
   // y le ofrece elegir su contraseña.
   const html = `<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#1E2A3A;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A;padding:32px 16px;">
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0 !important;padding:0 !important;background:#1E2A3A !important;font-family:'Inter',Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A !important;padding:32px 16px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:560px;background:#243042;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
+      <table role="presentation" width="100%" style="max-width:560px;background:#243042 !important;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
         <tr><td>
-          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;">¡Bienvenida/o a <span style="color:#C8E600">HB Lab</span>!</h1>
+          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;font-family:'Inter',Arial,Helvetica,sans-serif;">¡Bienvenida/o a <span style="color:#C8E600">HB Lab</span>!</h1>
           <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, gracias por sumarte. Tu compra del curso <strong style="color:#FFFFFF">${safeTitle}</strong> está confirmada y ya podés acceder.</p>
 
           <p style="margin:0 0 16px;font-size:14px;color:#94A3B8;line-height:1.55;">Para activar tu cuenta y elegir tu contraseña personal, hacé click acá abajo:</p>
 
-          <p style="margin:0 0 28px;"><a href="${opts.magicLink}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:8px;font-size:15px;">Crear mi contraseña →</a></p>
+          <p style="margin:0 0 28px;"><a href="${opts.magicLink}" style="display:inline-block;background:#C8E600 !important;color:#1E2A3A !important;text-decoration:none;font-weight:700;padding:16px 32px;border-radius:8px;font-size:15px;font-family:'Inter',Arial,Helvetica,sans-serif;">Crear mi contraseña →</a></p>
 
           <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;line-height:1.55;">¿El botón no funciona? Copiá y pegá este link en tu navegador:</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#9B6FDE;word-break:break-all;line-height:1.4;">${opts.magicLink}</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#C8E600;word-break:break-all;line-height:1.4;">${opts.magicLink}</p>
 
           <p style="margin:0 0 6px;font-size:13px;color:#94A3B8;line-height:1.55;">El link expira en 1 hora. Si vence, podés pedir uno nuevo desde la pantalla de login con "Olvidaste tu contraseña" usando este email: <strong style="color:#FFFFFF">${opts.email}</strong>.</p>
 
@@ -152,18 +159,25 @@ async function sendConfirmationEmail(opts: {
   // HTML email-safe — mismo estilo visual inline que sendWelcomeEmail.
   // Sin magic link, sin contraseña, solo CTA al dashboard.
   const html = `<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#1E2A3A;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A;padding:32px 16px;">
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0 !important;padding:0 !important;background:#1E2A3A !important;font-family:'Inter',Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A !important;padding:32px 16px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:560px;background:#243042;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
+      <table role="presentation" width="100%" style="max-width:560px;background:#243042 !important;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
         <tr><td>
-          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;">✅ Nuevo curso activado en <span style="color:#C8E600">HB Lab</span></h1>
+          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;font-family:'Inter',Arial,Helvetica,sans-serif;">✅ Nuevo curso activado en <span style="color:#C8E600">HB Lab</span></h1>
           <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, tu acceso al curso <strong style="color:#FFFFFF">${safeTitle}</strong> ya está activo. Entrá a tu dashboard para empezar.</p>
 
-          <p style="margin:0 0 28px;"><a href="${dashboardUrl}" style="display:inline-block;background:#C8E600;color:#1E2A3A;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:8px;font-size:15px;">Ir al dashboard →</a></p>
+          <p style="margin:0 0 28px;"><a href="${dashboardUrl}" style="display:inline-block;background:#C8E600 !important;color:#1E2A3A !important;text-decoration:none;font-weight:700;padding:16px 32px;border-radius:8px;font-size:15px;font-family:'Inter',Arial,Helvetica,sans-serif;">Ir al dashboard →</a></p>
 
           <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;line-height:1.55;">¿El botón no funciona? Copiá y pegá este link en tu navegador:</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#9B6FDE;word-break:break-all;line-height:1.4;">${dashboardUrl}</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#C8E600;word-break:break-all;line-height:1.4;">${dashboardUrl}</p>
 
           <p style="margin:0;font-size:13px;color:#94A3B8;line-height:1.55;">Ingresá con tu email <strong style="color:#FFFFFF">${opts.email}</strong> y la contraseña que ya configuraste.</p>
 
