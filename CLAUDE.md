@@ -1229,6 +1229,29 @@ Debajo de la tabla mensual de `loadGanancias()` en `coach.html` se agrega un blo
 
 ---
 
+## Etapa X.36 — Soporte por email (footer público + FAB alumnos)
+
+Dos canales de contacto agregados, ambos apuntan a `mailto:ekapradacoach@gmail.com`:
+
+**1. Footer de páginas públicas** (`index.html` + `venta-curso.html`):
+
+Dentro del `.footer-bottom` se agrega `<p class="footer-support"><a href="mailto:ekapradacoach@gmail.com">✉ ¿Consultas? Escribinos</a></p>` entre el copyright y el "Hecho con ♥". CSS asociado: color base `#94A3B8` (gray-text de la paleta), hover `#C8E600` (lime), font-size 0.82rem, sin underline.
+
+⚠️ Las páginas legacy `webinar-hipertrofia.html`, `carrera-hibrida.html`, `entrenamiento-hibrido.html`, `curso-webinar-hipertrofia.html`, `curso-carrera-hibrida.html`, `curso-entrenamiento-hibrido.html` son archivos de 14 líneas que sólo hacen un meta-refresh redirect a sus reemplazos dinámicos (`venta-curso.html?slug=...` / `curso.html?slug=...`). No tienen footer ni body real, por eso no se les agregó nada — el footer del destino ya cubre el caso.
+
+**2. Botón flotante (FAB) en páginas de alumno** (`dashboard.html` + `curso.html`):
+
+Botón `<a class="support-fab">✉</a>` con `position: fixed; bottom: 24px; right: 24px; z-index: 999`, círculo de 52px (48px en mobile), fondo `#C8E600`, ícono `#1E2A3A`, box-shadow suave con tinte lime. Hover: traslada -2px arriba + sombra más fuerte. Tooltip CSS puro (`::after` con `content: "¿Necesitás ayuda?"`) que aparece a la izquierda del botón en hover, fondo card-bg `#243042` con borde `#2f3e52`. Sin JS para el tooltip.
+
+- **`dashboard.html`**: href estático `mailto:...?subject=Consulta%20HB%20Lab&body=Hola%2C%20tengo%20una%20consulta%20sobre...`.
+- **`curso.html`**: href base estático en el HTML, pero se actualiza al cargar el curso (justo después de `document.title = ${course.title}`) usando `supportFab.href = mailto:...?subject=${encodeURIComponent('Consulta sobre ' + course.title)}&body=...`. Así el subject incluye dinámicamente el nombre del curso actual.
+
+Las páginas legacy de curso (`curso-*.html`) son redirects de 14 líneas — el FAB no aplica.
+
+`z-index: 999` queda por debajo del navbar (`z-index: 100` en dashboard, no — `100` < `999`; en realidad el FAB queda **por encima**) pero no interfiere con modales (z-index 1000+) ni el loading screen (z-index 300). El media query mobile reduce el botón a 48px y lo despega 16px del borde.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
