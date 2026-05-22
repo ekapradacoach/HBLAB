@@ -426,6 +426,14 @@
       font-size: 1rem; font-weight: 700; color: var(--white); margin-bottom: 4px;
     }
     .modules-active-actions { display: flex; justify-content: flex-start; }
+    /* Etapa X.42b — placeholder cuando la lección no tiene video_url */
+    .no-video-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 200px; padding: 40px 24px;
+      background: rgba(47,62,82,0.25); border: 1px dashed var(--card-border);
+      border-radius: 12px; color: var(--gray-text);
+      font-size: 0.92rem; font-style: italic; text-align: center;
+    }
 
     /* Etapa X.42 — bloque de live por módulo (sidebar) */
     .modules-mod-live {
@@ -1120,12 +1128,18 @@
       } else {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
+        // Etapa X.42b — si la lección no tiene video_url, mostrar placeholder
+        // en vez del iframe vacío (que se ve como pantalla negra).
+        const hasVideo = !!(active && (active.video_url || '').trim());
+        const videoBlockHtml = hasVideo
+          ? `<div class="video-wrapper">
+               <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
+                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+             </div>`
+          : `<div class="no-video-placeholder">📄 Esta lección aún no tiene video cargado.</div>`;
         mainHtml = active ? `
           <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
-          <div class="video-wrapper">
-            <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-          </div>
+          ${videoBlockHtml}
           <div class="modules-active-actions">
             ${isDone
               ? `<button class="btn-video completed" disabled>
