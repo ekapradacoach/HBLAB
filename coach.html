@@ -488,6 +488,35 @@
     }
     .mod-card-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .mod-card-head .field-input { flex: 1; font-weight: 600; }
+
+    /* Etapa X.45 — bloque "Finalizar live" en el card del módulo (coach + admin) */
+    .coach-live-status {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin: 0 0 10px; padding: 8px 12px;
+      background: rgba(252, 129, 129, 0.08);
+      border: 1px solid rgba(252, 129, 129, 0.32);
+      border-radius: 8px;
+    }
+    .coach-live-status.ended {
+      background: rgba(200, 230, 0, 0.08);
+      border-color: rgba(200, 230, 0, 0.32);
+    }
+    .btn-finalize-live {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700;
+      background: #fc8181; color: #1E2A3A; border: none;
+      transition: opacity 0.18s, transform 0.18s;
+    }
+    .btn-finalize-live:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-finalize-live:disabled { opacity: 0.6; cursor: wait; }
+    .coach-live-status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.82rem; font-weight: 700; color: var(--lime, #C8E600);
+    }
+    .coach-live-status-meta {
+      font-size: 0.74rem; color: var(--gray-text);
+    }
     .mod-lessons-list {
       display: flex; flex-direction: column; gap: 8px;
       padding-left: 14px; margin-left: 4px; padding-top: 4px; padding-bottom: 4px;
@@ -2511,7 +2540,7 @@ async function loadModulos(seq) {
   `;
 
   // Pre-poblar
-  (modules || []).forEach(m => addCoachModuleRow(m.id || '', m.title || '', m.lessons || []));
+  (modules || []).forEach(m => addCoachModuleRow(m.id || '', m.title || '', m.lessons || [], m.live || null));
   if (!modules.length) addCoachModuleRow();
 
   // Etapa X.8: preload counts de materiales por lección → setea los badges del 📚
@@ -2552,33 +2581,120 @@ async function loadCoachModulesForCourse(courseId) {
     .from('course_modules').select('id, title, order_num').eq('course_id', courseId).order('order_num');
   if (!modules?.length) return [];
   const modIds = modules.map(m => m.id);
-  const { data: lessons } = await sb
-    .from('course_lessons').select('id, module_id, title, video_url, order_num').in('module_id', modIds).order('order_num');
+  // Etapa X.45 — además de lecciones, traemos también course_lives (1:0..1) para
+  // poder renderizar el botón "Finalizar live" desde el panel del coach.
+  const [{ data: lessons }, { data: lives }] = await Promise.all([
+    sb.from('course_lessons')
+      .select('id, module_id, title, video_url, order_num')
+      .in('module_id', modIds)
+      .order('order_num'),
+    sb.from('course_lives')
+      .select('id, module_id, live_url, live_date, recording_url, live_ended')
+      .in('module_id', modIds),
+  ]);
   const lessonsByMod = {};
   (lessons || []).forEach(l => {
     if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
     lessonsByMod[l.module_id].push(l);
   });
-  return modules.map(m => ({ ...m, lessons: lessonsByMod[m.id] || [] }));
+  const liveByMod = {};
+  (lives || []).forEach(lv => { liveByMod[lv.module_id] = lv; });
+  return modules.map(m => ({
+    ...m,
+    lessons: lessonsByMod[m.id] || [],
+    live:    liveByMod[m.id]    || null,
+  }));
 }
 
-function addCoachModuleRow(modId = '', title = '', lessons = []) {
+function addCoachModuleRow(modId = '', title = '', lessons = [], live = null) {
   const list = document.getElementById('mod-list');
   if (!list) return;
   const card = document.createElement('div');
   card.className = 'mod-card';
   if (modId) card.dataset.modId = modId;
+  // Etapa X.45 — Render bloque de live status (solo cuando hay live asociado).
+  // Permite al coach finalizar el live una vez terminada la clase. Antes de eso,
+  // los alumnos no ven el botón "Asistí al live" en curso.html.
+  const liveStatusHtml = (live && live.id) ? renderCoachLiveStatus(live) : '';
   card.innerHTML = `
     <div class="mod-card-head">
       <input class="field-input" type="text" placeholder="Título del módulo" value="${escapeHtml(title)}" />
       <button type="button" class="btn-icon-rec" title="Eliminar módulo" onclick="this.closest('.mod-card').remove()">×</button>
     </div>
+    ${liveStatusHtml}
     <div class="mod-lessons-list"></div>
     <button type="button" class="mod-add-lesson-btn" onclick="addCoachLessonRow(this.previousElementSibling)">+ Agregar lección</button>
   `;
   list.appendChild(card);
   const lessonsList = card.querySelector('.mod-lessons-list');
   (lessons || []).forEach(l => addCoachLessonRow(lessonsList, l.id || '', l.title || '', l.video_url || ''));
+}
+
+// Etapa X.45 — render del estado del live para el coach.
+// Solo se muestra si el live ya pasó (live_date <= now). Casos:
+//   - !live_ended → botón "🔴 Finalizar live" + texto "Live realizado el {fecha}"
+//   - live_ended → badge "✅ Live finalizado" en gris/verde
+// Si live_date es futura, no se muestra nada (todavía no hay nada para "finalizar").
+function renderCoachLiveStatus(live) {
+  if (!live?.live_date) return '';
+  const ts = new Date(live.live_date).getTime();
+  if (isNaN(ts) || ts > Date.now()) return '';   // futura → nada
+
+  const fecha   = formatCoachLiveDate(live.live_date);
+  const ended   = !!live.live_ended;
+  const safeId  = escapeHtml(live.id);
+
+  if (ended) {
+    return `
+      <div class="coach-live-status ended" data-live-id="${safeId}">
+        <span class="coach-live-status-badge">✅ Live finalizado</span>
+        <span class="coach-live-status-meta">Realizado el ${escapeHtml(fecha)}</span>
+      </div>`;
+  }
+  return `
+    <div class="coach-live-status" data-live-id="${safeId}">
+      <button type="button" class="btn-finalize-live" onclick="finalizarLive('${safeId}', this)">🔴 Finalizar live</button>
+      <span class="coach-live-status-meta">Live realizado el ${escapeHtml(fecha)}</span>
+    </div>`;
+}
+
+function formatCoachLiveDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
+}
+
+// Etapa X.45 — UPDATE course_lives.live_ended = true. Al confirmar, reemplaza
+// el bloque del coach con el estado "finalizado" sin recargar toda la sección.
+async function finalizarLive(liveId, btn) {
+  if (!liveId) return;
+  if (!confirm('¿Finalizar este live? Después de confirmar, los alumnos verán el botón "Asistí al live".')) return;
+
+  const wrap = btn.closest('.coach-live-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Finalizando...'; }
+
+  const { error } = await sb.from('course_lives').update({ live_ended: true }).eq('id', liveId);
+  if (error) {
+    console.error('finalizarLive error:', error);
+    alert('Error al finalizar el live: ' + error.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🔴 Finalizar live'; }
+    return;
+  }
+  // Reemplazar el bloque por el estado "finalizado"
+  if (wrap) {
+    const meta = wrap.querySelector('.coach-live-status-meta');
+    const fechaTxt = meta ? meta.textContent.replace(/^Live realizado el /, '') : '';
+    wrap.classList.add('ended');
+    wrap.innerHTML = `
+      <span class="coach-live-status-badge">✅ Live finalizado</span>
+      <span class="coach-live-status-meta">Realizado el ${escapeHtml(fechaTxt)}</span>
+    `;
+  }
 }
 
 function addCoachLessonRow(listEl, lessonId = '', title = '', url = '') {

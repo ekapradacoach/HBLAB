@@ -819,6 +819,35 @@
 
     /* Etapa X.38 — Drip + Lives por módulo */
     .cf-mod-meta { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; padding: 10px 12px; background: rgba(30,42,58,0.35); border: 1px solid rgba(123,79,190,0.18); border-radius: 8px; }
+
+    /* Etapa X.45 — bloque "Finalizar live" (espejo del CSS de coach.html) */
+    .coach-live-status {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin: 0 0 10px; padding: 8px 12px;
+      background: rgba(252, 129, 129, 0.08);
+      border: 1px solid rgba(252, 129, 129, 0.32);
+      border-radius: 8px;
+    }
+    .coach-live-status.ended {
+      background: rgba(200, 230, 0, 0.08);
+      border-color: rgba(200, 230, 0, 0.32);
+    }
+    .btn-finalize-live {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700;
+      background: #fc8181; color: #1E2A3A; border: none;
+      transition: opacity 0.18s, transform 0.18s;
+    }
+    .btn-finalize-live:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-finalize-live:disabled { opacity: 0.6; cursor: wait; }
+    .coach-live-status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.82rem; font-weight: 700; color: var(--lime, #C8E600);
+    }
+    .coach-live-status-meta {
+      font-size: 0.74rem; color: var(--gray-text);
+    }
     .cf-mod-meta-row { display: flex; flex-direction: column; gap: 6px; }
     .cf-mod-meta-label { font-size: 0.74rem; font-weight: 700; color: var(--gray-text); letter-spacing: 0.04em; text-transform: uppercase; }
     .cf-mod-live-fields { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 6px; padding-left: 56px; }
@@ -2247,17 +2276,24 @@
       // Pre-carga datos del live (si existe) en data-attrs para que getModulesFromForm() los lea.
       if (live?.id)            card.dataset.liveId       = live.id;
       if (live?.recording_url) card.dataset.liveRecording = live.recording_url;
+      // Etapa X.45 — preservar live_ended durante el sync (admin no lo edita
+      // desde los inputs del form; lo togglea con el botón "Finalizar live").
+      if (live?.live_ended)    card.dataset.liveEnded    = '1';
 
       const unlockVal    = unlockAt ? String(unlockAt).slice(0, 16) : '';
       const hasLive      = !!(live && (live.live_date || live.live_url));
       const liveDateVal  = live?.live_date ? String(live.live_date).slice(0, 16) : '';
       const liveUrlVal   = live?.live_url || '';
 
+      // Etapa X.45 — bloque "Finalizar live" (solo si el live ya pasó y existe en BD)
+      const liveStatusHtml = (live && live.id) ? renderAdminLiveStatus(live) : '';
+
       card.innerHTML = `
         <div class="cf-module-head">
           <input class="form-input cf-mod-title" type="text" placeholder="Título del módulo" value="${escapeAttr(title)}" />
           <button type="button" class="btn-icon" title="Eliminar módulo" onclick="this.closest('.cf-module-card').remove()">×</button>
         </div>
+        ${liveStatusHtml}
         <div class="cf-mod-meta">
           <div class="cf-mod-meta-row">
             <label class="cf-mod-meta-label">📅 Fecha de desbloqueo (drip)
@@ -2291,6 +2327,64 @@
       const lessonsList = card.querySelector('.cf-lessons-list');
       (lessons || []).forEach(l => addLessonRow(lessonsList, l.id || '', l.title || '', l.video_url || ''));
       return card;
+    }
+
+    // Etapa X.45 — bloque "Finalizar live" / "Live finalizado" en el card del módulo
+    function renderAdminLiveStatus(live) {
+      if (!live?.live_date) return '';
+      const ts = new Date(live.live_date).getTime();
+      if (isNaN(ts) || ts > Date.now()) return '';   // todavía no pasó → nada
+
+      const fecha = (() => {
+        const d = new Date(live.live_date);
+        const dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+        const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
+      })();
+      const safeId = escapeAttr(live.id);
+      if (live.live_ended) {
+        return `
+          <div class="coach-live-status ended" data-live-id="${safeId}">
+            <span class="coach-live-status-badge">✅ Live finalizado</span>
+            <span class="coach-live-status-meta">Realizado el ${escapeAttr(fecha)}</span>
+          </div>`;
+      }
+      return `
+        <div class="coach-live-status" data-live-id="${safeId}">
+          <button type="button" class="btn-finalize-live" onclick="finalizarLiveAdmin('${safeId}', this)">🔴 Finalizar live</button>
+          <span class="coach-live-status-meta">Live realizado el ${escapeAttr(fecha)}</span>
+        </div>`;
+    }
+
+    async function finalizarLiveAdmin(liveId, btn) {
+      if (!liveId) return;
+      if (!confirm('¿Finalizar este live? Después de confirmar, los alumnos verán el botón "Asistí al live".')) return;
+
+      const wrap = btn.closest('.coach-live-status');
+      if (btn) { btn.disabled = true; btn.textContent = 'Finalizando...'; }
+
+      const { error } = await sb.from('course_lives').update({ live_ended: true }).eq('id', liveId);
+      if (error) {
+        console.error('finalizarLiveAdmin error:', error);
+        showAlert('alert-cursos', 'Error al finalizar el live: ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = '🔴 Finalizar live'; }
+        return;
+      }
+      // Reemplazar el bloque por estado "finalizado" + persistir flag en dataset
+      // (para que un guardado posterior del form no pise el valor).
+      const card = btn.closest('.cf-module-card');
+      if (card) card.dataset.liveEnded = '1';
+      if (wrap) {
+        const meta = wrap.querySelector('.coach-live-status-meta');
+        const fechaTxt = meta ? meta.textContent.replace(/^Live realizado el /, '') : '';
+        wrap.classList.add('ended');
+        wrap.innerHTML = `
+          <span class="coach-live-status-badge">✅ Live finalizado</span>
+          <span class="coach-live-status-meta">Realizado el ${escapeAttr(fechaTxt)}</span>
+        `;
+      }
     }
 
     // Etapa X.38 — toggle visibilidad de los campos de live por módulo
@@ -2392,6 +2486,9 @@
             live_date:     liveDateRaw ? new Date(liveDateRaw).toISOString() : null,
             live_url:      liveUrl || null,
             recording_url: card.dataset.liveRecording || null,
+            // Etapa X.45 — preservar el flag live_ended para que el UPSERT del sync
+            // no lo pise a false. El flag se togglea solo via "Finalizar live" (UPDATE puntual).
+            live_ended:    card.dataset.liveEnded === '1',
           } : null,
         };
       });
@@ -2424,7 +2521,7 @@
           .in('module_id', modIds)
           .order('order_num'),
         sb.from('course_lives')
-          .select('id, module_id, live_url, live_date, recording_url')
+          .select('id, module_id, live_url, live_date, recording_url, live_ended')
           .in('module_id', modIds),
       ]);
       const lessonsByMod = {};
@@ -2533,6 +2630,7 @@
             live_url:      mod.live.live_url      || null,
             live_date:     mod.live.live_date     || null,
             recording_url: mod.live.recording_url || null,
+            live_ended:    !!mod.live.live_ended,   // Etapa X.45 — preserva el flag
           };
           if (mod.live.id) {
             const { error: errUpdLive } = await sb.from('course_lives').update(livePayload).eq('id', mod.live.id);

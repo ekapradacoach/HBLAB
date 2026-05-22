@@ -1039,7 +1039,7 @@
           .in('module_id', modIds)
           .order('order_num'),
         sb.from('course_lives')
-          .select('id, module_id, live_url, live_date, recording_url')
+          .select('id, module_id, live_url, live_date, recording_url, live_ended')
           .in('module_id', modIds),
       ]);
       const lessonsByMod = {};
@@ -1068,15 +1068,20 @@
       return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
     }
 
-    // Etapa X.42 + X.44 — render del bloque de live para un módulo.
-    // 5 estados según live_date / asistencia / recording_url (ver tabla en CONTEXTO):
-    //   1. Futuro → Unirse al live + (si no asistió) Asistí al live + fecha.
-    //   2. Pasado + asistido + sin grabación → ✅ Asististe a este live.
-    //   3. Pasado + no asistido + sin grabación → ⏳ Grabación próximamente (72hs).
-    //   4. Pasado + asistido + con grabación → Ver grabación + ✅ Asististe a este live.
-    //   5. Pasado + no asistido + con grabación → Ver grabación (el botón "Marcar
-    //      como completado" aparece debajo de la grabación en el main panel cuando
-    //      el alumno la abre).
+    // Etapa X.42 + X.44 + X.45 — render del bloque de live para un módulo.
+    // El botón "✅ Asistí al live" SOLO aparece cuando el coach finalizó el live
+    // (live_ended = true) y el alumno aún no marcó asistencia. Mientras live_ended
+    // siga false, el alumno solo ve "📡 Unirse al live" + fecha.
+    //
+    // Estados:
+    //   - live futura → "📡 Unirse al live" + fecha (sin botón asistí).
+    //   - live pasada NO finalizada → mismo que futura (el coach todavía no cerró).
+    //   - live pasada + finalizada + asistió + sin grabación → "✅ Asististe a este live".
+    //   - live pasada + finalizada + NO asistió + sin grabación → "⏳ La grabación estará
+    //     disponible en las próximas 72hs" + botón "✅ Asistí al live" (para marcar).
+    //   - live pasada + finalizada + asistió + con grabación → "▶ Ver grabación" + badge.
+    //   - live pasada + finalizada + NO asistió + con grabación → "▶ Ver grabación"
+    //     + botón asistí (también queda disponible en el main panel al ver la grabación).
     function renderModuleLiveInfo(m) {
       const live = m?.live;
       if (!live) return '';
@@ -1084,43 +1089,43 @@
       const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
       const isFuture = ts && !isNaN(ts) && ts > now;
       const attended = isLiveAttended(m);
+      const ended    = !!live.live_ended;
 
-      // Estado 1: live futura
-      if (isFuture) {
-        const safeUrl    = escHtml(live.live_url || '#');
-        const attendedBadge = attended
-          ? '<div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>'
-          : `<button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>`;
+      // Caso "todavía no finalizado por el coach": tanto si la fecha está en el
+      // futuro como si ya pasó pero el coach no cerró → solo Unirse + fecha.
+      if (isFuture || !ended) {
+        const safeUrl = escHtml(live.live_url || '#');
         return `
           <div class="modules-mod-live">
             <a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
-            ${attendedBadge}
             <div class="modules-mod-live-meta">${escHtml(formatLiveDate(live.live_date))}</div>
           </div>`;
       }
 
-      // Live ya pasada → branches según recording + asistencia
+      // Live ya pasada Y finalizada por el coach → asistencia + grabación disponibles
+      const attendedBadge = attended
+        ? '<div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>'
+        : `<button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>`;
+
       if (live.recording_url) {
-        // Estado 4 o 5
         return `
           <div class="modules-mod-live recording">
             <button class="btn-live-recording" onclick="playLiveRecording('${escHtml(m.id)}')">▶ Ver grabación</button>
             <div class="modules-mod-live-meta">Grabación del ${escHtml(formatLiveDate(live.live_date))}</div>
-            ${attended ? '<div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>' : ''}
+            ${attendedBadge}
           </div>`;
       }
       // Sin grabación
       if (attended) {
-        // Estado 2
         return `
           <div class="modules-mod-live attended-only">
             <div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>
           </div>`;
       }
-      // Estado 3: pasada + no asistió + sin grabación
       return `
         <div class="modules-mod-live pending">
           <div class="modules-mod-live-meta">⏳ La grabación estará disponible en las próximas 72hs</div>
+          <button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>
         </div>`;
     }
 

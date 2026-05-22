@@ -3311,3 +3311,75 @@ Cuando `_liveOverride` está activo (alumno viendo grabación de un live pasado)
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Finalizar live + gate de asistencia (live_ended)
+
+**Fecha:** 22 de mayo de 2026. Sigue el feature de lives. Antes, el botón "✅ Asistí al live" en curso.html aparecía únicamente cuando `live_date` estaba en el futuro — comportamiento extraño porque el alumno marcaría asistencia ANTES de que la clase empezara. Esta etapa cambia el control al coach: ahora hay un explícito **"finalizar el live"** que destraba la asistencia para los alumnos. Mientras el coach no marque `live_ended = true`, los alumnos solo ven el botón "Unirse al live" y la fecha — no pueden marcar asistencia.
+
+### SQL ejecutado (manual)
+
+```sql
+ALTER TABLE public.course_lives
+  ADD COLUMN IF NOT EXISTS live_ended BOOLEAN DEFAULT FALSE;
+```
+
+### `coach.html` — botón en cada módulo con live
+
+En el tab "Mi curso" → sección Módulos, cada `.mod-card` con live asociado y `live_date <= now` muestra arriba un bloque `.coach-live-status`:
+
+- **`!live_ended`** → botón **`🔴 Finalizar live`** (rosa coral, color `#fc8181`) + meta gris "Live realizado el {fecha}".
+- **`live_ended`** → badge **`✅ Live finalizado`** (lime) + "Realizado el {fecha}". Sin botón.
+- **`live_date` futura** → no se renderiza nada (no hay nada que finalizar todavía).
+- **Sin live** → no se renderiza nada.
+
+El click en "Finalizar live" abre un `confirm()` con copy `"¿Finalizar este live? Después de confirmar, los alumnos verán el botón 'Asistí al live'."`. Tras confirmar, UPDATE `course_lives SET live_ended = true WHERE id = X`, y reemplaza el bloque inline por el estado finalizado sin recargar toda la sección.
+
+Implementación:
+- `loadCoachModulesForCourse` ahora hace `Promise.all` con `course_lessons` + `course_lives` (incluyendo `live_ended` en el SELECT) — espejo del patrón ya usado en `loadStudentModules` (curso.html) y `loadModulesForCourse` (admin.html).
+- `addCoachModuleRow(modId, title, lessons, live)` recibe el live como cuarto argumento. Si existe y `live_date <= now`, renderiza `renderCoachLiveStatus(live)` al inicio de la card.
+- `renderCoachLiveStatus(live)` y `formatCoachLiveDate(iso)` son helpers nuevos. Patrón similar a `renderModuleLiveInfo` de curso.html.
+- `finalizarLive(liveId, btn)` hace el UPDATE puntual sin tocar el resto del módulo. Maneja botón disabled + texto "Finalizando..." durante el await.
+
+### `admin.html` — mismo flujo en el editor de cursos
+
+Espejo de coach.html en `addModuleRow` del wizard. Se agrega `renderAdminLiveStatus(live)` y `finalizarLiveAdmin(liveId, btn)`. Diferencias menores con coach:
+- `loadModulesForCourse` ya traía `course_lives`; se extiende el SELECT para incluir `live_ended`.
+- El estado `live_ended` se persiste en `card.dataset.liveEnded = '1'` después del finalize manual → `getModulesFromForm` lo lee y lo pasa en el `live.live_ended` del payload → `syncCourseModules` lo incluye en el `livePayload` del UPDATE. Esto **es crítico**: sin la preservación, un "Guardar curso" posterior haría UPDATE de `course_lives` sin `live_ended`, y el flag por defecto (FALSE) lo pisaría. La doble persistencia (UPDATE puntual + preservación en sync) garantiza idempotencia.
+
+### `curso.html` — gate del botón "Asistí al live"
+
+**Antes** (Etapa X.44): el botón aparecía cuando `live_date > now`. **Ahora** (Etapa X.45): el botón aparece SOLO cuando `live_date <= now` Y `live_ended = true` Y el alumno no marcó asistencia todavía.
+
+Re-escritura del switch de `renderModuleLiveInfo`:
+
+| Condición | Bloque renderizado |
+|---|---|
+| `isFuture || !ended` | "📡 Unirse al live" + fecha (sin botón asistí — antes de la finalización el alumno no puede marcar) |
+| pasada + finalizada + asistió + con grabación | "▶ Ver grabación" + "Grabación del {fecha}" + "✅ Asististe a este live" |
+| pasada + finalizada + NO asistió + con grabación | "▶ Ver grabación" + "Grabación del {fecha}" + botón "✅ Asistí al live" |
+| pasada + finalizada + asistió + sin grabación | "✅ Asististe a este live" (solo el badge) |
+| pasada + finalizada + NO asistió + sin grabación | "⏳ La grabación estará disponible en las próximas 72hs" + botón "✅ Asistí al live" |
+
+El gate `!ended` colapsa los casos "futuro" y "pasado-no-finalizado" en el mismo bloque — UX consistente: el alumno ve siempre Unirse + fecha hasta que el coach explícitamente marque el cierre.
+
+El SELECT en `loadStudentModules` se extiende para traer `live_ended`. El `_liveOverride` y el botón "Marcar como completado" en el main panel (Etapa X.44) siguen igual: el alumno puede ver la grabación y marcar asistencia desde ahí también una vez que `live_ended = true`.
+
+### CSS
+
+Mismo bloque `.coach-live-status` + `.btn-finalize-live` definido en ambos archivos (admin + coach). Color base coral `#fc8181` para el botón (matchea con `--red` de la paleta pero un poco más cálido). Variante `.ended` con fondo lime soft. Bloques compactos (`padding: 8px 12px`) para no inflar el alto del card.
+
+### Lo que NO se hizo en esta etapa
+
+- **Tabla `course_lives` sigue sin RLS**: pendiente desde X.38. El UPDATE de `live_ended` lo hace cualquier authenticated cliente — para producción habría que policy de UPDATE solo para `role IN ('coach','admin')` joining a `coach_courses` para verificar que el coach esté asignado al curso. Hoy es trust-by-default.
+- **Reabrir un live finalizado**: no hay forma desde el panel. Si el coach hace click por error, hay que ir a la BD. Un toggle bidireccional sería trivial pero abre la puerta a inconsistencias (alumnos que ya marcaron asistencia perderían el badge). Decidimos finalize-only.
+- **Notificación a alumnos cuando se finaliza**: el coach finaliza el live y los alumnos verán el botón "Asistí al live" la próxima vez que carguen la página. Sin push real-time. Podría sumarse un INSERT en `notifications` dentro de `finalizarLive`/`finalizarLiveAdmin` para que el alumno reciba el aviso.
+- **Auto-finalizar después de 24hs**: el spec sugería 72hs para la grabación pero no implica auto-finalize. Sigue siendo manual.
+- **Coach panel completo del live**: subida de `recording_url` post-live desde coach.html sigue pendiente desde X.42.
+
+**Archivos modificados:**
+- `coach.html` — SELECT de `course_lives` con `live_ended`, `addCoachModuleRow` recibe `live`, helpers `renderCoachLiveStatus` + `formatCoachLiveDate` + `finalizarLive`, CSS nuevo `.coach-live-status` + `.btn-finalize-live`.
+- `admin.html` — SELECT con `live_ended`, `addModuleRow` renderiza `renderAdminLiveStatus`, helpers `renderAdminLiveStatus` + `finalizarLiveAdmin`, `getModulesFromForm` y `syncCourseModules` preservan/escriben `live_ended`, CSS nuevo idéntico al de coach.
+- `curso.html` — SELECT con `live_ended`, `renderModuleLiveInfo` reescrito con el gate `!ended` que oculta el botón asistir hasta que el coach finalice.
+- `CONTEXTO.md` — esta sección.
+
+---
