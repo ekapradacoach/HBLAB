@@ -1319,6 +1319,37 @@
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
+    // ── Etapa X.41 — Precio vigente según courses.scheduled_prices ────
+    // Copia textual del helper en venta-curso.html. Si scheduled_prices está
+    // vacío/null o ninguna fecha pasó todavía → devuelve los precios base.
+    // Si hay entradas con date <= hoy → toma la más reciente (ordena DESC).
+    // Tolerante con string JSON (caso edge si la columna JSONB llega serializada).
+    function getEffectivePrice(course) {
+      const base = {
+        price_ars: Number(course?.price_ars || 0),
+        price_usd: Number(course?.price_usd || 0),
+      };
+      let arr = course?.scheduled_prices;
+      if (typeof arr === 'string') {
+        try { arr = JSON.parse(arr); } catch { arr = []; }
+      }
+      if (!Array.isArray(arr) || !arr.length) return base;
+
+      const now   = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+      const vigentes = arr
+        .filter(r => r && r.date && r.date <= today)
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      if (!vigentes.length) return base;
+      const w = vigentes[0];
+      return {
+        price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+        price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+      };
+    }
+
     // ── Slider state ─────────────────────────────────
     let sliderIndex = 0;
     let sliderTotal = 0;
@@ -1424,7 +1455,7 @@
           if (cd.course_id) {
             try {
               const { data: course } = await sb.from('courses')
-                .select('id, slug, title, description, price_ars, price_usd, cover_url, is_live, is_coming_soon')
+                .select('id, slug, title, description, price_ars, price_usd, scheduled_prices, cover_url, is_live, is_coming_soon')
                 .eq('id', cd.course_id).maybeSingle();
               if (course && course.slug) {
                 const url = `venta-curso.html?slug=${course.slug}`;
@@ -1471,6 +1502,8 @@
       const cover = course.cover_url
         ? `<div class="card-cover" style="background-image:url('${escHtml(course.cover_url)}')"></div>`
         : '';
+      // Etapa X.41 — precio vigente según scheduled_prices
+      const eff = getEffectivePrice(course);
       wrap.innerHTML = `
         <div class="course-card" style="cursor:pointer" onclick="window.location='${url}'">
           ${cover}
@@ -1482,9 +1515,9 @@
           <div class="card-divider"></div>
           <div class="card-footer">
             <div class="price-block">
-              <span class="price-ars">$${Number(course.price_ars||0).toLocaleString('es-AR')}</span>
+              <span class="price-ars">$${eff.price_ars.toLocaleString('es-AR')}</span>
               <span style="color:var(--gray-text);font-size:0.8rem">ARS</span>
-              <span class="price-usd">/ USD ${Number(course.price_usd||0).toLocaleString('es-AR')}</span>
+              <span class="price-usd">/ USD ${eff.price_usd.toLocaleString('es-AR')}</span>
             </div>
             <a href="${url}" class="btn-buy" onclick="event.stopPropagation()">Ver curso</a>
           </div>
@@ -1496,7 +1529,7 @@
     async function loadLaunches() {
       const { data, error } = await sb
         .from('launches')
-        .select('*, courses(slug, price_ars, price_usd)')
+        .select('*, courses(slug, price_ars, price_usd, scheduled_prices)')
         .eq('active', true)
         .order('created_at', { ascending: false })
         .limit(3);
@@ -1509,10 +1542,12 @@
       sliderTotal   = data.length;
 
       track.innerHTML = data.map(l => {
-        const priceArs = l.courses?.price_ars;
-        const priceUsd = l.courses?.price_usd;
+        // Etapa X.41 — precio vigente según scheduled_prices del curso vinculado
+        const eff = l.courses ? getEffectivePrice(l.courses) : { price_ars: 0, price_usd: 0 };
+        const priceArs = eff.price_ars;
+        const priceUsd = eff.price_usd;
         const priceStr = priceArs
-          ? `$${Number(priceArs).toLocaleString('es-AR')} ARS${priceUsd ? ' / USD ' + Number(priceUsd).toLocaleString('es-AR') : ''}`
+          ? `$${priceArs.toLocaleString('es-AR')} ARS${priceUsd ? ' / USD ' + priceUsd.toLocaleString('es-AR') : ''}`
           : '';
         const courseSlug = l.courses?.slug;
         const courseUrl  = courseSlug
@@ -1556,7 +1591,7 @@
 
       const { data, error } = await sb
         .from('courses')
-        .select('id, title, slug, description, price_ars, price_usd, is_active, is_coming_soon, display_order')
+        .select('id, title, slug, description, price_ars, price_usd, scheduled_prices, is_active, is_coming_soon, display_order')
         .eq('is_active', true)
         .or('is_coming_soon.is.null,is_coming_soon.eq.false')
         .order('display_order', { ascending: true })
@@ -1569,6 +1604,8 @@
 
       grid.innerHTML = data.map(c => {
         const coursePage = `venta-curso.html?slug=${c.slug}`;
+        // Etapa X.41 — precio vigente según scheduled_prices
+        const eff = getEffectivePrice(c);
         return `
         <div class="course-card" style="cursor:pointer" data-title="${escHtml((c.title || '').toLowerCase())}" onclick="window.location='${coursePage}'">
           <div class="card-body">
@@ -1584,9 +1621,9 @@
           <div class="card-divider"></div>
           <div class="card-footer">
             <div class="price-block">
-              <span class="price-ars">$${Number(c.price_ars||0).toLocaleString('es-AR')}</span>
+              <span class="price-ars">$${eff.price_ars.toLocaleString('es-AR')}</span>
               <span style="color:var(--gray-text);font-size:0.8rem">ARS</span>
-              <span class="price-usd">/ USD ${Number(c.price_usd||0).toLocaleString('es-AR')}</span>
+              <span class="price-usd">/ USD ${eff.price_usd.toLocaleString('es-AR')}</span>
             </div>
             <button class="btn-buy" onclick="event.stopPropagation();window.location.href='${coursePage}&buy=1'">Comprar ahora</button>
           </div>

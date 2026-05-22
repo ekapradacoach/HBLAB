@@ -3061,3 +3061,35 @@ Sigue siendo usado en otros archivos (`admin.html` — al guardar lecciones norm
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Precio vigente en index.html (cards de landing)
+
+**Fecha:** 22 de mayo de 2026. Sigue la línea de `venta-curso.html` (etapa anterior): aplicar `scheduled_prices` también en la landing. Antes los 3 spots donde se muestra precio en `index.html` leían `course.price_ars` / `course.price_usd` directos, ignorando si ya había un incremento vigente.
+
+### Implementación
+
+**Copia textual de `getEffectivePrice(course)`** desde `venta-curso.html`, colocada al lado de `escHtml` en la sección de helpers del script de `index.html`. Misma firma, misma lógica:
+- `scheduled_prices` vacío / null / no-array → precios base.
+- Tolerante con string JSON.
+- Calcula `today` en `YYYY-MM-DD` con zona local; filtra `date <= today`, ordena DESC, primera entrada gana.
+- Si ninguna fecha pasó todavía → fallback a base.
+
+### Cambios en `index.html`
+
+Tres sitios actualizados, cada uno con (a) ampliar el SELECT para traer `scheduled_prices` y (b) aplicar `getEffectivePrice(c)` antes de renderizar:
+
+1. **`loadCursos()` — grid principal de cursos** (`#courses-grid`). Es el caso visible más relevante de la landing. SELECT pasa de `..., price_ars, price_usd, is_active, ...` a `..., price_ars, price_usd, scheduled_prices, is_active, ...`. Render reemplaza `c.price_ars` / `c.price_usd` por `eff.price_ars` / `eff.price_usd`.
+2. **`loadLaunches()` — slider de lanzamientos**. La data viene del JOIN `courses(slug, price_ars, price_usd)` dentro del query a `launches`. Se extiende a `courses(slug, price_ars, price_usd, scheduled_prices)`. El `priceStr` que arma el subtítulo de la slide ahora viene de `getEffectivePrice(l.courses)` con guard `l.courses ? ... : { price_ars: 0, price_usd: 0 }` para el caso donde el launch no tiene curso asociado.
+3. **`renderCountdownCourseCard()` — card del countdown** (cuando `site_config.countdown` tiene `course_id`). SELECT del countdown pasa a incluir `scheduled_prices`. Render aplica `getEffectivePrice(course)`.
+
+### Lo que NO se hizo en esta etapa
+
+- **Sección "Próximamente"** (line ~1636: `loadProximamente()` o similar — cursos con `is_coming_soon=true`). Muestra solo `c.price_ars` y NO trae `scheduled_prices`. Caso de uso ambiguo: un curso aún no lanzado tiene precio "inicial" pero el incremento programado típicamente arranca después del lanzamiento. Lo dejamos sin tocar porque la semántica es discutible — si se quiere unificar, agregar `scheduled_prices` al SELECT y aplicar `getEffectivePrice` también ahí.
+- **Centralizar `getEffectivePrice`**: hoy hay 2 copias literales (venta-curso + index). Tercera copia vendrá cuando se aplique a checkout.html (etapa pendiente documentada en la sección X.39). Idealmente se extrae a un helper compartido — pero esto rompe el stack "sin módulos ES, sin build", así que la opción concreta es definirlo en `supabase.js` (que ya se carga en todas las páginas como global). Pendiente.
+- **Edge Functions**: igual que en venta-curso, `create-preference` y `create-paypal-order` siguen confiando en el `amount` que el cliente les envía. Sin server-side `getEffectivePrice` queda como vector de manipulación. No urgente, anotado.
+
+**Archivos modificados:**
+- `index.html` — función nueva `getEffectivePrice` (~30 líneas, copia textual de venta-curso), SELECTs extendidos en `loadCursos`, `loadLaunches`, render de countdown card; aplicación de `eff.price_ars` / `eff.price_usd` en los 3 sitios de render.
+- `CONTEXTO.md` — esta sección.
+
+---
