@@ -62,9 +62,10 @@ hblab/
 |-------|-------------------|
 | `auth.users` | Interna Supabase Auth |
 | `public.profiles` | `id, full_name, email, avatar_url, bio, role, created_at, birth_date, phone, experience_level, training_goal` — RLS: `auth.uid() = id` (solo propio). Campos extra para perfil del usuario (Sesión 57) |
-| `public.courses` | `id, slug, title, description, cover_url, banner_text, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url (legacy single), recordings JSONB DEFAULT '[]' (array `[{title, url}]`), live_completed, total_videos, videos JSONB, learning_points JSONB, syllabus JSONB, certificate_url, course_type ENUM('videos','modules','live')` |
-| `public.course_modules` | `id, course_id, title, order_num, created_at` — agrupa lecciones cuando `course_type='modules'` (Sesión 48) |
+| `public.courses` | `id, slug, title, description, cover_url, banner_text, price_ars, price_usd, scheduled_prices JSONB DEFAULT '[]' (Etapa X.38 — array `[{date: 'YYYY-MM-DD', price_ars, price_usd}]` con incrementos automáticos por fecha), is_active, is_coming_soon, is_live, live_url, live_date, recording_url (legacy single), recordings JSONB DEFAULT '[]' (array `[{title, url}]`), live_completed, total_videos, videos JSONB, learning_points JSONB, syllabus JSONB, certificate_url, course_type ENUM('videos','modules','live')` |
+| `public.course_modules` | `id, course_id, title, order_num, unlock_at, created_at` — agrupa lecciones cuando `course_type='modules'` (Sesión 48). `unlock_at TIMESTAMPTZ` (Etapa X.38) controla el drip: si está set y `> now`, el módulo está "bloqueado" (lógica del filtro queda pendiente del lado alumno). NULL = disponible siempre. |
 | `public.course_lessons` | `id, module_id, title, video_url, order_num, created_at` — videos individuales dentro de cada módulo. ⚠️ La columna se llama **`video_url`** (NO `url`) — usar siempre `video_url` en SELECTs y en los payloads de INSERT/UPDATE (Sesión 50 fix) |
+| `public.course_lives` | `id, module_id, live_url, live_date, recording_url, created_at` (Etapa X.38) — 0..1 por módulo. Para el link Meet/Zoom previo al live + grabación posterior. FK con `ON DELETE CASCADE` desde `course_modules`. ⚠️ **Sin RLS configurada** — queda public-readable por default (pendiente agregar policies). El render del lado alumno en `curso.html` (Etapa X.42) muestra 3 estados: live futura (botón lime "📡 Unirse"), pasada con grabación (botón violet "▶ Ver grabación"), pasada sin grabación ("⏳ Grabación próximamente"). |
 | `public.user_courses` | `user_id, course_id, payment_status, payment_method, amount_paid, currency, status` — acceso: `paid + active` |
 | `public.coach_courses` | `coach_id, course_id, commission_pct` — asigna coaches a cursos |
 | `public.forum_posts` | `course_id, user_id, parent_id, content, is_anonymous, image_urls TEXT[]` — árbol a un nivel |
@@ -1278,6 +1279,85 @@ Dos columnas nuevas en `user_courses`:
 2. Deploy nuevo de `sync-mp-payments`: Supabase Dashboard → Edge Functions → New function → nombre `sync-mp-payments` → "Via Editor" → pegar contenido → Settings → activar "Enforce JWT verification". Sin secrets nuevos.
 
 Sin estos deploys: las ventas MP nuevas no van a tener `mp_payment_id` (UPSERT funciona sin la nueva col porque es nullable), y el botón de sync va a fallar con 404 hasta que la función exista. El frontend ya está deployable y funciona con `mp_payment_id` null (la columna Neto MP muestra "—").
+
+---
+
+## Etapa X.38 — Drip + Lives por módulo + Precios programados (editor admin)
+
+**SQL ejecutado** (manual):
+```sql
+ALTER TABLE public.course_modules ADD COLUMN IF NOT EXISTS unlock_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS public.course_lives (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  module_id UUID NOT NULL REFERENCES public.course_modules(id) ON DELETE CASCADE,
+  live_url TEXT, live_date TIMESTAMPTZ, recording_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS scheduled_prices JSONB DEFAULT '[]'::jsonb;
+```
+
+Modelo nuevo:
+- **`course_modules.unlock_at TIMESTAMPTZ`** (nullable) — fecha/hora de desbloqueo del módulo (drip). NULL = disponible siempre.
+- **`course_lives (id, module_id, live_url, live_date, recording_url, created_at)`** — relación 0..1 por módulo. Para link Meet/Zoom previo + grabación post-live. FK `ON DELETE CASCADE`. **⚠️ Sin RLS configurada todavía** — la tabla queda public-readable; falta `ENABLE ROW LEVEL SECURITY` + policies antes de prod.
+- **`courses.scheduled_prices JSONB DEFAULT '[]'`** — array `[{date: 'YYYY-MM-DD', price_ars: N, price_usd: N}]`. A partir de cada fecha el curso pasa a ese precio.
+
+**`admin.html`** (editor de cursos, course_type='modules'):
+- Cada `.cf-module-card` tiene ahora un bloque `.cf-mod-meta` con: input `datetime-local` para `unlock_at`, toggle "¿Tiene live?" + (cuando activo) fields `live_date` (datetime-local) + `live_url` (text). El id del live preexistente se persiste en `card.dataset.liveId`, y `recording_url` en `card.dataset.liveRecording` (no editable desde admin — pensado para subirse desde coach panel post-live).
+- `loadStudentModules`-equivalente (`loadModulesForCourse`) hace SELECT paralelo de `course_lessons` + `course_lives` y mergea por `module_id`.
+- `syncCourseModules` ahora hace UPSERT del módulo con `unlock_at`, y al final del loop sync de `course_lives`: si `has_live && live` → UPDATE (con id) o INSERT (sin id); si no → DELETE por `module_id` (idempotente).
+- **Sección "Precios programados"** en wizard step 1, debajo de Precio USD. Filas `[date | price_ars | price_usd | ×]` + botón "+ Agregar". Funciones: `addSchedPriceRow`, `getSchedPricesFromForm` (ordena ASC, descarta sin fecha), `renderSchedPriceRows` (tolerante string JSON). `loadCursos` + `editCurso` + `saveCurso` + `resetCursoForm` wired.
+
+---
+
+## Etapa X.39 — Precio vigente en venta-curso.html
+
+Helper `getEffectivePrice(course)` que aplica `scheduled_prices`: filtra entradas con `date <= today` (formato `YYYY-MM-DD` en zona local del cliente), ordena DESC y toma la primera; si ninguna es vigente o `scheduled_prices` está vacío → precios base. Tolera string JSON. SELECT del init + MutationObserver extiende con `scheduled_prices`. Render hero/CTA usa `effective.price_ars/usd`. `_ventaCourse` se cachea con precios vigentes ya aplicados (auto-open `?buy=1` se movió al init porque el observer ya no entra al re-query branch).
+
+**Pendiente:** `checkout.html` aún lee precio base — riesgo de inconsistencia. Edge Functions también — vector de manipulación si el cliente manda precio base estando un scheduled activo.
+
+---
+
+## Etapa X.40 — getEmbedUrl: soporte de URLs Drive + YouTube en curso.html
+
+Helper `getEmbedUrl(url)` que detecta:
+- **YouTube** (`youtube.com/watch?v=ID`, `youtu.be/ID`, `youtube.com/embed/ID`) → `https://www.youtube.com/embed/ID` (matcher unificado).
+- **Google Drive** (`drive.google.com/file/d/ID/...`) → `https://drive.google.com/file/d/ID/preview` (única variante embed-friendly; `/view` deniega iframe).
+- **Vacío** → string vacío.
+- **Cualquier otro link** → tal cual.
+
+Aplicado en los 2 iframes del player de `curso.html`: `renderVideos()` (modo videos sueltos + live recordings) y `renderModulesView()` (modo módulos). `toYoutubeEmbed` se mantiene porque sigue usado en admin al guardar (matcher estricto solo-YouTube).
+
+---
+
+## Etapa X.41 — getEffectivePrice en index.html (cards de landing)
+
+Copia textual de `getEffectivePrice` desde venta-curso.html, colocada junto a `escHtml`. Aplicada en 3 sitios:
+1. `loadCursos()` — grid principal.
+2. `loadLaunches()` — slider de lanzamientos (JOIN extendido a `courses(..., scheduled_prices)`, guard si el launch no tiene curso asociado).
+3. `renderCountdownCourseCard()` — card del curso vinculado al countdown.
+
+**Pendientes documentados:** sección "Próximamente" (semántica ambigua, sin tocar); centralizar `getEffectivePrice` en `supabase.js` (hoy hay 2 copias literales, sumará una 3ra cuando se aplique a checkout.html); aplicación server-side en Edge Functions.
+
+---
+
+## Etapa X.42 — Lives por módulo en curso.html (cierre del feature drip/lives)
+
+Visualización del lado alumno. `loadStudentModules` extendido para traer `course_lives` en paralelo y mergear. Tres estados por módulo (bloque entre `.modules-mod-head` y `.modules-lessons`):
+
+1. **Live futura** (`live_date > now`) → botón lime "📡 Unirse al live" (target `_blank`) + fecha formateada (`Jue 23 May · 19:30` en zona local).
+2. **Pasada con grabación** → botón violet "▶ Ver grabación" que reproduce en el panel principal vía global `_liveOverride = { moduleId, title, src }`. El main panel checkea ese flag al inicio del render: si está set, ignora la lección activa y muestra `<iframe>` con `getEmbedUrl(_liveOverride.src)` + título `"🔴 {módulo} — Grabación"`. Sin botón "Marcar completado" y sin materiales (no es una lección).
+3. **Pasada sin grabación** → texto italic gris "⏳ Grabación próximamente".
+4. **Sin live** → nada.
+
+`selectLesson(lessonId)` limpia `_liveOverride = null` — el alumno vuelve del modo grabación a una lección con un click. Las lecciones en el sidebar se marcan `active` solo si `!_liveOverride` (evita highlight confuso).
+
+Helpers nuevos: `formatLiveDate(iso)`, `renderModuleLiveInfo(m)`, `playLiveRecording(moduleId)`. CSS nuevo: `.modules-mod-live` con variantes `.recording` (violet) / `.pending` (gray) — borde-left color-coded + bg soft + botones `.btn-live-join` (lime) / `.btn-live-recording` (violet).
+
+**Pendientes:** notif pre-live, tracking de asistencia al click, marcar grabación como completada (afectar `video_progress`), edición de `recording_url` desde admin/coach, RLS de `course_lives`, render del live en `course_type='videos'`/`'live'` (legacy).
+
+### Etapa X.42b — Placeholder para lecciones sin video
+
+Fix UX: si la lección activa no tiene `video_url`, en lugar de mostrar un `<iframe>` vacío (que se ve negro), se renderiza un `.no-video-placeholder` (card con borde dashed + texto italic "📄 Esta lección aún no tiene video cargado"). En ese caso también se oculta el botón "Marcar como completado" — solo aparece cuando hay video real.
 
 ---
 
