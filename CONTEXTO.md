@@ -3218,3 +3218,96 @@ Antes, `activeLessonId` defaultaba a `LESSONS_FLAT[0].id` (la primera lección d
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Completado de lives + certificado por módulo en curso.html
+
+**Fecha:** 22 de mayo de 2026. Cierra el feature lives sumando (a) la posibilidad de que el alumno marque su asistencia y (b) cambia el gate del certificado de "todas las lecciones completas" a "todos los módulos completos" — donde un módulo se considera completo si tiene al menos 1 lección hecha O bien la asistencia al live registrada.
+
+### Convención de identificación en `video_progress`
+
+La columna `video_progress.video_index INT` se reutiliza para guardar la "asistencia al live de un módulo" usando **valores negativos**:
+
+```
+liveAttendanceIndex(m) = -1 * order_num     (con order_num = 1 si order_num <= 0)
+```
+
+El signo negativo garantiza que no haya colisión con los índices reales de lecciones (que son 0..N-1 en `LESSONS_FLAT`). Caso edge: si algún módulo tiene `order_num = 0`, mapea al bucket -1; si dos módulos compartieran `order_num=0`, la asistencia se confunde — en la práctica el editor de admin asigna order_num secuencial desde 0 sin duplicados, pero queda anotado como caso teórico.
+
+⚠️ **Esto reutiliza una columna sin migración**. La alternativa correcta sería una tabla `live_attendance` separada. Decidimos esta convención pragmática para no agregar otra tabla solo para esto; si en el futuro hace falta más metadata (timestamp del check-in, etc.), se migra.
+
+### 5 estados del bloque de live en el sidebar
+
+`renderModuleLiveInfo(m)` cubre los siguientes casos:
+
+| Condición | UI |
+|---|---|
+| `live_date > now` (futura) + NO asistió | `📡 Unirse al live` (lime, abre tab nueva) + `✅ Asistí al live` (lime soft, marca atendence) + fecha formateada |
+| `live_date > now` + ya asistió | `📡 Unirse al live` + badge "✅ Asististe a este live" + fecha |
+| `live_date <= now` + asistió + sin grabación | `✅ Asististe a este live` (solo el badge, sin botones, sin fecha) |
+| `live_date <= now` + NO asistió + sin grabación | `⏳ La grabación estará disponible en las próximas 72hs` (gris italic) |
+| `live_date <= now` + asistió + con grabación | `▶ Ver grabación` + "Grabación del {fecha}" + badge "✅ Asististe a este live" |
+| `live_date <= now` + NO asistió + con grabación | `▶ Ver grabación` + "Grabación del {fecha}" (el botón "Marcar como completado" aparece **en el main panel debajo del iframe** cuando el alumno abre la grabación) |
+
+### Marca de asistencia (`markLiveAttended(moduleId)`)
+
+UPSERT a `video_progress` con:
+```js
+{
+  user_id, course_id,
+  video_index:  liveAttendanceIndex(m),
+  completed:    true,
+  completed_at: <ISO now>,
+}
+```
+
+`onConflict: 'user_id,course_id,video_index'`. Tras el UPSERT, hace `completedSet.add(idx)`, re-renderiza el sidebar (para que el botón se convierta en badge) y llama a `updateProgress()` (que dispara el cert si todos los módulos quedaron completos).
+
+### Lógica del certificado
+
+**Antes:** el cert se mostraba cuando `completedSet.size >= TOTAL_VIDEOS` (= todas las lecciones del curso).
+
+**Ahora (modo módulos):** cert se muestra cuando `areAllModulesCompleted() === true`, donde un módulo está completo si:
+
+- Tiene al menos 1 lección con `completed=true`, **O**
+- Tiene live y el live fue asistido (`completedSet.has(-order_num)`), **O**
+- No tiene ni lecciones ni live (módulo "vacío" — no bloquea el cert).
+
+`isModuleCompleted(m)` encapsula esta lógica. `areAllModulesCompleted()` itera `MODULES.every(isModuleCompleted)`.
+
+En modo videos sueltos / live (no-modules) el gate sigue siendo `pct >= 100` como antes.
+
+### `updateProgress` rediseñado
+
+- El cálculo del % de la barra ahora cuenta solo `completedSet` con `index >= 0` (los negativos son asistencias de live y no aportan al progreso visual de "lecciones vistas"). Esto evita que la barra se infle artificialmente cuando el alumno marca asistencia.
+- El label sigue diciendo "X de Y lecciones completadas" en modo módulos — pero la **gate del cert** ya no depende del % sino de `areAllModulesCompleted()`. Esto puede generar un caso UX peculiar: el alumno asistió a todos los lives + 1 lección por módulo, el % está en 30% pero el card "¡Curso completado! 🎉" + cert ya está visible. Es esperable según la spec.
+
+### Carga inicial de `video_progress`
+
+El filtro anterior `idx >= 0 && idx < LESSONS_FLAT.length` excluía los índices negativos. Ahora se aceptan los dos rangos: `[0, LESSONS_FLAT.length)` para lecciones reales y cualquier `idx < 0` para asistencias a lives. `isLiveAttended(m)` se encarga del matching final.
+
+### Main panel: botón "Marcar como completado" en grabación
+
+Cuando `_liveOverride` está activo (alumno viendo grabación de un live pasado), se busca el módulo origen del live. Si la asistencia AÚN no fue marcada, debajo del iframe aparece un botón `<button class="btn-video">Marcar como completado</button>` (mismo look que el de lecciones). Click → `markLiveAttended(moduleId)`. Si la asistencia ya estaba marcada, se muestra el botón "Completado" disabled con check, igual que las lecciones.
+
+### CSS nuevo
+
+```css
+.btn-live-attended { bg lime soft, color lime, border lime soft }
+.modules-mod-live-meta.live-attended { color lime, font-weight 700, no italic }
+.modules-mod-live.attended-only { border-left lime brillante }
+```
+
+### Lo que NO se hizo en esta etapa
+
+- **Tabla `live_attendance` dedicada**: hoy reusamos `video_progress` con índices negativos. Funcional pero ensucia un poquito la semántica. Si en el futuro se quiere trackear timestamps de join, duración asistida, etc., conviene una tabla aparte.
+- **Validación server-side de que el alumno asistió de verdad**: el botón "Asistí al live" es self-reportado — un alumno puede clickearlo sin haber entrado nunca al meet. Sin integración con Zoom/Meet API no hay forma técnica de verificar.
+- **Backfill de asistencias**: no hay migración para usuarios que ya marcaron lecciones — su gate del cert sigue funcionando porque `areAllModulesCompleted` retorna true cuando todas las lecciones están done (caso compatible). Pero un módulo con ÚNICAMENTE live (sin lecciones), si el alumno no clickea "Asistí al live", no completa el curso. Mensaje pendiente o algún tour la primera vez.
+- **Cancelar asistencia**: una vez marcada, no se puede desmarcar. Si fue por error, hay que ir a la BD.
+- **72hs hardcoded en el copy**: el texto "La grabación estará disponible en las próximas 72hs" es estático. No hay lógica que despache notif a las 72hs o cambie el copy si pasaron más.
+- **Coach panel**: la subida de `recording_url` post-live sigue sin estar expuesta en `coach.html`. Pendiente desde X.42.
+
+**Archivos modificados:**
+- `curso.html` — helpers nuevos `liveAttendanceIndex` + `isLiveAttended` + `isModuleCompleted` + `areAllModulesCompleted` + `markLiveAttended`; `renderModuleLiveInfo` reescrito para los 5 estados; main panel con botón "Marcar como completado" debajo de la grabación cuando el live no fue asistido; `updateProgress` con cálculo de % filtrado a índices no-negativos + cert gate vía `areAllModulesCompleted` en modo módulos; load inicial de `video_progress` admite índices negativos; CSS nuevo `.btn-live-attended` + `.live-attended` + `.modules-mod-live.attended-only`.
+- `CONTEXTO.md` — esta sección.
+
+---
