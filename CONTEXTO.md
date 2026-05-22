@@ -2852,3 +2852,91 @@ CREATE POLICY coupons_public_read ON public.coupons FOR SELECT USING (is_active 
 - `checkout.html` — ~430 líneas. Página de checkout pública con form 2 columnas, validación de cupones contra `coupons` con 7 chequeos (existencia, activo, vencimiento, max_uses, course_id, currency-mismatch para fixed, cálculo del final price), redirect a placeholder MP/PayPal con sessionStorage del payload.
 
 ---
+
+## Etapa — Drip + Lives + Precios programados
+
+**Fecha:** 22 de mayo de 2026. Sesión orientada a sumar tres features al editor de cursos con `course_type='modules'`: liberación temporal de módulos (drip), clases en vivo asociadas a un módulo, e incrementos automáticos de precio por fecha.
+
+### SQL ejecutado (manual, vía Supabase SQL Editor)
+
+```sql
+ALTER TABLE public.course_modules
+  ADD COLUMN IF NOT EXISTS unlock_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS public.course_lives (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  module_id     UUID NOT NULL REFERENCES public.course_modules(id) ON DELETE CASCADE,
+  live_url      TEXT,
+  live_date     TIMESTAMPTZ,
+  recording_url TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.courses
+  ADD COLUMN IF NOT EXISTS scheduled_prices JSONB DEFAULT '[]'::jsonb;
+```
+
+**Modelo:**
+- `course_modules.unlock_at TIMESTAMPTZ` (nullable) — fecha/hora de desbloqueo del módulo en el panel del alumno. Si `NULL`, disponible desde siempre.
+- `course_lives (id, module_id, live_url, live_date, recording_url, created_at)` — relación 0..1 por módulo. Pensado para almacenar el link Meet/Zoom previo al live y luego la grabación post-live, sin tocar `courses.live_url` (legacy del modo `course_type='live'`). FK con `ON DELETE CASCADE` para limpiar el live si se borra el módulo.
+- `courses.scheduled_prices JSONB DEFAULT '[]'` — array de pares `{date: 'YYYY-MM-DD', price_ars: N, price_usd: N}`. A partir de cada fecha el curso pasa a ese precio. La aplicación real (en venta-curso.html / checkout.html) queda pendiente para una etapa siguiente — esta etapa solo monta la captura/edición desde admin.
+
+### Cambios en `admin.html`
+
+**Modules manager extendido** (función `addModuleRow` y compañía). Cada `.cf-module-card` ahora incluye un bloque `.cf-mod-meta` con:
+
+- **Input `datetime-local` `cf-mod-unlock`** — fecha de desbloqueo del módulo. Si está vacío al guardar, se persiste como `NULL` (= disponible siempre). Si tiene valor, se convierte a ISO via `new Date(raw).toISOString()`.
+- **Toggle `cf-mod-has-live`** — checkbox con la estética de los `toggle-row` del admin. Cuando se tilda, muestra los campos `.cf-mod-live-fields` (un grid 1fr / 1.4fr con `live_date` datetime-local + `live_url` text); cuando se destilda, los oculta. La función `toggleModuleLiveFields(checkbox)` maneja el toggle inline. En mobile (≤600px) los campos pasan a una sola columna.
+- El id del live preexistente (si lo hay) se guarda en `card.dataset.liveId`, y la URL de grabación en `card.dataset.liveRecording`. Esto permite distinguir UPDATE de INSERT en el sync. La columna `recording_url` se preserva (no se edita desde este form — queda para coach.html en una etapa futura).
+
+`getModulesFromForm()` ahora retorna por cada módulo: `{ id, title, order_num, unlock_at, lessons, has_live, live: { id, live_date, live_url, recording_url } | null }`. `renderModuleRows(modules)` pasa los campos extra a `addModuleRow`. `loadModulesForCourse(courseId)` selecciona `unlock_at` y joinea `course_lives` con un segundo query en paralelo (vía `Promise.all`), buildando un map `liveByMod[module_id]` para asociar 1:0..1 a cada módulo.
+
+`syncCourseModules` extendido para:
+1. Incluir `unlock_at` en el `modPayload` del UPSERT a `course_modules`.
+2. Tras procesar las lecciones del módulo, sync de `course_lives`:
+   - **`mod.has_live && mod.live`** → si `mod.live.id` existe → `UPDATE course_lives SET ... WHERE id = mod.live.id`. Si no → `INSERT` nuevo.
+   - **No tiene live** → `DELETE FROM course_lives WHERE module_id = modId` (idempotente — si no había nada, no rompe).
+
+**Precios programados (nueva sección en wizard step 1)**:
+
+Bloque agregado debajo del input de Precio USD, antes de Descripción. UI: una `div.scheduled-prices-wrap` que contiene filas `.scheduled-price-row` con `<input type="date">`, dos `<input type="number">` (ARS, USD) y botón `×` para eliminar. Botón `+ Agregar precio programado` con estilo `.btn-add-sched-price` (borde dashed, hover lime — espejo de `.cf-add-lesson-btn`).
+
+Funciones nuevas:
+- `addSchedPriceRow(date, priceArs, priceUsd)` — agrega una fila vacía o pre-cargada.
+- `getSchedPricesFromForm()` — itera las filas, descarta las que no tengan fecha, parsea precios a float (default 0), ordena por `date.localeCompare` ASC y retorna el array.
+- `renderSchedPriceRows(arr)` — limpia el contenedor y agrega una fila por cada item. Tolerante: si recibe string lo parsea como JSON; si no es array, queda vacío.
+
+Wiring:
+- `loadCursos()` ahora selecciona también `scheduled_prices` para que `editCurso(c)` lo tenga disponible.
+- `editCurso(c)` llama `renderSchedPriceRows(c.scheduled_prices || [])` después de poblar los inputs de precio.
+- `saveCurso()` agrega `scheduled_prices: getSchedPricesFromForm()` al payload de la `UPDATE/INSERT` en `courses`.
+- `resetCursoForm()` limpia el contenedor `#cf-sched-prices-list`.
+
+### CSS nuevo
+
+```css
+.cf-mod-meta { ... background rgba(30,42,58,0.35); border 1px violeta soft; }
+.cf-mod-meta-row { flex column; gap 6px; }
+.cf-mod-meta-label { uppercase tracked, color gray-text; }
+.cf-mod-live-fields { grid 1fr/1.4fr; padding-left 56px (alineado con el toggle); }
+.scheduled-prices-wrap { flex column; gap 8px; }
+.scheduled-price-row { grid 1fr 1fr 1fr auto; }
+.btn-add-sched-price { dashed border, hover lime — clone de .cf-add-lesson-btn. }
+```
+
+Media query `≤600px`: los grids colapsan a una columna.
+
+### Lo que NO se hizo en esta etapa
+
+- **Aplicación en venta-curso.html / checkout.html del incremento por fecha**: hoy `courses.scheduled_prices` solo se captura/edita desde admin. Falta lógica del lado cliente que, al cargar el curso, recorra el array, encuentre el último item cuya `date <= now()` y sustituya `price_ars` / `price_usd` por esos valores. Sin esto, el precio mostrado al alumno sigue siendo `courses.price_ars` / `price_usd` directos.
+- **Aplicación del drip en curso.html / coach.html**: la columna `unlock_at` se guarda, pero los módulos siguen visibles para el alumno sin importar la fecha. Falta el filtro en el render de `curso.html` (course_type='modules') que oculte o marque como "🔒 Disponible el DD/MM" los módulos con `unlock_at > now()`.
+- **Render de course_lives en curso.html**: cada módulo con un registro en `course_lives` debería mostrar un bloque "🔴 Live el DD/MM a las HH:MM" + botón "Unirme" cuando `now() ∈ [live_date - 15min, live_date + 2hs]`. Hoy la tabla se popula correctamente desde admin pero el alumno aún no la ve.
+- **RLS de `course_lives`**: el SQL crea la tabla pero no agrega policies. Por default Supabase la deja con RLS deshabilitado, lo que hace pública para el rol `anon`. Antes de pasar a producción habría que: `ALTER TABLE course_lives ENABLE ROW LEVEL SECURITY` + policy de SELECT pública (los lives son visibles para todos los alumnos del curso) + policy de INSERT/UPDATE/DELETE para `admin` y `coach`.
+- **Edición de `recording_url` en course_lives desde coach.html**: el campo se preserva durante el sync (el dataset lo guarda y lo restaura) pero no se expone para edición desde admin — coherente con que la grabación se sube post-live, típicamente desde el panel del coach.
+- **Validación de orden cronológico en `scheduled_prices`**: hoy admite cualquier orden de entrada, lo ordena por fecha ASC al guardar/render. No valida que haya fechas duplicadas (si las hay, el "último ganador" depende del orden en el array — se acepta como caso edge ya que la UI ordena visualmente).
+
+**Archivos modificados:**
+- `admin.html` — `addModuleRow` extendido, `getModulesFromForm` extendido, `loadModulesForCourse` extendido, `syncCourseModules` con sync de `course_lives`, nuevas funciones `toggleModuleLiveFields` + `addSchedPriceRow` + `getSchedPricesFromForm` + `renderSchedPriceRows`, payload de `saveCurso` con `scheduled_prices`, SELECT de `loadCursos` con `scheduled_prices`, `editCurso` carga `scheduled_prices`, `resetCursoForm` limpia. CSS nuevo (~25 líneas).
+- `CONTEXTO.md` — esta sección.
+
+---

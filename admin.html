@@ -817,6 +817,30 @@
     }
     .cf-add-lesson-btn:hover { border-color: var(--lime); color: var(--lime); }
 
+    /* Etapa X.38 — Drip + Lives por módulo */
+    .cf-mod-meta { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; padding: 10px 12px; background: rgba(30,42,58,0.35); border: 1px solid rgba(123,79,190,0.18); border-radius: 8px; }
+    .cf-mod-meta-row { display: flex; flex-direction: column; gap: 6px; }
+    .cf-mod-meta-label { font-size: 0.74rem; font-weight: 700; color: var(--gray-text); letter-spacing: 0.04em; text-transform: uppercase; }
+    .cf-mod-live-fields { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 6px; padding-left: 56px; }
+    @media (max-width: 600px) {
+      .cf-mod-live-fields { grid-template-columns: 1fr; padding-left: 0; }
+    }
+
+    /* Etapa X.38 — Precios programados (sección del wizard del curso) */
+    .scheduled-prices-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .scheduled-price-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
+    .scheduled-price-row .form-input { font-size: 0.86rem; }
+    .btn-add-sched-price {
+      background: transparent; border: 1.5px dashed var(--card-border); color: var(--gray-text);
+      padding: 8px 14px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.82rem;
+      font-weight: 600; cursor: pointer; align-self: flex-start; margin-top: 6px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-add-sched-price:hover { border-color: var(--lime); color: var(--lime); }
+    @media (max-width: 600px) {
+      .scheduled-price-row { grid-template-columns: 1fr; }
+    }
+
     /* ════════════════════════════════════════════════
        MODAL "VER CURSO" — fullscreen, 4 secciones
        (Sesión 42 — espejo de coach.html)
@@ -1106,6 +1130,15 @@
               <label class="form-label">Precio USD</label>
               <input class="form-input" id="cf-price-usd" type="number" placeholder="40" />
             </div>
+
+            <!-- Etapa X.38 — Precios programados (incrementos automáticos por fecha) -->
+            <div class="form-group col2">
+              <label class="form-label">📅 Precios programados <span class="form-hint">(opcional — incrementos automáticos por fecha)</span></label>
+              <p style="font-size:0.75rem;color:var(--gray-text);margin:4px 0 0;">A partir de cada fecha, el curso pasa a ese precio. Se guarda como JSON en <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px">courses.scheduled_prices</code>.</p>
+              <div class="scheduled-prices-wrap" id="cf-sched-prices-list"></div>
+              <button type="button" class="btn-add-sched-price" onclick="addSchedPriceRow()">+ Agregar precio programado</button>
+            </div>
+
             <div class="form-group col2">
               <label class="form-label">Descripción</label>
               <textarea class="form-textarea" id="cf-desc" placeholder="Descripción breve del curso"></textarea>
@@ -2202,15 +2235,54 @@
       document.getElementById('cf-modules-section').style.display = (t === 'modules') ? '' : 'none';
     }
 
-    function addModuleRow(modId = '', title = '', lessons = []) {
+    // Etapa X.38 — addModuleRow recibe también unlock_at y un objeto `live`
+    // ({ id, live_date, live_url, recording_url }) para precargar el form
+    // de drip + live por módulo. `unlock_at` y `live.live_date` se truncan a
+    // 16 chars para el formato datetime-local (YYYY-MM-DDTHH:MM).
+    function addModuleRow(modId = '', title = '', lessons = [], unlockAt = '', live = null) {
       const list = document.getElementById('cf-modules-list');
       const card = document.createElement('div');
       card.className = 'cf-module-card';
       if (modId) card.dataset.modId = modId;
+      // Pre-carga datos del live (si existe) en data-attrs para que getModulesFromForm() los lea.
+      if (live?.id)            card.dataset.liveId       = live.id;
+      if (live?.recording_url) card.dataset.liveRecording = live.recording_url;
+
+      const unlockVal    = unlockAt ? String(unlockAt).slice(0, 16) : '';
+      const hasLive      = !!(live && (live.live_date || live.live_url));
+      const liveDateVal  = live?.live_date ? String(live.live_date).slice(0, 16) : '';
+      const liveUrlVal   = live?.live_url || '';
+
       card.innerHTML = `
         <div class="cf-module-head">
-          <input class="form-input" type="text" placeholder="Título del módulo" value="${escapeAttr(title)}" />
+          <input class="form-input cf-mod-title" type="text" placeholder="Título del módulo" value="${escapeAttr(title)}" />
           <button type="button" class="btn-icon" title="Eliminar módulo" onclick="this.closest('.cf-module-card').remove()">×</button>
+        </div>
+        <div class="cf-mod-meta">
+          <div class="cf-mod-meta-row">
+            <label class="cf-mod-meta-label">📅 Fecha de desbloqueo (drip)
+              <span style="color:var(--gray-text);font-weight:400;">— vacío = disponible desde siempre</span>
+            </label>
+            <input class="form-input cf-mod-unlock" type="datetime-local" value="${escapeAttr(unlockVal)}" />
+          </div>
+          <div class="cf-mod-meta-row">
+            <label class="toggle-row" style="margin:0;">
+              <input type="checkbox" class="cf-mod-has-live" ${hasLive ? 'checked' : ''}
+                     onchange="toggleModuleLiveFields(this)" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">¿Tiene live?</span>
+            </label>
+            <div class="cf-mod-live-fields" style="display:${hasLive ? 'grid' : 'none'};">
+              <div>
+                <label class="form-label" style="font-size:0.72rem;">Fecha y hora del live</label>
+                <input class="form-input cf-mod-live-date" type="datetime-local" value="${escapeAttr(liveDateVal)}" />
+              </div>
+              <div>
+                <label class="form-label" style="font-size:0.72rem;">Link del live (Meet / Zoom)</label>
+                <input class="form-input cf-mod-live-url" type="url" placeholder="https://meet.google.com/..." value="${escapeAttr(liveUrlVal)}" />
+              </div>
+            </div>
+          </div>
         </div>
         <div class="cf-lessons-list"></div>
         <button type="button" class="cf-add-lesson-btn" onclick="addLessonRow(this.previousElementSibling)">+ Agregar lección</button>
@@ -2219,6 +2291,63 @@
       const lessonsList = card.querySelector('.cf-lessons-list');
       (lessons || []).forEach(l => addLessonRow(lessonsList, l.id || '', l.title || '', l.video_url || ''));
       return card;
+    }
+
+    // Etapa X.38 — toggle visibilidad de los campos de live por módulo
+    function toggleModuleLiveFields(checkbox) {
+      const wrap = checkbox.closest('.cf-mod-meta-row').querySelector('.cf-mod-live-fields');
+      if (wrap) wrap.style.display = checkbox.checked ? 'grid' : 'none';
+    }
+
+    // ════════════════════════════════════════════════
+    // Etapa X.38 — Precios programados (courses.scheduled_prices)
+    // ════════════════════════════════════════════════
+    // Array de filas { date: 'YYYY-MM-DD', price_ars: N, price_usd: N }.
+    // Se renderizan dinámicamente y se serializan en saveCurso(). Al cargar
+    // un curso existente, se llama a renderSchedPriceRows() con el array que
+    // viene de courses.scheduled_prices (parseado a array si era string).
+    function addSchedPriceRow(date = '', priceArs = '', priceUsd = '') {
+      const list = document.getElementById('cf-sched-prices-list');
+      if (!list) return;
+      const row = document.createElement('div');
+      row.className = 'scheduled-price-row';
+      row.innerHTML = `
+        <input class="form-input sp-date"     type="date"   value="${escapeAttr(date)}" placeholder="YYYY-MM-DD" />
+        <input class="form-input sp-price-ars" type="number" value="${escapeAttr(priceArs)}" placeholder="Precio ARS" min="0" step="any" />
+        <input class="form-input sp-price-usd" type="number" value="${escapeAttr(priceUsd)}" placeholder="Precio USD" min="0" step="any" />
+        <button type="button" class="btn-icon" title="Eliminar" onclick="this.closest('.scheduled-price-row').remove()">×</button>
+      `;
+      list.appendChild(row);
+    }
+
+    function getSchedPricesFromForm() {
+      const rows = document.querySelectorAll('#cf-sched-prices-list .scheduled-price-row');
+      const out = [];
+      rows.forEach(row => {
+        const date     = row.querySelector('.sp-date')?.value || '';
+        const priceArs = parseFloat(row.querySelector('.sp-price-ars')?.value || '0') || 0;
+        const priceUsd = parseFloat(row.querySelector('.sp-price-usd')?.value || '0') || 0;
+        if (!date) return; // sin fecha, fila inválida → la descartamos silenciosamente
+        out.push({ date, price_ars: priceArs, price_usd: priceUsd });
+      });
+      // Ordenar por fecha ASC (UI consistente con el orden cronológico)
+      out.sort((a, b) => a.date.localeCompare(b.date));
+      return out;
+    }
+
+    function renderSchedPriceRows(arr) {
+      const list = document.getElementById('cf-sched-prices-list');
+      if (!list) return;
+      list.innerHTML = '';
+      // Aceptamos array o string (por si la columna JSONB viene parseable como string)
+      let parsed = arr || [];
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch { parsed = []; }
+      }
+      if (!Array.isArray(parsed)) parsed = [];
+      // Ordenar por fecha ASC
+      parsed.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+      parsed.forEach(r => addSchedPriceRow(r.date || '', r.price_ars ?? '', r.price_usd ?? ''));
     }
 
     function addLessonRow(listEl, lessonId = '', title = '', url = '') {
@@ -2236,7 +2365,7 @@
     function getModulesFromForm() {
       const cards = document.querySelectorAll('#cf-modules-list .cf-module-card');
       return Array.from(cards).map((card, i) => {
-        const titleInput = card.querySelector('.cf-module-head input');
+        const titleInput = card.querySelector('.cf-mod-title');
         const lessons = Array.from(card.querySelectorAll('.cf-lesson-row')).map((row, j) => {
           const inputs = row.querySelectorAll('input');
           return {
@@ -2246,40 +2375,70 @@
             order_num: j,
           };
         });
+        // Etapa X.38 — drip + live per módulo
+        const unlockRaw   = card.querySelector('.cf-mod-unlock')?.value || '';
+        const hasLive     = !!card.querySelector('.cf-mod-has-live')?.checked;
+        const liveDateRaw = card.querySelector('.cf-mod-live-date')?.value || '';
+        const liveUrl     = (card.querySelector('.cf-mod-live-url')?.value || '').trim();
         return {
           id:        card.dataset.modId || null,
           title:     titleInput.value.trim(),
           order_num: i,
+          unlock_at: unlockRaw ? new Date(unlockRaw).toISOString() : null,
           lessons,
+          has_live:  hasLive,
+          live: hasLive ? {
+            id:            card.dataset.liveId || null,
+            live_date:     liveDateRaw ? new Date(liveDateRaw).toISOString() : null,
+            live_url:      liveUrl || null,
+            recording_url: card.dataset.liveRecording || null,
+          } : null,
         };
       });
     }
 
     function renderModuleRows(modules) {
       document.getElementById('cf-modules-list').innerHTML = '';
-      (modules || []).forEach(m => addModuleRow(m.id || '', m.title || '', m.lessons || []));
+      (modules || []).forEach(m => addModuleRow(
+        m.id || '',
+        m.title || '',
+        m.lessons || [],
+        m.unlock_at || '',
+        m.live || null,
+      ));
     }
 
-    // Carga módulos+lecciones desde Supabase para el editor
+    // Carga módulos+lecciones+lives desde Supabase para el editor
+    // Etapa X.38 — ahora también trae `unlock_at` y joinea `course_lives` (1:0..1 por módulo)
     async function loadModulesForCourse(courseId) {
       const { data: modules } = await sb
         .from('course_modules')
-        .select('id, title, order_num')
+        .select('id, title, order_num, unlock_at')
         .eq('course_id', courseId)
         .order('order_num');
       if (!modules?.length) return [];
       const modIds = modules.map(m => m.id);
-      const { data: lessons } = await sb
-        .from('course_lessons')
-        .select('id, module_id, title, video_url, order_num')
-        .in('module_id', modIds)
-        .order('order_num');
+      const [{ data: lessons }, { data: lives }] = await Promise.all([
+        sb.from('course_lessons')
+          .select('id, module_id, title, video_url, order_num')
+          .in('module_id', modIds)
+          .order('order_num'),
+        sb.from('course_lives')
+          .select('id, module_id, live_url, live_date, recording_url')
+          .in('module_id', modIds),
+      ]);
       const lessonsByMod = {};
       (lessons || []).forEach(l => {
         if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
         lessonsByMod[l.module_id].push(l);
       });
-      return modules.map(m => ({ ...m, lessons: lessonsByMod[m.id] || [] }));
+      const liveByMod = {};
+      (lives || []).forEach(lv => { liveByMod[lv.module_id] = lv; });
+      return modules.map(m => ({
+        ...m,
+        lessons: lessonsByMod[m.id] || [],
+        live:    liveByMod[m.id]    || null,
+      }));
     }
 
     // Diff sync con la BD: UPDATE existentes (preserva IDs → progreso intacto),
@@ -2311,6 +2470,7 @@
           course_id: courseId,
           title:     mod.title || 'Módulo sin título',
           order_num: mod.order_num,
+          unlock_at: mod.unlock_at || null,   // Etapa X.38 — drip
         };
         if (modId) {
           const { error: errUpdMod } = await sb.from('course_modules').update(modPayload).eq('id', modId);
@@ -2363,6 +2523,29 @@
             }
           }
         }
+
+        // Etapa X.38 — sync course_lives (1:0..1 por módulo)
+        // Si el módulo tiene live activo → UPSERT (UPDATE si trae id, INSERT si no).
+        // Si NO tiene → DELETE el registro existente (si lo hubiera).
+        if (mod.has_live && mod.live) {
+          const livePayload = {
+            module_id:     modId,
+            live_url:      mod.live.live_url      || null,
+            live_date:     mod.live.live_date     || null,
+            recording_url: mod.live.recording_url || null,
+          };
+          if (mod.live.id) {
+            const { error: errUpdLive } = await sb.from('course_lives').update(livePayload).eq('id', mod.live.id);
+            if (errUpdLive) fail('UPDATE course_lives', errUpdLive, { liveId: mod.live.id, payload: livePayload });
+          } else {
+            const { error: errInsLive } = await sb.from('course_lives').insert(livePayload);
+            if (errInsLive) fail('INSERT course_lives', errInsLive, { payload: livePayload });
+          }
+        } else {
+          // No tiene live → borrar si existía (idempotente: si no hay nada, no pasa nada).
+          const { error: errDelLive } = await sb.from('course_lives').delete().eq('module_id', modId);
+          if (errDelLive) fail('DELETE course_lives', errDelLive, { modId });
+        }
       }
     }
 
@@ -2387,6 +2570,9 @@
       document.getElementById('cf-live-fields').classList.remove('visible');
       document.getElementById('cf-video-list').innerHTML = '';
       document.getElementById('cf-modules-list').innerHTML = '';
+      // Etapa X.38 — limpiar precios programados
+      const spList = document.getElementById('cf-sched-prices-list');
+      if (spList) spList.innerHTML = '';
       document.getElementById('cf-course-type').value = 'videos';
       toggleCourseTypeFields();
       document.getElementById('lp-list').innerHTML = '';
@@ -2669,6 +2855,8 @@
       document.getElementById('cf-desc').value      = c.description || '';
       document.getElementById('cf-price-ars').value = c.price_ars   || '';
       document.getElementById('cf-price-usd').value = c.price_usd   || '';
+      // Etapa X.38 — precios programados (courses.scheduled_prices, JSONB array)
+      renderSchedPriceRows(c.scheduled_prices || []);
       const slug = c.slug || '';
       document.getElementById('cf-tipo').value =
         slug.includes('webinar')   ? 'webinar'     :
@@ -2804,6 +2992,7 @@
         is_active:        isActive,                                // Sesión 52
         course_type:      courseType,
         has_quiz:         hasQuiz,                                  // Etapa U
+        scheduled_prices: getSchedPricesFromForm(),                 // Etapa X.38 — JSONB array [{date, price_ars, price_usd}]
       };
 
       let error, savedCourseId = editingCourseId;
@@ -2859,7 +3048,7 @@
     async function loadCursos() {
       const { data, error } = await sb
         .from('courses')
-        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, created_at')
+        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, created_at')
         .order('created_at');
       const tbody = document.getElementById('tbody-cursos');
 
