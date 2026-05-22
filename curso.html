@@ -426,6 +426,32 @@
       font-size: 1rem; font-weight: 700; color: var(--white); margin-bottom: 4px;
     }
     .modules-active-actions { display: flex; justify-content: flex-start; }
+
+    /* Etapa X.42 — bloque de live por módulo (sidebar) */
+    .modules-mod-live {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 8px 12px 10px; margin: 0 4px 4px;
+      border-left: 2px solid rgba(200,230,0,0.35);
+      border-radius: 0 6px 6px 0; background: rgba(200,230,0,0.04);
+    }
+    .modules-mod-live.recording { border-left-color: rgba(123,79,190,0.45); background: rgba(123,79,190,0.06); }
+    .modules-mod-live.pending   { border-left-color: rgba(148,163,184,0.30); background: transparent; }
+    .btn-live-join, .btn-live-recording {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 6px; font-family: inherit;
+      font-size: 0.76rem; font-weight: 700; cursor: pointer;
+      text-decoration: none; border: none; align-self: flex-start;
+      transition: opacity 0.18s, transform 0.18s;
+    }
+    .btn-live-join      { background: var(--lime, #C8E600);   color: #1E2A3A; }
+    .btn-live-recording { background: var(--violet, #7B4FBE); color: #FFFFFF; }
+    .btn-live-join:hover, .btn-live-recording:hover { opacity: 0.88; transform: translateY(-1px); }
+    .modules-mod-live-meta {
+      font-size: 0.72rem; color: var(--gray-text);
+    }
+    .modules-mod-live.pending .modules-mod-live-meta {
+      font-style: italic; font-size: 0.74rem;
+    }
     /* Etapa X.7: materiales específicos por lección, debajo del video activo */
     .lesson-materials-wrap { margin-top: 24px; }
     .lesson-materials-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: var(--white); }
@@ -944,19 +970,101 @@
     }
 
     /* ── Vista de módulos (Sesión 48) ─────────────── */
+    // Etapa X.42 — además de lecciones, también trae course_lives (1:0..1 por módulo).
     async function loadStudentModules(courseId) {
       const { data: modules } = await sb
         .from('course_modules').select('id, title, order_num').eq('course_id', courseId).order('order_num');
       if (!modules?.length) return [];
       const modIds = modules.map(m => m.id);
-      const { data: lessons } = await sb
-        .from('course_lessons').select('id, module_id, title, video_url, order_num').in('module_id', modIds).order('order_num');
+      const [{ data: lessons }, { data: lives }] = await Promise.all([
+        sb.from('course_lessons')
+          .select('id, module_id, title, video_url, order_num')
+          .in('module_id', modIds)
+          .order('order_num'),
+        sb.from('course_lives')
+          .select('id, module_id, live_url, live_date, recording_url')
+          .in('module_id', modIds),
+      ]);
       const lessonsByMod = {};
       (lessons || []).forEach(l => {
         if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
         lessonsByMod[l.module_id].push(l);
       });
-      return modules.map(m => ({ ...m, lessons: lessonsByMod[m.id] || [] }));
+      const liveByMod = {};
+      (lives || []).forEach(lv => { liveByMod[lv.module_id] = lv; });
+      return modules.map(m => ({
+        ...m,
+        lessons: lessonsByMod[m.id] || [],
+        live:    liveByMod[m.id]    || null,
+      }));
+    }
+
+    // Etapa X.42 — formatear fecha/hora del live (ej. "Jue 23 May · 19:30")
+    function formatLiveDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+      const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
+    }
+
+    // Etapa X.42 — render del bloque de live para un módulo. Devuelve HTML que se
+    // inserta entre el head del módulo y la lista de lecciones.
+    // Estados:
+    //   - live futura → botón lime "📡 Unirse al live" + fecha formateada debajo.
+    //   - live pasada con grabación → botón violet "▶ Ver grabación" que pone el
+    //     video en el main panel (vía _liveOverride).
+    //   - live pasada sin grabación → "⏳ Grabación próximamente".
+    //   - sin live → string vacío.
+    function renderModuleLiveInfo(m) {
+      const live = m?.live;
+      if (!live) return '';
+      const now = Date.now();
+      const ts  = live.live_date ? new Date(live.live_date).getTime() : 0;
+      const isFuture = ts && !isNaN(ts) && ts > now;
+
+      if (isFuture) {
+        const safeUrl = escHtml(live.live_url || '#');
+        return `
+          <div class="modules-mod-live">
+            <a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
+            <div class="modules-mod-live-meta">${escHtml(formatLiveDate(live.live_date))}</div>
+          </div>`;
+      }
+      // live ya pasó (o nunca tuvo fecha — tratado como "no futura" → cae al recording branch)
+      if (live.recording_url) {
+        return `
+          <div class="modules-mod-live recording">
+            <button class="btn-live-recording" onclick="playLiveRecording('${escHtml(m.id)}')">▶ Ver grabación</button>
+            <div class="modules-mod-live-meta">Grabación del ${escHtml(formatLiveDate(live.live_date))}</div>
+          </div>`;
+      }
+      return `
+        <div class="modules-mod-live pending">
+          <div class="modules-mod-live-meta">⏳ Grabación próximamente</div>
+        </div>`;
+    }
+
+    // Etapa X.42 — override del main panel para reproducir la grabación del live
+    // de un módulo. Cuando está set, renderModulesView lo usa en vez de la lesson activa.
+    // Para volver a una lección normal, selectLesson() lo limpia.
+    let _liveOverride = null;  // { moduleId, title, src } | null
+
+    function playLiveRecording(moduleId) {
+      const m = MODULES.find(x => x.id === moduleId);
+      if (!m?.live?.recording_url) return;
+      _liveOverride = {
+        moduleId,
+        title: `🔴 ${m.title || 'Live'} — Grabación`,
+        src:   m.live.recording_url,
+      };
+      renderModulesView();
+      // Scroll suave al main del player (que ahora muestra la grabación)
+      const videos = document.getElementById('videos-container');
+      if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function renderModulesView() {
@@ -978,7 +1086,7 @@
         const lessonsHtml = (m.lessons || []).map((l, li) => {
           // Etapa X.3: completedSet guarda flat-index (número), no UUID.
           const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
-          const active = l.id === activeLessonId;
+          const active = l.id === activeLessonId && !_liveOverride;
           const checkContent = done ? '✓' : (li + 1);
           return `
             <button class="modules-lesson ${active ? 'active' : ''}" onclick="selectLesson('${escHtml(l.id)}')">
@@ -986,38 +1094,52 @@
               <span class="modules-lesson-title">${escHtml(l.title || `Lección ${li + 1}`)}</span>
             </button>`;
         }).join('');
+        // Etapa X.42 — bloque de live entre el head y las lecciones
+        const liveHtml = renderModuleLiveInfo(m);
         return `
           <div class="modules-mod" id="modules-mod-${mi}">
             <button class="modules-mod-head" onclick="toggleModule(${mi})">
               <span class="modules-mod-title">${escHtml(m.title || `Módulo ${mi + 1}`)}</span>
               <span class="modules-mod-arrow">▾</span>
             </button>
+            ${liveHtml}
             <div class="modules-lessons">${lessonsHtml}</div>
           </div>`;
       }).join('');
 
-      // Main: lección activa con iframe
-      const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
-      const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
-      const mainHtml = active ? `
-        <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
-        <div class="video-wrapper">
-          <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-        </div>
-        <div class="modules-active-actions">
-          ${isDone
-            ? `<button class="btn-video completed" disabled>
-                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                 Completado
-               </button>`
-            : `<button class="btn-video" id="btn-lesson-mark" onclick="markLessonComplete('${escHtml(active.id)}')">
-                 Marcar como completado
-               </button>`}
-        </div>
-        <!-- Etapa X.7: materiales específicos de esta lección — se popula async tras el render. Si no hay, queda vacío (silencioso). -->
-        <div id="lesson-materials-${escHtml(active.id)}" class="lesson-materials-wrap"></div>`
-        : '<div class="no-videos-msg">Seleccioná una lección.</div>';
+      // Main: si hay override de live recording → reproducir grabación.
+      // Si no → render normal de la lección activa.
+      let mainHtml;
+      if (_liveOverride) {
+        mainHtml = `
+          <div class="modules-active-title">${escHtml(_liveOverride.title)}</div>
+          <div class="video-wrapper">
+            <iframe src="${escHtml(getEmbedUrl(_liveOverride.src))}" frameborder="0" allowfullscreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+          </div>`;
+      } else {
+        const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
+        const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
+        mainHtml = active ? `
+          <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
+          <div class="video-wrapper">
+            <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+          </div>
+          <div class="modules-active-actions">
+            ${isDone
+              ? `<button class="btn-video completed" disabled>
+                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                   Completado
+                 </button>`
+              : `<button class="btn-video" id="btn-lesson-mark" onclick="markLessonComplete('${escHtml(active.id)}')">
+                   Marcar como completado
+                 </button>`}
+          </div>
+          <!-- Etapa X.7: materiales específicos de esta lección — se popula async tras el render. Si no hay, queda vacío (silencioso). -->
+          <div id="lesson-materials-${escHtml(active.id)}" class="lesson-materials-wrap"></div>`
+          : '<div class="no-videos-msg">Seleccioná una lección.</div>';
+      }
 
       container.innerHTML = `
         <div class="modules-layout">
@@ -1026,7 +1148,11 @@
         </div>`;
 
       // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
-      if (active) loadLessonMaterials(active.id);
+      // Solo si NO estamos en modo grabación-live (no hay lección activa "real").
+      if (!_liveOverride) {
+        const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
+        if (active) loadLessonMaterials(active.id);
+      }
     }
 
     /* ─── Materiales por lección (Etapa X.7) ─────────
@@ -1069,6 +1195,7 @@
 
     function selectLesson(lessonId) {
       activeLessonId = lessonId;
+      _liveOverride  = null;   // Etapa X.42 — salir del modo grabación-live al elegir lección
       renderModulesView();
     }
 

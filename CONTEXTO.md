@@ -3093,3 +3093,62 @@ Tres sitios actualizados, cada uno con (a) ampliar el SELECT para traer `schedul
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Lives por módulo en curso.html (cierre del feature drip/lives)
+
+**Fecha:** 22 de mayo de 2026. Cierra el feature Lives/Drip que arrancó en la sesión anterior (admin podía cargar lives en `course_lives`, pero el alumno no los veía). Esta etapa monta la visualización en `curso.html` para `course_type='modules'`.
+
+### Lógica de visualización
+
+Para cada módulo con un registro en `course_lives`, se inserta un bloque entre el título del módulo y la lista de lecciones (en el sidebar), con uno de 3 estados:
+
+1. **Live futura** (`live_date > now`): botón lime **"📡 Unirse al live"** que abre `live_url` en nueva pestaña (`target="_blank"`). Debajo, la fecha formateada en español (`Jue 23 May · 19:30`).
+2. **Live pasada con grabación** (`live_date <= now && recording_url`): botón violet **"▶ Ver grabación"** que reproduce el video en el panel principal (mismo `<iframe>` que usan las lecciones). Subtexto: "Grabación del {fecha del live original}".
+3. **Live pasada sin grabación** (`live_date <= now && !recording_url`): texto gris italic **"⏳ Grabación próximamente"**. Sin botón.
+
+Si el módulo no tiene `live` → no se renderiza nada extra (string vacío). El comportamiento del módulo queda idéntico al anterior.
+
+### Implementación
+
+**Query extendido**: `loadStudentModules(courseId)` ahora hace en paralelo (`Promise.all`) la query de `course_lessons` y la de `course_lives`. Mergea ambos al objeto del módulo: `{ ...m, lessons: [...], live: liveByMod[m.id] || null }`. Pattern idéntico al `loadModulesForCourse` de admin.html (Etapa X.38).
+
+**Helper `formatLiveDate(iso)`**: convierte un timestamp ISO a `Día DD Mes · HH:MM` en zona local del cliente. Usa arrays cortos `['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']` y `['Ene','Feb',...,'Dic']`. Si el input es inválido o vacío, devuelve string vacío.
+
+**Helper `renderModuleLiveInfo(m)`**: devuelve el HTML del bloque según el estado. Centraliza la lógica de los 3 cases. Si `m.live == null` → string vacío. Si `m.live` existe pero `live_date` está vacío → cae al branch de "live pasada" (asume que pasó si no tiene fecha explícita).
+
+**Helper `playLiveRecording(moduleId)`**: setea una variable global `_liveOverride = { moduleId, title, src }` y llama a `renderModulesView()`. La variable se chequea al principio del render del panel principal: si está set, en lugar de mostrar la lección activa, muestra el `iframe` con la grabación + título "🔴 {nombre módulo} — Grabación". Hace `scrollIntoView` suave al `#videos-container` para que el alumno vea el cambio.
+
+**`selectLesson(lessonId)` modificado**: ahora limpia `_liveOverride = null` antes de re-renderizar. Esto permite que el alumno vuelva del modo "grabación de live" a una lección normal con un click en el sidebar.
+
+**`renderModulesView()` modificado**:
+- Sidebar: inserta `renderModuleLiveInfo(m)` entre `.modules-mod-head` y `.modules-lessons`.
+- Sidebar: las lecciones se marcan como `active` solo si `l.id === activeLessonId && !_liveOverride` — así cuando estamos viendo una grabación de live, ninguna lección queda highlighted (lo cual sería confuso).
+- Main: branch nuevo `if (_liveOverride) { ... } else { ... lección normal ... }`. El branch de grabación NO muestra el botón "Marcar como completado" ni el wrap de materiales (porque la grabación no es una lección — no afecta progreso ni tiene materiales asociados todavía).
+
+### Estilos nuevos
+
+```css
+.modules-mod-live           /* borde-left lime + bg lime soft — estado live futura */
+.modules-mod-live.recording /* borde-left violet + bg violet soft */
+.modules-mod-live.pending   /* borde-left gray + sin bg */
+.btn-live-join              /* bg lime, texto #1E2A3A — botón "Unirse al live" */
+.btn-live-recording         /* bg violet, texto blanco — botón "Ver grabación" */
+.modules-mod-live-meta      /* subtexto con fecha o "Grabación próximamente" */
+```
+
+Todos los botones tienen hover con `opacity: 0.88` + `translateY(-1px)`. Los bloques están dentro del sidebar pegados al borde izquierdo del card de módulo, alineados con la barra de live/recording/pending color-coded.
+
+### Lo que NO se hizo en esta etapa
+
+- **Notificación pre-live**: no se manda email/notif al alumno cuando faltan X minutos para el live. Próxima etapa podría usar el sistema de `notifications` (Sesión 58) + algún cron/Edge Function.
+- **Tracking de asistencia al live**: el click en "Unirse al live" abre el `live_url` en nueva pestaña sin loguear que el alumno entró. Si interesa medir asistencia, habría que agregar una columna `attended` en alguna tabla y disparar un INSERT en el click.
+- **Marcar la grabación como "completada"**: hoy el botón "Ver grabación" no afecta el progreso del alumno. Si las lives son parte del temario completable, podría agregarse una integración con `video_progress` usando un `video_index` reservado o una tabla nueva.
+- **Edición de `recording_url` desde admin.html**: el campo se preserva en el sync de `course_lives` pero no se expone en el form del módulo del admin. Coherente con el flujo esperado (la grabación se sube post-live, típicamente desde el panel del coach). El coach panel (`coach.html`) tampoco lo expone aún — pendiente.
+- **Render del live en `course_type='videos'` o `'live'` (legacy)**: esta etapa solo aplica al modo `modules`. El modo `live` (Sesión 37 — `courses.live_url` directo) sigue funcionando con su propio flujo.
+- **RLS de `course_lives`**: pendiente desde Etapa X.38 (sin policies, queda public-readable por default). El SELECT del alumno funciona por ese motivo. Antes de prod, agregar `ENABLE ROW LEVEL SECURITY` + policy de SELECT pública para alumnos con `user_courses.payment_status='paid'`.
+
+**Archivos modificados:**
+- `curso.html` — `loadStudentModules` extendido (paralelo a `course_lives`), helpers nuevos `formatLiveDate` + `renderModuleLiveInfo` + `playLiveRecording`, global `_liveOverride`, `renderModulesView` con bloque live en sidebar + branch override para grabaciones en el main panel, `selectLesson` limpia el override. CSS nuevo (~25 líneas) para `.modules-mod-live` y sus variantes.
+- `CONTEXTO.md` — esta sección.
+
+---
