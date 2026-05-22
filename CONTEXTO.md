@@ -3006,3 +3006,58 @@ function getEffectivePrice(course) {
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Soporte de URLs Drive + YouTube en curso.html
+
+**Fecha:** 22 de mayo de 2026. Fix de embed que estaba fallando con Google Drive: el `<iframe>` del player asumía que la `video_url` venía en formato YouTube embed, y los links de Drive (`drive.google.com/file/d/{id}/view`) quedaban en pantalla negra porque Drive no permite que esa URL se sirva en iframe sin transformarla a `/preview`.
+
+### Implementación
+
+**Nueva función `getEmbedUrl(url)`** en `curso.html`, definida junto a `toYoutubeEmbed` (que se mantiene por compatibilidad):
+
+```js
+function getEmbedUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+
+  // YouTube (watch / youtu.be / embed)
+  const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+
+  // Google Drive — /file/d/ID/{view|preview|edit}?...
+  const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
+
+  // Fallback: la URL tal cual
+  return s;
+}
+```
+
+**Comportamiento:**
+- `youtube.com/watch?v=ID`, `youtu.be/ID`, `youtube.com/embed/ID` → `https://www.youtube.com/embed/ID` (matcher único que cubre las 3 variantes).
+- `drive.google.com/file/d/ID/view?usp=sharing` (o cualquier sufijo después del ID) → `https://drive.google.com/file/d/ID/preview`. El sufijo `/preview` es el único que Drive sirve embed-friendly: `/view` deniega el iframe.
+- URLs vacías → string vacío.
+- Cualquier otro link (Vimeo, Bunny, mp4 directo, etc.) → devuelta sin cambios. Si el server remoto manda `X-Frame-Options: DENY` o `Content-Security-Policy: frame-ancestors`, el iframe queda en blanco — caso edge no resuelto pero esperado (sin lista blanca de proveedores no podemos hacer más).
+
+### Cambios en `curso.html`
+
+Reemplazos en los dos lugares donde se construye el `src` del `<iframe>` del player:
+
+1. **Modo videos sueltos / live recordings** (`renderVideos()` línea ~831): `<iframe src="${escHtml(getEmbedUrl(video.src))}">`. Antes usaba `video.src` directo, que asumía YouTube embed.
+2. **Modo módulos** (`renderModulesView()` línea ~984): el `<iframe>` de la lección activa pasa de `toYoutubeEmbed(active.video_url)` a `getEmbedUrl(active.video_url)`. Esto permite que coexistan lecciones con video en YouTube y otras en Drive dentro del mismo curso.
+
+### Por qué no se eliminó `toYoutubeEmbed`
+
+Sigue siendo usado en otros archivos (`admin.html` — al guardar lecciones normaliza la URL de YouTube en `syncCourseModules`). Mantenemos `toYoutubeEmbed` como helper específico de YouTube (más estricto: solo matchea IDs de 11 chars y NO toca URLs no-YouTube) y `getEmbedUrl` como el dispatcher general para el render. Si en el futuro queremos que `admin.html` también normalice URLs de Drive al guardar, se puede portar `getEmbedUrl` allí y reemplazar las llamadas.
+
+### Lo que NO se hizo en esta etapa
+
+- **Normalizar URLs de Drive al guardar en `admin.html`**: hoy si el coach pega un link `/view`, queda en BD como `/view` — el embed lo corrige al renderizar. Funciona pero ensucia los datos. Idealmente al guardar lección/video se debería pasar por `getEmbedUrl` también para normalizar a `/preview` en BD.
+- **Otros proveedores**: Vimeo, Loom, Bunny.net, Wistia. No agregamos lógica específica — cada uno con su formato embed. Cuando aparezca el primer caso real, se suma al matcher.
+- **Validación del lado del editor**: el form de admin no avisa si la URL es de un proveedor no soportado por iframe. Mejora UX futura.
+
+**Archivos modificados:**
+- `curso.html` — función nueva `getEmbedUrl` (~20 líneas), reemplazo de `video.src` → `getEmbedUrl(video.src)` y `toYoutubeEmbed(active.video_url)` → `getEmbedUrl(active.video_url)`.
+- `CONTEXTO.md` — esta sección.
+
+---

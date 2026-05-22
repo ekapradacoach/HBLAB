@@ -759,6 +759,27 @@
       return match ? `https://www.youtube.com/embed/${match[1]}` : url;
     }
 
+    // Etapa X.40 — Convierte cualquier URL de video al formato embed adecuado.
+    // - YouTube (watch?v= / youtu.be/ID / embed/) → https://www.youtube.com/embed/ID
+    // - Google Drive (drive.google.com/file/d/ID/...) → https://drive.google.com/file/d/ID/preview
+    // - Cualquier otro link → se devuelve tal cual (el <iframe> intenta cargarlo;
+    //   si el server remoto envía X-Frame-Options DENY, el embed quedará en blanco).
+    function getEmbedUrl(url) {
+      if (!url) return '';
+      const s = String(url).trim();
+
+      // YouTube (watch / youtu.be / embed) — reutiliza el matcher de toYoutubeEmbed
+      const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+
+      // Google Drive — /file/d/ID/{view|preview|edit}?...
+      const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
+
+      // Fallback: usar la URL tal cual
+      return s;
+    }
+
     function linkify(raw) {
       if (!raw) return '';
       const urlRegex = /https?:\/\/[^\s<>"']+/g;
@@ -828,7 +849,7 @@
               <span class="video-title">${escHtml(video.title)}</span>
             </div>
             <div class="video-wrapper">
-              <iframe src="${escHtml(video.src)}"
+              <iframe src="${escHtml(getEmbedUrl(video.src))}"
                 frameborder="0" allowfullscreen
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
               </iframe>
@@ -981,7 +1002,7 @@
       const mainHtml = active ? `
         <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
         <div class="video-wrapper">
-          <iframe src="${escHtml(toYoutubeEmbed(active.video_url || ''))}" frameborder="0" allowfullscreen
+          <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
         </div>
         <div class="modules-active-actions">
