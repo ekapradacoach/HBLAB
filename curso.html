@@ -435,6 +435,34 @@
       font-size: 0.92rem; font-style: italic; text-align: center;
     }
 
+    /* Etapa X.43 — Drip: módulos bloqueados (unlock_at > now) */
+    .modules-mod.locked { opacity: 0.55; }
+    .modules-mod.locked .modules-mod-head { cursor: not-allowed; }
+    .modules-mod.locked .modules-mod-head:hover { background: transparent; }
+    .modules-mod.locked .modules-mod-arrow { display: none; }
+    .modules-mod-lock-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-right: 6px; color: var(--gray-text); font-size: 0.95rem;
+    }
+
+    /* Panel "módulo bloqueado" en el main */
+    .locked-module-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; gap: 12px; padding: 60px 28px;
+      background: rgba(47,62,82,0.25); border: 1px dashed var(--card-border);
+      border-radius: 14px; min-height: 320px;
+    }
+    .locked-module-panel .lock-icon-lg {
+      font-size: 3rem; line-height: 1; margin-bottom: 4px;
+    }
+    .locked-module-panel .lock-msg {
+      font-size: 1.05rem; font-weight: 700; color: var(--white); max-width: 480px;
+    }
+    .locked-module-panel .lock-msg strong { color: var(--lime, #C8E600); font-weight: 800; }
+    .locked-module-panel .lock-sub {
+      font-size: 0.85rem; color: var(--gray-text); font-style: italic; max-width: 420px;
+    }
+
     /* Etapa X.42 — bloque de live por módulo (sidebar) */
     .modules-mod-live {
       display: flex; flex-direction: column; gap: 4px;
@@ -981,7 +1009,7 @@
     // Etapa X.42 — además de lecciones, también trae course_lives (1:0..1 por módulo).
     async function loadStudentModules(courseId) {
       const { data: modules } = await sb
-        .from('course_modules').select('id, title, order_num').eq('course_id', courseId).order('order_num');
+        .from('course_modules').select('id, title, order_num, unlock_at').eq('course_id', courseId).order('order_num');
       if (!modules?.length) return [];
       const modIds = modules.map(m => m.id);
       const [{ data: lessons }, { data: lives }] = await Promise.all([
@@ -1056,10 +1084,33 @@
         </div>`;
     }
 
+    // Etapa X.43 — Drip: helpers de módulo bloqueado
+    function isModuleLocked(m) {
+      if (!m?.unlock_at) return false;
+      const t = new Date(m.unlock_at).getTime();
+      return !isNaN(t) && t > Date.now();
+    }
+    // Formato de fecha en español: "lunes 6 de junio"
+    function formatUnlockDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      try {
+        return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+      } catch {
+        // Fallback manual si toLocaleDateString no soporta es-AR
+        const dias  = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        return `${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]}`;
+      }
+    }
+
     // Etapa X.42 — override del main panel para reproducir la grabación del live
     // de un módulo. Cuando está set, renderModulesView lo usa en vez de la lesson activa.
     // Para volver a una lección normal, selectLesson() lo limpia.
     let _liveOverride = null;  // { moduleId, title, src } | null
+    // Etapa X.43 — override del main panel para mostrar el panel de módulo bloqueado.
+    let _lockedView   = null;  // { moduleId, unlock_at, title } | null
 
     function playLiveRecording(moduleId) {
       const m = MODULES.find(x => x.id === moduleId);
@@ -1069,8 +1120,24 @@
         title: `🔴 ${m.title || 'Live'} — Grabación`,
         src:   m.live.recording_url,
       };
+      _lockedView = null;  // salir del modo bloqueado si estaba
       renderModulesView();
       // Scroll suave al main del player (que ahora muestra la grabación)
+      const videos = document.getElementById('videos-container');
+      if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Etapa X.43 — al click en un módulo bloqueado, mostrar el panel en el main.
+    function showLockedModule(moduleId) {
+      const m = MODULES.find(x => x.id === moduleId);
+      if (!m || !isModuleLocked(m)) return;
+      _lockedView = {
+        moduleId,
+        unlock_at: m.unlock_at,
+        title:     m.title || 'Módulo',
+      };
+      _liveOverride = null;  // si estaba viendo una grabación, salir
+      renderModulesView();
       const videos = document.getElementById('videos-container');
       if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -1084,17 +1151,32 @@
         return;
       }
 
-      // Default: primera lección activa si no hay una seleccionada
-      if (!activeLessonId || !LESSONS_FLAT.find(l => l.id === activeLessonId)) {
-        activeLessonId = LESSONS_FLAT[0].id;
+      // Etapa X.43 — default: primera lección de un módulo NO bloqueado.
+      // Si todas están bloqueadas, queda sin lección activa (se muestra panel "Seleccioná una lección"
+      // en el branch normal, o mejor: si el alumno clickea un módulo bloqueado, _lockedView toma el main).
+      const lockedModIds = new Set(MODULES.filter(isModuleLocked).map(m => m.id));
+      const availableLessons = LESSONS_FLAT.filter(l => !lockedModIds.has(l.module_id));
+      if (!activeLessonId || !availableLessons.find(l => l.id === activeLessonId)) {
+        activeLessonId = availableLessons[0]?.id || null;
       }
 
       // Sidebar: módulos plegables con lecciones
       const sidebarHtml = MODULES.map((m, mi) => {
+        // Etapa X.43 — módulo bloqueado: head con 🔒, sin expandir, sin lecciones,
+        // sin bloque de live. Click muestra el panel "bloqueado" en el main.
+        if (isModuleLocked(m)) {
+          return `
+            <div class="modules-mod locked" id="modules-mod-${mi}">
+              <button class="modules-mod-head" onclick="showLockedModule('${escHtml(m.id)}')">
+                <span class="modules-mod-title"><span class="modules-mod-lock-icon">🔒</span>${escHtml(m.title || `Módulo ${mi + 1}`)}</span>
+                <span class="modules-mod-arrow">▾</span>
+              </button>
+            </div>`;
+        }
         const lessonsHtml = (m.lessons || []).map((l, li) => {
           // Etapa X.3: completedSet guarda flat-index (número), no UUID.
           const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
-          const active = l.id === activeLessonId && !_liveOverride;
+          const active = l.id === activeLessonId && !_liveOverride && !_lockedView;
           const checkContent = done ? '✓' : (li + 1);
           return `
             <button class="modules-lesson ${active ? 'active' : ''}" onclick="selectLesson('${escHtml(l.id)}')">
@@ -1115,10 +1197,18 @@
           </div>`;
       }).join('');
 
-      // Main: si hay override de live recording → reproducir grabación.
-      // Si no → render normal de la lección activa.
+      // Main: prioridad → módulo bloqueado > grabación de live > lección activa.
       let mainHtml;
-      if (_liveOverride) {
+      if (_lockedView) {
+        // Etapa X.43 — panel "módulo bloqueado"
+        const fecha = formatUnlockDate(_lockedView.unlock_at);
+        mainHtml = `
+          <div class="locked-module-panel">
+            <div class="lock-icon-lg">🔒</div>
+            <div class="lock-msg">Este módulo estará disponible el <strong>${escHtml(fecha)}</strong></div>
+            <div class="lock-sub">Vas a recibir una notificación cuando se habilite.</div>
+          </div>`;
+      } else if (_liveOverride) {
         mainHtml = `
           <div class="modules-active-title">${escHtml(_liveOverride.title)}</div>
           <div class="video-wrapper">
@@ -1163,8 +1253,8 @@
         </div>`;
 
       // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
-      // Solo si NO estamos en modo grabación-live (no hay lección activa "real").
-      if (!_liveOverride) {
+      // Solo si estamos en el modo lección normal (sin override de live ni lock).
+      if (!_liveOverride && !_lockedView) {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         if (active) loadLessonMaterials(active.id);
       }
@@ -1211,6 +1301,7 @@
     function selectLesson(lessonId) {
       activeLessonId = lessonId;
       _liveOverride  = null;   // Etapa X.42 — salir del modo grabación-live al elegir lección
+      _lockedView    = null;   // Etapa X.43 — salir del modo módulo-bloqueado
       renderModulesView();
     }
 

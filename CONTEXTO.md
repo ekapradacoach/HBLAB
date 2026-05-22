@@ -3152,3 +3152,69 @@ Todos los botones tienen hover con `opacity: 0.88` + `translateY(-1px)`. Los blo
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Drip de módulos en curso.html (aplicación de unlock_at)
+
+**Fecha:** 22 de mayo de 2026. Cierra el feature de drip empezado en la sesión X.38 (que sumó la columna `course_modules.unlock_at` + editor en admin). Hasta ahora la fecha de desbloqueo se guardaba pero los módulos seguían visibles para el alumno sin importar el valor. Esta etapa monta la lógica de bloqueo del lado alumno.
+
+### Lógica
+
+Por cada módulo en el sidebar:
+
+- **`unlock_at` null o pasada** (`isModuleLocked === false`): comportamiento actual — módulo expandible con sus lecciones clickeables + bloque de live si corresponde (Etapa X.42).
+- **`unlock_at` futura** (`isModuleLocked === true`):
+  - Sidebar: el head muestra el título con un **🔒** adelante. No se renderiza la lista de lecciones (`.modules-lessons`) ni el bloque de live (`renderModuleLiveInfo` se saltea). La flecha de expansión queda oculta (`.modules-mod-arrow { display: none }`). Opacidad reducida a 0.55 y `cursor: not-allowed`.
+  - Click en el head → setea `_lockedView = { moduleId, unlock_at, title }` y re-renderiza. El main panel muestra un card centrado con:
+    - Ícono grande **🔒** (3rem).
+    - Texto bold: `"Este módulo estará disponible el <strong>{fecha formateada}</strong>"`. El nombre del módulo en sí no se muestra (UX más limpio, foco en la fecha; si más adelante se quiere agregar, basta usar `_lockedView.title`).
+    - Subtexto italic gris: `"Vas a recibir una notificación cuando se habilite."`
+
+### Formato de fecha
+
+Helper `formatUnlockDate(iso)` usa `Date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })` → output tipo `"lunes 6 de junio"`. Si el environment no soporta el locale `es-AR` (caso edge muy raro hoy en día), hay un fallback manual con arrays hardcoded de días/meses en español.
+
+### Globals nuevos
+
+```js
+let _lockedView = null;  // { moduleId, unlock_at, title } | null
+```
+
+Se limpia (= null) en `selectLesson()` (cuando el alumno elige una lección normal) y en `playLiveRecording()` (cuando entra al modo grabación de live). De la misma forma, `showLockedModule()` limpia `_liveOverride` antes de setear `_lockedView`. Solo uno de los dos puede estar activo a la vez.
+
+### Prioridad en el main panel
+
+El branch del render del main panel es: `_lockedView > _liveOverride > lección activa`. Esto significa que si el alumno está viendo una grabación de live y clickea un módulo bloqueado, sale de la grabación y entra al panel de lock (esperable). Si está en una lección normal y clickea un módulo bloqueado, idem.
+
+### Fix: default de lección activa
+
+Antes, `activeLessonId` defaultaba a `LESSONS_FLAT[0].id` (la primera lección del primer módulo). Si el primer módulo está bloqueado, esto **filtraba contenido**: la lección se cargaba en el main panel aunque el módulo estuviera locked. Fix: ahora se construye `lockedModIds = new Set(MODULES.filter(isModuleLocked).map(m => m.id))` y se busca el default sobre `LESSONS_FLAT.filter(l => !lockedModIds.has(l.module_id))`. Si todas las lecciones están bloqueadas → `activeLessonId = null` (el main panel muestra "Seleccioná una lección" hasta que el alumno clickee algo).
+
+⚠️ **Nota:** esto no impide que un alumno chusma vea el `video_url` directamente en el DOM si abre las herramientas de desarrollador y mira el state de `MODULES`. Para enforcement real habría que filtrar `course_lessons` server-side via RLS basada en `course_modules.unlock_at`. Por ahora es un soft-lock (UX-only). Documentado como pendiente.
+
+### CSS nuevo
+
+```css
+.modules-mod.locked { opacity: 0.55; }
+.modules-mod.locked .modules-mod-head { cursor: not-allowed; }
+.modules-mod.locked .modules-mod-head:hover { background: transparent; }   /* no hover effect */
+.modules-mod.locked .modules-mod-arrow { display: none; }
+.modules-mod-lock-icon { margin-right: 6px; color: var(--gray-text); }     /* 🔒 inline en el title */
+.locked-module-panel  { /* card centrado en el main, padding 60px, borde dashed */ }
+.lock-icon-lg         { font-size: 3rem; }
+.lock-msg             { font-size: 1.05rem; font-weight: 700; }
+.lock-msg strong      { color: var(--lime); font-weight: 800; }            /* la fecha en lime */
+.lock-sub             { color: gray-text; italic; max-width: 420px; }
+```
+
+### Lo que NO se hizo en esta etapa
+
+- **Notificación cuando se desbloquea**: el subtexto promete "Vas a recibir una notificación cuando se habilite" pero hoy no hay nada que dispare esa notif. Falta un cron/Edge Function que recorra `course_modules` con `unlock_at <= now AND unlock_at > now - 1h` (ventana de 1h para no spammear retroactivamente) y INSERT en `notifications` para los alumnos del curso. Pendiente.
+- **Enforcement server-side**: hoy es soft-lock cliente. Un user técnico puede ver el `video_url` en `MODULES`. Para fix real → RPC `get_unlocked_lessons(course_id)` que filtre por `unlock_at IS NULL OR unlock_at <= now()`, o policy de RLS en `course_lessons` joining a `course_modules.unlock_at`. Pendiente.
+- **Auto-refresh cuando pasa la fecha**: si el alumno tiene la pestaña abierta cuando `unlock_at` se cumple, sigue viendo el módulo bloqueado hasta que recargue. Un `setInterval` chequeando `Date.now() >= unlock_at` y re-renderizando sería trivial — pero queda para una etapa de polish.
+- **Indicador de "se desbloquea pronto"** (ej: "Disponible en 2 días" en el sidebar): hoy el alumno ve solo el 🔒 + título; tiene que clickear para ver la fecha. Podría sumarse un subtítulo gray-text con la fecha resumida al lado del lock. Opcional UX.
+
+**Archivos modificados:**
+- `curso.html` — SELECT extendido con `unlock_at`, helpers nuevos `isModuleLocked` + `formatUnlockDate`, global `_lockedView`, `showLockedModule` setter, `selectLesson` + `playLiveRecording` limpian el lock, `renderModulesView` con render diferenciado de módulos bloqueados (sidebar) + branch nuevo en el main panel + fix del default `activeLessonId` para saltear módulos locked, CSS nuevo (~30 líneas).
+- `CONTEXTO.md` — esta sección.
+
+---
