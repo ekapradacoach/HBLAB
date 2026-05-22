@@ -1140,6 +1140,7 @@
         mainHtml = active ? `
           <div class="modules-active-title">${escHtml(active.title || 'Lección')}</div>
           ${videoBlockHtml}
+          ${hasVideo ? `
           <div class="modules-active-actions">
             ${isDone
               ? `<button class="btn-video completed" disabled>
@@ -1149,7 +1150,7 @@
               : `<button class="btn-video" id="btn-lesson-mark" onclick="markLessonComplete('${escHtml(active.id)}')">
                    Marcar como completado
                  </button>`}
-          </div>
+          </div>` : ''}
           <!-- Etapa X.7: materiales específicos de esta lección — se popula async tras el render. Si no hay, queda vacío (silencioso). -->
           <div id="lesson-materials-${escHtml(active.id)}" class="lesson-materials-wrap"></div>`
           : '<div class="no-videos-msg">Seleccioná una lección.</div>';
