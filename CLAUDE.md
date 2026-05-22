@@ -1252,6 +1252,35 @@ Las páginas legacy de curso (`curso-*.html`) son redirects de 14 líneas — el
 
 ---
 
+## Etapa X.37 — Sync del neto real de Mercado Pago en gestión
+
+**SQL ejecutado** (manual, vía Supabase SQL editor):
+```sql
+ALTER TABLE public.user_courses ADD COLUMN IF NOT EXISTS mp_payment_id TEXT;
+ALTER TABLE public.user_courses ADD COLUMN IF NOT EXISTS net_amount NUMERIC(10,2);
+```
+
+Dos columnas nuevas en `user_courses`:
+- **`mp_payment_id TEXT`**: ID real del payment de Mercado Pago (lo que devuelve `payment.id` en el webhook). Se popula automáticamente en el UPSERT del branch MP de `process-payment`. Sirve para vincular cada venta con su transacción real en MP y poder sincronizar el neto.
+- **`net_amount NUMERIC(10,2)`**: monto neto recibido por HB Lab post comisión MP + IIBB. Se popula manualmente cuando el admin hace click en "🔄 Sincronizar netos con MP".
+
+**Cambios en `process-payment/index.ts`**: el `upsertPayload` del UPSERT a `user_courses` ahora agrega `mp_payment_id: external_ref` cuando `payment_method === 'mercadopago'`. (`external_ref` ya contenía `String(payment.id)` desde la normalización del webhook MP.) Para PayPal/cupón/manual no se setea (queda null), como corresponde.
+
+**Nueva Edge Function `supabase/functions/sync-mp-payments/index.ts`** (`verify_jwt = true`). POST sin body. Verifica admin via JWT → SELECT `user_courses` WHERE `payment_method='mercadopago' AND mp_payment_id IS NOT NULL` → por cada fila hace `GET https://api.mercadopago.com/v1/payments/{mp_payment_id}` con `Authorization: Bearer ${MP_ACCESS_TOKEN}` → extrae `payment.transaction_details.net_received_amount` → UPDATE `user_courses.net_amount` donde `mp_payment_id` matchea. Retorna `{ ok: true, updated: N, errors: [{ mp_payment_id, error }] }`. Errores por fila (HTTP 4xx/5xx de MP, sin `transaction_details.net_received_amount` en la response, UPDATE fallido) se acumulan en el array `errors` sin abortar — el cliente loguea los errores y sigue. Sin paginación: si crece a miles de ventas habría que iterar en batches con `range()`. Secrets requeridos (ya configurados): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MP_ACCESS_TOKEN`. Entry en `config.toml`: `[functions.sync-mp-payments] verify_jwt = true`.
+
+**Cambios en `admin.html` — Tab Gestión**:
+- **Botón "🔄 Sincronizar netos con MP"** arriba del card de resultado neto (`<div>` con `btn-secondary` + `border: 1px solid lime; background: transparent; color: lime`). Al click llama `sb.functions.invoke('sync-mp-payments')`, deshabilita el botón, muestra "⏳ Sincronizando...", y al terminar muestra `✅ Sincronizados N pagos` (verde lime) o `Error: ...` (rojo) en un span al lado. Después del sync exitoso recarga `loadVentas()` y `loadResultadoNeto()` en paralelo para refrescar el card y la tabla.
+- **`loadResultadoNeto()`**: usa `COALESCE(net_amount, amount_paid)` vía helper inline `effectiveAmount(r) = Number(r.net_amount != null ? r.net_amount : r.amount_paid || 0)`. Si la venta MP ya fue sincronizada → el neto real entra al cálculo de ingresos totales + revenue por curso (que feed comisiones de coaches). Si no → cae al bruto. Se aplica tanto al `totalARS` como al `salesMap[course_id].revenue`. La query a `user_courses` ahora selecciona también `net_amount`.
+- **Tabla de ventas (`#tbody-ventas`)**: nueva columna **"Neto MP"** entre Monto y Moneda. Muestra `$X.XX` en lime si `net_amount != null`, o `—` en gris si no. Total de columnas ahora es **7** (antes 6); los `colspan` de las filas placeholder/empty/error/separador-mes se ajustaron a 7. La RPC `get_ventas()` no expone `net_amount` ni `mp_payment_id`, así que `loadVentas()` hace una side-query a `user_courses` (`select('enrolled_at, net_amount, mp_payment_id').eq('payment_status', 'paid')`) y construye un Map keyed por `enrolled_at` (timestamp con precisión de ms, virtualmente único por venta) para mergear los dos campos al shape de `_ventas`. Si en el futuro la RPC `get_ventas` se actualiza para devolver estos campos directamente, se puede eliminar el side-query.
+
+**⚠️ Pendiente de deploy manual** tras este commit:
+1. Re-deploy de `process-payment` (cambió el upsert para guardar `mp_payment_id`).
+2. Deploy nuevo de `sync-mp-payments`: Supabase Dashboard → Edge Functions → New function → nombre `sync-mp-payments` → "Via Editor" → pegar contenido → Settings → activar "Enforce JWT verification". Sin secrets nuevos.
+
+Sin estos deploys: las ventas MP nuevas no van a tener `mp_payment_id` (UPSERT funciona sin la nueva col porque es nullable), y el botón de sync va a fallar con 404 hasta que la función exista. El frontend ya está deployable y funciona con `mp_payment_id` null (la columna Neto MP muestra "—").
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

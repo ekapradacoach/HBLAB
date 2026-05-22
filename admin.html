@@ -1588,12 +1588,13 @@
                   <th>Alumno</th>
                   <th>Curso</th>
                   <th>Monto</th>
+                  <th>Neto MP</th>
                   <th>Moneda</th>
                   <th>Método</th>
                 </tr>
               </thead>
               <tbody id="tbody-ventas">
-                <tr><td colspan="6" class="empty-td">Cargando...</td></tr>
+                <tr><td colspan="7" class="empty-td">Cargando...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1618,6 +1619,16 @@
               <div class="ranking-empty">Aún no hay ventas registradas.</div>
             </div>
           </div>
+        </div>
+
+        <!-- Etapa X.37 — Sincronizar netos reales con MP -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;">
+          <button type="button" class="btn-secondary" id="btn-sync-mp"
+                  onclick="syncMpPayments()"
+                  style="border:1px solid var(--lime);color:var(--lime);background:transparent;">
+            🔄 Sincronizar netos con MP
+          </button>
+          <span id="sync-mp-status" style="font-size:0.85rem;color:var(--gray-text);"></span>
         </div>
 
         <!-- Resultado neto -->
@@ -3832,7 +3843,7 @@
     async function loadVentas() {
       const tbody = document.getElementById('tbody-ventas');
       if (!tbody) return;
-      tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Cargando...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-td">Cargando...</td></tr>`;
 
       // Etapa X.26 — RPC `get_ventas()` SECURITY DEFINER reemplaza las 3 queries
       // separadas de X.16.1/X.25. El RPC bypassea la RLS de profiles (que bloqueaba
@@ -3845,7 +3856,7 @@
 
       if (error) {
         console.error('loadVentas[get_ventas]:', error);
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">Error al cargar ventas: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-td">Error al cargar ventas: ${error.message}</td></tr>`;
         _ventas = [];
         return;
       }
@@ -3858,6 +3869,22 @@
         return tb - ta;
       });
 
+      // Etapa X.37 — enriquecer con net_amount/mp_payment_id desde user_courses.
+      // La RPC get_ventas no expone esas columnas (firma SECURITY DEFINER vieja),
+      // así que hacemos un side-query y mergeamos por `enrolled_at` (timestamp con
+      // precisión de ms — virtualmente único por venta).
+      const { data: ucRaw } = await sb
+        .from('user_courses')
+        .select('enrolled_at, net_amount, mp_payment_id')
+        .eq('payment_status', 'paid');
+      const netByEnrolledAt = {};
+      (ucRaw || []).forEach(r => {
+        if (r.enrolled_at) netByEnrolledAt[r.enrolled_at] = {
+          net_amount:    r.net_amount,
+          mp_payment_id: r.mp_payment_id,
+        };
+      });
+
       // Map al shape interno de _ventas. El campo `email` mantiene la cascada
       // de X.25: email → full_name → '(sin datos)' para identificar al alumno
       // incluso si profiles.email está vacío para usuarios viejos pre-X.19.
@@ -3865,6 +3892,7 @@
       // compara por course_title — ver _filteredVentas.
       _ventas = rows.map(r => {
         const display = r.email || r.full_name || '(sin datos)';
+        const extra   = netByEnrolledAt[r.enrolled_at] || {};
         return {
           enrolled_at:    r.enrolled_at,
           email:          display,
@@ -3873,6 +3901,8 @@
           amount_paid:    Number(r.amount_paid || 0),
           currency:       r.currency || 'ARS',
           payment_method: r.payment_method || '—',
+          net_amount:     extra.net_amount != null ? Number(extra.net_amount) : null,
+          mp_payment_id:  extra.mp_payment_id || null,
         };
       });
 
@@ -3936,7 +3966,7 @@
       const filtered = _filteredVentas();
 
       if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-td">${_ventas.length === 0 ? '💸 No hay ventas registradas.' : '🔍 Sin resultados para los filtros aplicados.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-td">${_ventas.length === 0 ? '💸 No hay ventas registradas.' : '🔍 Sin resultados para los filtros aplicados.'}</td></tr>`;
         _renderVentasTotals(filtered);
         _renderVentasToggle(filtered.length);
         return;
@@ -3960,7 +3990,7 @@
           if (ym !== lastMonth) {
             const [y, m] = ym.split('-');
             const label = `── ${MESES_NOMBRE[parseInt(m, 10) - 1] || m} ${y} ──`;
-            sepHtml = `<tr class="ventas-month-sep"><td colspan="6">${escapeAttr(label)}</td></tr>`;
+            sepHtml = `<tr class="ventas-month-sep"><td colspan="7">${escapeAttr(label)}</td></tr>`;
             lastMonth = ym;
           }
         }
@@ -3978,12 +4008,17 @@
           coupon:      '🎟 Cupón',
           manual:      '✋ Manual',
         })[metodo] || metodo;
+        // Etapa X.37 — columna Neto MP: muestra net_amount si existe, "—" si no.
+        const netoMp = (v.net_amount != null)
+          ? `<strong style="color:var(--lime);">$${Number(v.net_amount).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</strong>`
+          : '<span style="color:var(--gray-text);">—</span>';
         return `${sepHtml}
           <tr>
             <td style="white-space:nowrap;color:var(--gray-text);font-size:0.84rem;">${fecha}</td>
             <td style="font-size:0.86rem;">${escapeAttr(v.email)}</td>
             <td><strong>${escapeAttr(v.course_title)}</strong></td>
             <td><strong>${monto}</strong></td>
+            <td>${netoMp}</td>
             <td><span class="badge ${v.currency === 'USD' ? 'badge-violet' : 'badge-lime'}" style="font-size:0.7rem;">${escapeAttr(v.currency)}</span></td>
             <td style="font-size:0.84rem;">${escapeAttr(methodLabel)}</td>
           </tr>`;
@@ -4457,6 +4492,51 @@
       await Promise.all([loadAdInversiones(), loadResultadoNeto()]);
     }
 
+    // ── Etapa X.37 — Sincronizar netos reales con MP ────────────────
+    // Llama a la Edge Function `sync-mp-payments` que itera todos los
+    // user_courses con payment_method='mercadopago' + mp_payment_id, hace GET
+    // a la API de MP por cada uno, y guarda `transaction_details.net_received_amount`
+    // en `user_courses.net_amount`. Tras el sync, recarga la tabla de ventas
+    // y el card de resultado neto.
+    async function syncMpPayments() {
+      const btn    = document.getElementById('btn-sync-mp');
+      const status = document.getElementById('sync-mp-status');
+      if (!btn || !status) return;
+      btn.disabled = true;
+      const originalLabel = btn.textContent;
+      btn.textContent = '⏳ Sincronizando...';
+      status.textContent = '';
+      status.style.color = 'var(--gray-text)';
+
+      try {
+        const { data, error } = await sb.functions.invoke('sync-mp-payments');
+        if (error) {
+          console.error('sync-mp-payments invoke error:', error);
+          status.textContent = 'Error: ' + (error.message || 'desconocido');
+          status.style.color = 'var(--red)';
+          return;
+        }
+        if (data?.error) {
+          status.textContent = 'Error: ' + data.error;
+          status.style.color = 'var(--red)';
+          return;
+        }
+        const n = data?.updated ?? 0;
+        const errs = data?.errors?.length || 0;
+        status.textContent = `✅ Sincronizados ${n} pago${n !== 1 ? 's' : ''}` + (errs ? ` · ${errs} con error (ver consola)` : '');
+        status.style.color = 'var(--lime)';
+        if (errs) console.warn('sync-mp-payments errores:', data.errors);
+        await Promise.all([loadVentas(), loadResultadoNeto()]);
+      } catch (e) {
+        console.error('sync-mp-payments excepción:', e);
+        status.textContent = 'Error de red: ' + (e?.message || String(e));
+        status.style.color = 'var(--red)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    }
+
     // ── Resultado neto ───────────────────────────────
     async function loadResultadoNeto() {
       const card = document.getElementById('resultado-neto-card');
@@ -4467,15 +4547,21 @@
         { data: ccData },
         { data: adData }
       ] = await Promise.all([
-        sb.from('user_courses').select('course_id, amount_paid, currency').eq('payment_status', 'paid'),
+        sb.from('user_courses').select('course_id, amount_paid, net_amount, currency').eq('payment_status', 'paid'),
         sb.from('coach_courses').select('course_id, commission_pct, courses(price_ars)'),
         sb.from('ad_spend').select('amount_ars')
       ]);
 
+      // Etapa X.37 — COALESCE(net_amount, amount_paid). Si la venta MP ya fue
+      // sincronizada vía sync-mp-payments, usamos el neto real (post comisión
+      // MP + IIBB). Si no hay net_amount (PayPal, cupón, MP sin sincronizar),
+      // caemos al monto bruto pagado.
+      const effectiveAmount = (r) => Number(r.net_amount != null ? r.net_amount : r.amount_paid || 0);
+
       // Ingresos totales ARS
       const totalARS = (ucData || [])
         .filter(r => !r.currency || r.currency === 'ARS')
-        .reduce((s, r) => s + Number(r.amount_paid || 0), 0);
+        .reduce((s, r) => s + effectiveAmount(r), 0);
 
       // Mapa de revenue real por curso
       const salesMap = {};
@@ -4484,7 +4570,7 @@
         .forEach(r => {
           if (!salesMap[r.course_id]) salesMap[r.course_id] = { count: 0, revenue: 0 };
           salesMap[r.course_id].count++;
-          salesMap[r.course_id].revenue += Number(r.amount_paid || 0);
+          salesMap[r.course_id].revenue += effectiveAmount(r);
         });
 
       // Total comisiones: por cada coach_course, revenue × commission_pct

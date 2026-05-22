@@ -48,6 +48,9 @@ verify_jwt = true   # exige JWT válido en el header Authorization (admin token)
 [functions.invite-coach-new]
 verify_jwt = true   # admin crea coach desde cero (email + nombre) + magic link
 
+[functions.sync-mp-payments]
+verify_jwt = true   # admin sincroniza net_amount real desde MP (Etapa X.37)
+
 [functions.process-payment]
 verify_jwt = false  # webhook público de MP/PayPal — la firma se valida adentro
 

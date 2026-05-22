@@ -835,7 +835,7 @@ serve(async (req: Request) => {
 
   // onConflict (user_id, course_id) — si ya existe la inscripción, la pisamos
   // con payment_status='paid' (idempotencia frente a re-envío del webhook).
-  const upsertPayload = {
+  const upsertPayload: Record<string, unknown> = {
     user_id:        userId,
     course_id,
     payment_status: 'paid',
@@ -844,6 +844,12 @@ serve(async (req: Request) => {
     currency,
     status:         'active',
   };
+  // Etapa X.37 — guardar el ID real del payment de MP en `mp_payment_id`
+  // para poder sincronizar el neto real luego con `sync-mp-payments`.
+  // En MP, `external_ref` ya contiene String(payment.id).
+  if (payment_method === 'mercadopago' && external_ref) {
+    upsertPayload.mp_payment_id = external_ref;
+  }
   const { error: ucErr } = await sbAdmin
     .from('user_courses')
     .upsert(upsertPayload, { onConflict: 'user_id,course_id' });
