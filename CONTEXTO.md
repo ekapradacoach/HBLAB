@@ -2940,3 +2940,69 @@ Media query `≤600px`: los grids colapsan a una columna.
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Precio vigente en venta-curso.html (aplicación de scheduled_prices)
+
+**Fecha:** 22 de mayo de 2026. Follow-up de la etapa anterior. Antes solo se podía editar el array `scheduled_prices` desde admin; ahora `venta-curso.html` lo respeta al mostrar precios y al armar el flujo de checkout.
+
+### Implementación
+
+**Nueva función `getEffectivePrice(course)`** definida arriba del `init()` en `venta-curso.html`:
+
+```js
+function getEffectivePrice(course) {
+  const base = {
+    price_ars: Number(course?.price_ars || 0),
+    price_usd: Number(course?.price_usd || 0),
+  };
+  let arr = course?.scheduled_prices;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { arr = []; }
+  }
+  if (!Array.isArray(arr) || !arr.length) return base;
+
+  const now   = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const vigentes = arr
+    .filter(r => r && r.date && r.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date));   // DESC: la más reciente primero
+
+  if (!vigentes.length) return base;
+  const w = vigentes[0];
+  return {
+    price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+    price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+  };
+}
+```
+
+**Comportamiento:**
+- `scheduled_prices` vacío / null / no-array → retorna los precios base de `courses`.
+- Tolera string JSON (caso edge si la columna llega serializada).
+- Calcula `today` en formato `YYYY-MM-DD` con zona local del cliente. Los `date` del array son strings sin TZ, así que la comparación lexicográfica `r.date <= today` es válida.
+- Si ninguna fecha es `<= today` (todas son futuras) → fallback al precio base.
+- Si hay matches → ordena DESC y toma el primer (la más reciente vigente).
+
+### Cambios en `venta-curso.html`
+
+1. **SELECT extendido**: la query del init y la re-query del `MutationObserver` ahora seleccionan también `scheduled_prices`.
+2. **Render hero + CTA**: las 4 asignaciones `*-price-ars/-usd` usan `effective.price_ars` / `effective.price_usd` en lugar de `course.price_ars` / `course.price_usd`.
+3. **Cache `_ventaCourse`**: en lugar de delegar al `MutationObserver` (que hacía una re-query mínima), ahora `_ventaCourse` se setea directamente en el init con los precios vigentes ya aplicados. Esto evita una segunda llamada a Supabase y garantiza que el modal de moneda (`openCurrencyModal()` → `goToCheckout(currency)`) trabaje con el precio correcto. El observer queda como fallback defensivo: si por alguna razón `_ventaCourse` quedara null cuando el hero ya tiene precio renderizado, re-querea y aplica `getEffectivePrice` antes de cachear.
+4. **Auto-open `?buy=1`**: el trigger del modal cuando viene `?buy=1` se movió al init (después de cachear `_ventaCourse`), porque el branch del observer ya no se ejecuta en el happy path.
+
+### URL del checkout
+
+`goToCheckout(currency)` sigue redirigiendo a `checkout.html?slug=X&currency=Y` sin precio en query — la implementación actual de checkout re-querea por slug. **Por lo tanto, `checkout.html` también necesita aplicar `getEffectivePrice` para mantener consistencia entre el precio mostrado en venta-curso y el final price del form**. Esto queda **pendiente** y debería resolverse en una etapa siguiente (replicar `getEffectivePrice` en `checkout.html`, idealmente extrayéndolo a un helper compartido). Sin ese fix, un curso con `scheduled_prices` puede mostrar el precio incrementado en venta-curso pero cobrar el precio base en checkout (o viceversa si la fecha programada cayó entre las dos vistas).
+
+### Lo que NO se hizo en esta etapa
+
+- **`checkout.html`**: aún lee `price_ars` / `price_usd` directos. Riesgo de inconsistencia con venta-curso si hay `scheduled_prices` activos. Próxima etapa: aplicar el mismo helper.
+- **Edge Functions `create-preference` + `create-paypal-order`**: estas funciones reciben el `amount` del cliente como parámetro y crean la preference/order con ese monto. Si el cliente manda el precio efectivo correcto, todo bien — pero queda como **vector potencial de manipulación**: un cliente podría enviar el precio base aunque el scheduled_price ya esté activo. Idealmente las Edge Functions deberían hacer su propio `getEffectivePrice` server-side antes de crear la preference. No urgente porque el flujo normal manda el precio vigente desde checkout.html (cuando se aplique ahí también), pero queda anotado.
+- **`index.html` (cards de cursos en la landing)**: el card de cada curso muestra el precio base de `courses.price_ars`. Cuando un scheduled_price está activo, debería mostrar el efectivo. Pendiente.
+
+**Archivos modificados:**
+- `venta-curso.html` — función nueva `getEffectivePrice` (~30 líneas), SELECT del init/observer extendido con `scheduled_prices`, render del hero + CTA usando `effective.*`, cacheo de `_ventaCourse` con precios vigentes, auto-open `?buy=1` movido al init.
+- `CONTEXTO.md` — esta sección.
+
+---

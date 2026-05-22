@@ -789,6 +789,39 @@
       });
     }, { threshold: 0.1 });
 
+    // ── Etapa X.39 — Precio vigente según scheduled_prices ─────
+    // Si scheduled_prices está vacío o es null → devuelve los precios base.
+    // Si hay entradas → toma la más reciente cuya `date <= hoy` (hoy en zona local
+    // del cliente, ya que `scheduled_prices[].date` es 'YYYY-MM-DD' sin TZ).
+    // Si ninguna fecha pasó todavía → cae al precio base. Tolerante con strings
+    // (si la columna JSONB vino serializada).
+    function getEffectivePrice(course) {
+      const base = {
+        price_ars: Number(course?.price_ars || 0),
+        price_usd: Number(course?.price_usd || 0),
+      };
+      let arr = course?.scheduled_prices;
+      if (typeof arr === 'string') {
+        try { arr = JSON.parse(arr); } catch { arr = []; }
+      }
+      if (!Array.isArray(arr) || !arr.length) return base;
+
+      // Hoy en formato 'YYYY-MM-DD' (zona local) — comparable contra date string
+      const now   = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+      const vigentes = arr
+        .filter(r => r && r.date && r.date <= today)
+        .sort((a, b) => b.date.localeCompare(a.date));  // DESC: la más reciente primero
+
+      if (!vigentes.length) return base;
+      const winner = vigentes[0];
+      return {
+        price_ars: Number(winner.price_ars != null ? winner.price_ars : base.price_ars) || base.price_ars,
+        price_usd: Number(winner.price_usd != null ? winner.price_usd : base.price_usd) || base.price_usd,
+      };
+    }
+
     // ── Main init ─────────────────────────────────────
     (async function init() {
       const slug = new URLSearchParams(window.location.search).get('slug');
@@ -796,7 +829,7 @@
 
       const { data: course, error } = await sb
         .from('courses')
-        .select('id, slug, title, description, cover_url, price_ars, price_usd, banner_text, learning_points, syllabus, is_live, is_active')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, banner_text, learning_points, syllabus, is_live, is_active')
         .eq('slug', slug)
         .eq('is_active', true)
         .maybeSingle();
@@ -837,10 +870,29 @@
       const fmtARS = n => `$${Number(n || 0).toLocaleString('es-AR')} ARS`;
       const fmtUSD = n => `/ USD ${Number(n || 0).toLocaleString('es-AR')}`;
 
-      document.getElementById('hero-price-ars').textContent = fmtARS(course.price_ars);
-      document.getElementById('hero-price-usd').textContent = fmtUSD(course.price_usd);
-      document.getElementById('cta-price-ars').textContent  = fmtARS(course.price_ars);
-      document.getElementById('cta-price-usd').textContent  = fmtUSD(course.price_usd);
+      // Etapa X.39 — usar getEffectivePrice para respetar `scheduled_prices`
+      const effective = getEffectivePrice(course);
+      document.getElementById('hero-price-ars').textContent = fmtARS(effective.price_ars);
+      document.getElementById('hero-price-usd').textContent = fmtUSD(effective.price_usd);
+      document.getElementById('cta-price-ars').textContent  = fmtARS(effective.price_ars);
+      document.getElementById('cta-price-usd').textContent  = fmtUSD(effective.price_usd);
+
+      // Cachear el course completo (con precios vigentes ya aplicados) en _ventaCourse
+      // para que el modal de moneda use el precio correcto al abrirse. Evita la re-query
+      // del MutationObserver de abajo cuando se aplica scheduled_prices.
+      _ventaCourse = {
+        id:        course.id,
+        slug:      course.slug,
+        price_ars: effective.price_ars,
+        price_usd: effective.price_usd,
+        scheduled_prices: course.scheduled_prices || [],
+      };
+      // Si llegamos desde la card de la landing con ?buy=1 → abrir el modal directo.
+      // Antes esto lo hacía el MutationObserver (única vía de cachear el course),
+      // pero ahora _ventaCourse se setea acá → el observer ya no entra al branch.
+      if (new URLSearchParams(window.location.search).get('buy') === '1') {
+        openCurrencyModal();
+      }
 
       // ── Cover image ───────────────────────────────
       if (course.cover_url) {
@@ -995,12 +1047,20 @@
         if (slug && !_ventaCourse) {
           // Re-query mínima para tener id+precios crudos sin parsear strings con formato
           sb.from('courses')
-            .select('id, slug, price_ars, price_usd')
+            .select('id, slug, price_ars, price_usd, scheduled_prices')
             .eq('slug', slug)
             .maybeSingle()
             .then(({ data }) => {
               if (!data) return;
-              _ventaCourse = data;
+              // Etapa X.39 — aplicar el precio vigente antes de cachear
+              const eff = getEffectivePrice(data);
+              _ventaCourse = {
+                id:        data.id,
+                slug:      data.slug,
+                price_ars: eff.price_ars,
+                price_usd: eff.price_usd,
+                scheduled_prices: data.scheduled_prices || [],
+              };
               // Si llegan desde la card de la landing con ?buy=1 → abrir el modal directo
               if (new URLSearchParams(window.location.search).get('buy') === '1') {
                 openCurrencyModal();
