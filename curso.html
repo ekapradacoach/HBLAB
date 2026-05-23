@@ -1068,18 +1068,34 @@
       return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
     }
 
-    // Etapa X.47 — render minimalista del bloque de live (3 estados).
-    // - !live_ended → return '' (nada relacionado al live se muestra).
-    // - live_ended && NO asistió → botón lime "✅ Asistí al live".
-    // - live_ended && SÍ asistió → texto verde "✅ Asististe a este live", sin botón.
+    // Etapa X.48 — render del bloque de live (4 estados):
+    // - live_date futura → "📡 Unirse al live" + fecha (live_ended no importa).
+    // - live_date pasada + !live_ended → nada (coach todavía no cerró).
+    // - live_date pasada + live_ended + NO asistió → botón lime "✅ Asistí al live".
+    // - live_date pasada + live_ended + SÍ asistió → texto verde "✅ Asististe a este live".
     //
-    // El estado de asistencia se determina ÚNICAMENTE consultando completedSet, que
-    // se hidrata al cargar el curso desde `video_progress` (ver init más abajo).
-    // No hay ningún campo en course_lives que indique asistencia del alumno actual.
+    // La asistencia se determina ÚNICAMENTE consultando completedSet, que se
+    // hidrata desde video_progress al cargar el curso. No hay ningún campo en
+    // course_lives que indique asistencia del alumno actual.
     function renderModuleLiveInfo(m) {
       const live = m?.live;
       if (!live) return '';
-      if (!live.live_ended) return '';   // sin live_ended, no mostramos nada
+      const now = Date.now();
+      const ts  = live.live_date ? new Date(live.live_date).getTime() : 0;
+      const isFuture = !!(ts && !isNaN(ts) && ts > now);
+
+      // Live futura → Unirse al live + fecha. live_ended es irrelevante.
+      if (isFuture) {
+        const safeUrl = escHtml(live.live_url || '#');
+        return `
+          <div class="modules-mod-live">
+            <a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
+            <div class="modules-mod-live-meta">${escHtml(formatLiveDate(live.live_date))}</div>
+          </div>`;
+      }
+
+      // Live pasada → depende de live_ended + asistencia
+      if (!live.live_ended) return '';   // coach todavía no cerró → nada
 
       if (isLiveAttended(m)) {
         return `

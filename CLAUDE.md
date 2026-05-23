@@ -1477,6 +1477,30 @@ Bug observado: cuando el coach finalizaba el live (`live_ended=true`), había es
 
 ---
 
+## Etapa X.48 — Restaurar "Unirse al live" para fecha futura
+
+Fix de la simplificación de X.47 que había removido completamente el botón "📡 Unirse al live". Ese botón debe seguir apareciendo para `live_date > now`, independientemente de `live_ended`.
+
+**Spec actualizada — 4 estados:**
+
+| Condición | Render |
+|---|---|
+| `live_date` futura | **"📡 Unirse al live"** + fecha formateada. `live_ended` se ignora. |
+| `live_date` pasada + `!live_ended` | `return ''` (nada — coach no cerró) |
+| `live_date` pasada + `live_ended` + `!attended` | botón lime **"✅ Asistí al live"** |
+| `live_date` pasada + `live_ended` + `attended` | texto verde **"✅ Asististe a este live"** |
+
+**Cambios en `renderModuleLiveInfo`** (curso.html):
+
+- Branch `isFuture` arriba de todo, antes del check de `live_ended`. Renderiza `.btn-live-join` (lime) abriendo `live.live_url` en target `_blank` + meta con `formatLiveDate(live.live_date)`.
+- Si no es futura → cae a la lógica de asistencia de X.47: nada si `!live_ended`, botón o badge según `attended`.
+
+`formatLiveDate` y el botón `.btn-live-join` ya existían desde Etapa X.42; esta etapa solo restaura el branch que los usa.
+
+**Pendiente:** decidir el manejo de "live en curso" (entre `live_date` y `live_date + duración estimada`) — hoy queda categorizado como "pasada" tras el segundo cero. Si el coach no finaliza inmediatamente, el alumno deja de ver "Unirse al live" pero tampoco ve el botón asistir todavía. Podría sumarse una ventana de gracia (ej. 3h post-live_date sigue mostrando "Unirse").
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
