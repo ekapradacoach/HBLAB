@@ -1501,6 +1501,37 @@ Fix de la simplificación de X.47 que había removido completamente el botón "�
 
 ---
 
+## Etapa X.49 — Fix: módulos con solo live (sin lecciones) en curso.html
+
+Regresión introducida en X.47 cuando se habilitó el caso "módulo solo con live, sin lecciones". El `renderModulesView` mantenía un guard temprano:
+
+```js
+if (!LESSONS_FLAT.length) {
+  container.innerHTML = `<div class="no-videos-msg">📚 Este curso aún no tiene módulos cargados.</div>`;
+  return;
+}
+```
+
+El problema: ese guard se basa en `LESSONS_FLAT` (lista plana de lecciones), no en `MODULES`. Para un curso cuyos módulos tienen ÚNICAMENTE un live (cero lecciones), `LESSONS_FLAT` queda vacío aunque `MODULES` tenga items. Resultado: el alumno ve el mensaje "Este curso aún no tiene módulos cargados" en vez de la sidebar con los módulos + sus bloques de live.
+
+**Fix** (curso.html — `renderModulesView`):
+
+```js
+// Bailear SOLO si no hay ni módulos ni lecciones.
+if (!MODULES.length && !LESSONS_FLAT.length) {
+  container.innerHTML = `<div class="no-videos-msg">📚 Este curso aún no tiene módulos cargados.</div>`;
+  return;
+}
+```
+
+El resto del render sigue funcionando porque ya manejaba el caso `activeLessonId = null` (cuando `availableLessons[0]?.id` es undefined) — el main panel cae al placeholder "Seleccioná una lección" mientras el alumno usa el sidebar para clickear un live.
+
+**Por qué no era visible antes**: hasta X.47 los cursos siempre tenían lecciones (los lives eran un complemento). Recién al agregar el caso "módulo solo live" — que es lo que el coach está armando en este curso — apareció el bug.
+
+`loadStudentModules` no necesitó cambios: la query a `course_modules` ya retorna los módulos correctamente; el JOIN a `course_lives` funciona aunque `course_lessons` esté vacío para ese `module_id`. La regresión era 100% en el render.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

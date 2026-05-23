@@ -1230,14 +1230,17 @@
       const container = document.getElementById('videos-container');
       if (!container) return;
 
-      if (!LESSONS_FLAT.length) {
+      // Etapa X.49 — bailear SOLO si no hay ni módulos ni lecciones. Antes
+      // bailábamos con `!LESSONS_FLAT.length`, pero eso rompía los cursos cuyos
+      // módulos tienen ÚNICAMENTE un live (sin lecciones) — caso válido tras X.47.
+      if (!MODULES.length && !LESSONS_FLAT.length) {
         container.innerHTML = `<div class="no-videos-msg">📚 Este curso aún no tiene módulos cargados.</div>`;
         return;
       }
 
       // Etapa X.43 — default: primera lección de un módulo NO bloqueado.
-      // Si todas están bloqueadas, queda sin lección activa (se muestra panel "Seleccioná una lección"
-      // en el branch normal, o mejor: si el alumno clickea un módulo bloqueado, _lockedView toma el main).
+      // Si todas están bloqueadas o no hay lecciones, queda sin lección activa
+      // (el main panel muestra "Seleccioná una lección" o el bloque locked/live).
       const lockedModIds = new Set(MODULES.filter(isModuleLocked).map(m => m.id));
       const availableLessons = LESSONS_FLAT.filter(l => !lockedModIds.has(l.module_id));
       if (!activeLessonId || !availableLessons.find(l => l.id === activeLessonId)) {
