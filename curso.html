@@ -1068,63 +1068,27 @@
       return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
     }
 
-    // Etapa X.42 + X.44 + X.45 — render del bloque de live para un módulo.
-    // El botón "✅ Asistí al live" SOLO aparece cuando el coach finalizó el live
-    // (live_ended = true) y el alumno aún no marcó asistencia. Mientras live_ended
-    // siga false, el alumno solo ve "📡 Unirse al live" + fecha.
+    // Etapa X.47 — render minimalista del bloque de live (3 estados).
+    // - !live_ended → return '' (nada relacionado al live se muestra).
+    // - live_ended && NO asistió → botón lime "✅ Asistí al live".
+    // - live_ended && SÍ asistió → texto verde "✅ Asististe a este live", sin botón.
     //
-    // Estados:
-    //   - live futura → "📡 Unirse al live" + fecha (sin botón asistí).
-    //   - live pasada NO finalizada → mismo que futura (el coach todavía no cerró).
-    //   - live pasada + finalizada + asistió + sin grabación → "✅ Asististe a este live".
-    //   - live pasada + finalizada + NO asistió + sin grabación → "⏳ La grabación estará
-    //     disponible en las próximas 72hs" + botón "✅ Asistí al live" (para marcar).
-    //   - live pasada + finalizada + asistió + con grabación → "▶ Ver grabación" + badge.
-    //   - live pasada + finalizada + NO asistió + con grabación → "▶ Ver grabación"
-    //     + botón asistí (también queda disponible en el main panel al ver la grabación).
+    // El estado de asistencia se determina ÚNICAMENTE consultando completedSet, que
+    // se hidrata al cargar el curso desde `video_progress` (ver init más abajo).
+    // No hay ningún campo en course_lives que indique asistencia del alumno actual.
     function renderModuleLiveInfo(m) {
       const live = m?.live;
       if (!live) return '';
-      const now      = Date.now();
-      const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
-      const isFuture = ts && !isNaN(ts) && ts > now;
-      const attended = isLiveAttended(m);
-      const ended    = !!live.live_ended;
+      if (!live.live_ended) return '';   // sin live_ended, no mostramos nada
 
-      // Caso "todavía no finalizado por el coach": tanto si la fecha está en el
-      // futuro como si ya pasó pero el coach no cerró → solo Unirse + fecha.
-      if (isFuture || !ended) {
-        const safeUrl = escHtml(live.live_url || '#');
-        return `
-          <div class="modules-mod-live">
-            <a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
-            <div class="modules-mod-live-meta">${escHtml(formatLiveDate(live.live_date))}</div>
-          </div>`;
-      }
-
-      // Live ya pasada Y finalizada por el coach → asistencia + grabación disponibles
-      const attendedBadge = attended
-        ? '<div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>'
-        : `<button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>`;
-
-      if (live.recording_url) {
-        return `
-          <div class="modules-mod-live recording">
-            <button class="btn-live-recording" onclick="playLiveRecording('${escHtml(m.id)}')">▶ Ver grabación</button>
-            <div class="modules-mod-live-meta">Grabación del ${escHtml(formatLiveDate(live.live_date))}</div>
-            ${attendedBadge}
-          </div>`;
-      }
-      // Sin grabación
-      if (attended) {
+      if (isLiveAttended(m)) {
         return `
           <div class="modules-mod-live attended-only">
             <div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>
           </div>`;
       }
       return `
-        <div class="modules-mod-live pending">
-          <div class="modules-mod-live-meta">⏳ La grabación estará disponible en las próximas 72hs</div>
+        <div class="modules-mod-live">
           <button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>
         </div>`;
     }
@@ -1622,11 +1586,16 @@
         LESSON_IDX_BY_ID = {};
         LESSONS_FLAT.forEach((l, i) => { LESSON_IDX_BY_ID[l.id] = i; });
 
-        if (LESSONS_FLAT.length) {
+        // Etapa X.47 — el load corre si hay LECCIONES o MÓDULOS (con o sin
+        // lecciones), para hidratar también las asistencias a lives en módulos
+        // que solo tienen live y ninguna lección.
+        if (LESSONS_FLAT.length || MODULES.length) {
           // Filtramos solo por curso + completado: video_progress es INT y los registros válidos
           // de este curso son índices 0..N-1 en el array aplanado (lecciones).
           // Etapa X.44 — además admitimos índices NEGATIVOS que representan
           // asistencia al live de un módulo (video_index = -1 * order_num).
+          // Este SELECT es la ÚNICA fuente de verdad para `attended` — no hay
+          // campo en course_lives que indique asistencia del alumno actual.
           const { data: progressData } = await sb
             .from('video_progress')
             .select('video_index')

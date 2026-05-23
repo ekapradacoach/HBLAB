@@ -1445,6 +1445,38 @@ Reemplazo completo de `loadLiveSection` en `coach.html`. **Antes** leía `course
 
 ---
 
+## Etapa X.47 — Fix flujo de asistencia al live (curso.html)
+
+Bug observado: cuando el coach finalizaba el live (`live_ended=true`), había estados en que el alumno veía "✅ Asististe a este live" sin haberlo marcado. Causa raíz: el render de `renderModuleLiveInfo` mezclaba múltiples ramas (futura/pasada/con grabación/sin grabación) y el resultado era difícil de auditar — además, el load inicial de `video_progress` se saltaba completamente cuando el módulo no tenía lecciones (solo live), dejando estados inconsistentes entre `markLiveAttended` (que actualizaba `completedSet` en memoria) y la siguiente recarga.
+
+**Spec simplificada — 3 estados solamente:**
+
+| Condición | Render |
+|---|---|
+| `!live.live_ended` | `return ''` (nada — ni botón, ni texto, ni link al meet) |
+| `live_ended && !attended` | botón lime **"✅ Asistí al live"** que dispara `markLiveAttended` |
+| `live_ended && attended` | texto verde **"✅ Asististe a este live"** (sin botón) |
+
+`attended` = `completedSet.has(liveAttendanceIndex(m))` — viene **ÚNICAMENTE** de `video_progress.video_index` (no hay ningún campo en `course_lives` que indique asistencia del alumno actual).
+
+**Cambios concretos:**
+
+- **`renderModuleLiveInfo` rediseñado** — pasó de 5 ramas (futura, pasada-no-finalizada, con/sin grabación, asistió/no asistió) a 3 ramas explícitas. Sale temprano con `return ''` si `!live_ended`. **Se removió** del render del live block:
+  - Botón "📡 Unirse al live" + fecha futura (estaban pre-finalización).
+  - Bloque "▶ Ver grabación" + "Grabación del {fecha}".
+  - Texto "⏳ La grabación estará disponible en las próximas 72hs".
+  - Badge superpuesto al "Ver grabación".
+
+  Las funciones `playLiveRecording` + `_liveOverride` quedan en el código sin caller actual desde el sidebar (no se eliminaron por seguridad — futuras etapas pueden re-conectar la grabación a otro UI).
+
+- **Load inicial de `video_progress` ampliado** — antes: `if (LESSONS_FLAT.length)`. Ahora: `if (LESSONS_FLAT.length || MODULES.length)`. Garantiza que las asistencias previas a lives (índices negativos) se carguen aunque el módulo no tenga lecciones, evitando el desfase entre el estado en memoria post-mark y la recarga.
+
+**Fuente de verdad documentada en código** (comentarios `Etapa X.47`): el render comenta explícitamente "se determina ÚNICAMENTE consultando completedSet, que se hidrata al cargar el curso desde video_progress". El load comenta "Este SELECT es la ÚNICA fuente de verdad para `attended` — no hay campo en course_lives que indique asistencia del alumno actual."
+
+**Pendientes:** decidir si se restaura el "Ver grabación" en algún punto del UI (admin pidió simplificación absoluta; si la grabación reaparece, debería ser fuera del live block para no mezclar conceptos). Limpieza eventual de `playLiveRecording` + `_liveOverride` + branch del main panel si efectivamente quedan sin uso a futuro.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
