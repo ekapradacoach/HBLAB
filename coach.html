@@ -2286,6 +2286,11 @@ async function loadProgreso(courseId, seq) {
 /* ══════════════════════════════════════════════════
    ─── SECCIÓN: CLASE EN VIVO ──────────────────────
 ══════════════════════════════════════════════════ */
+// Etapa X.46 — Sección "Clase en vivo" rediseñada.
+// Antes leía `courses.is_live` (legacy, course_type='live' con un único live por curso).
+// Ahora consulta `course_lives` JOIN `course_modules` filtrando por course_id del
+// curso actual → muestra TODOS los lives de los módulos del curso, con estado y
+// acción según `live_ended` + `live_date`.
 async function loadLiveSection(seq) {
   const courseId = currentCourseId;
   const wrap = document.getElementById('live-content');
@@ -2293,86 +2298,172 @@ async function loadLiveSection(seq) {
 
   wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
 
-  const { data: course, error } = await sb
-    .from('courses')
-    .select('id, title, is_live, live_url, live_date, live_completed, recording_url, recordings')
-    .eq('id', courseId)
-    .single();
+  // 1) Traer los módulos del curso (para mapear module_id → título + order)
+  const { data: modules, error: modErr } = await sb
+    .from('course_modules')
+    .select('id, title, order_num')
+    .eq('course_id', courseId)
+    .order('order_num');
 
   if (seq !== undefined && seq !== _loadSeq) return;
   const wrapNow = document.getElementById('live-content');
   if (!wrapNow) return;
 
-  if (error || !course) {
+  if (modErr) {
     wrapNow.innerHTML = '<div class="empty-state">⚠️ Error al cargar los datos del curso.</div>';
     return;
   }
-
-  if (!course.is_live) {
+  if (!modules?.length) {
     wrapNow.innerHTML = `
       <div class="card"><div class="card-body">
-        <p style="color:var(--gray-text);font-size:0.875rem;">Este curso no es una clase en vivo. No hay acciones disponibles.</p>
+        <p style="color:var(--gray-text);font-size:0.875rem;">No hay lives configurados para este curso.</p>
       </div></div>`;
     return;
   }
 
-  if (course.live_completed) {
-    // Construir lista inicial: prioridad a course.recordings; fallback al recording_url legacy.
-    const initial = (Array.isArray(course.recordings) ? course.recordings : [])
-      .filter(r => r && (r.title || r.url))
-      .map(r => ({ title: r.title || '', url: r.url || '' }));
-    if (initial.length === 0 && course.recording_url) {
-      initial.push({ title: 'Clase 1', url: course.recording_url });
+  // 2) Traer los lives de esos módulos
+  const modIds = modules.map(m => m.id);
+  const { data: lives, error: livesErr } = await sb
+    .from('course_lives')
+    .select('id, module_id, live_url, live_date, recording_url, live_ended')
+    .in('module_id', modIds);
+
+  if (seq !== undefined && seq !== _loadSeq) return;
+  const wrapNow2 = document.getElementById('live-content');
+  if (!wrapNow2) return;
+
+  if (livesErr) {
+    wrapNow2.innerHTML = '<div class="empty-state">⚠️ Error al cargar los lives.</div>';
+    return;
+  }
+  if (!lives?.length) {
+    wrapNow2.innerHTML = `
+      <div class="card"><div class="card-body">
+        <p style="color:var(--gray-text);font-size:0.875rem;">No hay lives configurados para este curso.</p>
+      </div></div>`;
+    return;
+  }
+
+  // 3) Ordenar por order_num del módulo (los lives heredan el orden de su módulo)
+  const modById = {};
+  modules.forEach(m => { modById[m.id] = m; });
+  const sorted = lives.slice().sort((a, b) =>
+    (modById[a.module_id]?.order_num ?? 0) - (modById[b.module_id]?.order_num ?? 0)
+  );
+
+  // 4) Render por live
+  const now = Date.now();
+  const rowsHtml = sorted.map(lv => {
+    const mod      = modById[lv.module_id];
+    const modTitle = mod?.title || '(módulo sin título)';
+    const ts       = lv.live_date ? new Date(lv.live_date).getTime() : 0;
+    const isPast   = !!(ts && !isNaN(ts) && ts <= now);
+    const fechaStr = lv.live_date
+      ? new Date(lv.live_date).toLocaleString('es-AR', {
+          weekday: 'long', day: '2-digit', month: 'long',
+          year: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+      : 'Sin fecha';
+
+    let actionHtml;
+    if (lv.live_ended) {
+      // Live ya finalizado → mostrar input para recording_url
+      actionHtml = `
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;margin-top:6px;">
+          <span style="color:var(--green);font-weight:700;font-size:0.86rem;">✅ Live finalizado</span>
+          <label style="font-size:0.74rem;color:var(--gray-text);font-weight:600;">URL de la grabación (YouTube o Drive)</label>
+          <input class="field-input live-recording-input" type="url"
+                 placeholder="https://www.youtube.com/watch?v=... o https://drive.google.com/file/d/..."
+                 value="${escapeHtml(lv.recording_url || '')}"
+                 style="font-size:0.86rem;" />
+          <div>
+            <button class="btn btn-lime" style="font-size:0.82rem;padding:7px 14px;"
+                    onclick="saveLiveRecording('${escapeHtml(lv.id)}', this)">
+              Guardar grabación
+            </button>
+          </div>
+        </div>`;
+    } else if (isPast) {
+      // Fecha pasada y todavía no finalizado → botón Finalizar
+      actionHtml = `
+        <div style="margin-top:6px;">
+          <button class="btn-finalize-live" onclick="finalizarLiveAndReload('${escapeHtml(lv.id)}', this)">🔴 Finalizar live</button>
+        </div>`;
+    } else {
+      // Fecha futura, todavía no se realizó
+      actionHtml = `
+        <div style="margin-top:6px;">
+          <span style="color:var(--gray-text);font-size:0.86rem;font-style:italic;">⏳ Live programado</span>
+        </div>`;
     }
 
-    wrapNow.innerHTML = `
-      <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
-        <div>
-          <p style="color:var(--green);font-weight:700;font-size:1rem;margin-bottom:6px;">✅ Clase finalizada</p>
-          <p style="color:var(--gray-text);font-size:0.875rem;">El certificado ya está habilitado para todos los alumnos inscriptos.</p>
+    return `
+      <div class="live-row" data-live-id="${escapeHtml(lv.id)}"
+           style="display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--card-border);border-radius:10px;background:rgba(47,62,82,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <strong style="font-size:0.95rem;">${escapeHtml(modTitle)}</strong>
+          <span style="font-size:0.78rem;color:var(--gray-text);">📅 ${escapeHtml(fechaStr)}</span>
         </div>
+        ${lv.live_url ? `
+          <a href="${escapeHtml(lv.live_url)}" target="_blank" rel="noopener noreferrer"
+             style="color:var(--lime);font-size:0.82rem;font-weight:600;word-break:break-all;">${escapeHtml(lv.live_url)}</a>
+        ` : ''}
+        ${actionHtml}
+      </div>`;
+  }).join('');
 
-        <div>
-          <label style="display:block;font-size:0.77rem;color:var(--gray-text);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Grabaciones de la clase</label>
-          <div class="rec-list" id="rec-list"></div>
-          <button type="button" class="btn-add-rec" onclick="addRecRow()">+ Agregar clase</button>
-        </div>
+  wrapNow2.innerHTML = `
+    <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+      ${rowsHtml}
+    </div></div>`;
+}
 
-        <div id="rec-action-msg" style="display:none;font-size:0.85rem;padding:8px 12px;border-radius:8px;"></div>
+// Etapa X.46 — Finalizar un live desde la sección "Clase en vivo".
+// Diferencia con finalizarLive (sección Módulos): tras el UPDATE recarga la
+// sección entera para que aparezca el input de recording_url.
+async function finalizarLiveAndReload(liveId, btn) {
+  if (!liveId) return;
+  if (!confirm('¿Finalizar este live? Después de confirmar, los alumnos verán el botón "Asistí al live".')) return;
 
-        <div>
-          <button class="btn btn-lime" id="btn-save-recs" onclick="saveRecordings()">Guardar grabaciones</button>
-        </div>
-      </div></div>`;
-
-    // Pre-poblar las filas (al menos una vacía si no hay nada cargado)
-    renderRecRows(initial.length > 0 ? initial : [{ title: '', url: '' }]);
+  if (btn) { btn.disabled = true; btn.textContent = 'Finalizando...'; }
+  const { error } = await sb.from('course_lives').update({ live_ended: true }).eq('id', liveId);
+  if (error) {
+    console.error('finalizarLiveAndReload error:', error);
+    alert('Error al finalizar el live: ' + error.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🔴 Finalizar live'; }
     return;
   }
+  // Recargar la sección para que aparezca el input de recording_url
+  await loadLiveSection();
+}
 
-  // is_live = true, live_completed = false → mostrar datos + botón finalizar
-  const dateStr = course.live_date
-    ? new Date(course.live_date).toLocaleString('es-AR', {
-        weekday: 'long', day: '2-digit', month: 'long',
-        year: 'numeric', hour: '2-digit', minute: '2-digit'
-      })
-    : null;
+// Etapa X.46 — Guardar la URL de grabación de un live ya finalizado.
+async function saveLiveRecording(liveId, btn) {
+  if (!liveId || !btn) return;
+  const row   = btn.closest('.live-row');
+  const input = row?.querySelector('.live-recording-input');
+  if (!input) return;
+  const url = (input.value || '').trim();
 
-  wrapNow.innerHTML = `
-    <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
-      <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--gray-text);">Clase en vivo activa</p>
-      ${dateStr ? `<p style="font-size:0.875rem;">📅 ${escapeHtml(dateStr)}</p>` : ''}
-      ${course.live_url
-        ? `<p><a href="${escapeHtml(course.live_url)}" target="_blank" rel="noopener noreferrer"
-               style="color:var(--lime);font-weight:600;font-size:0.88rem;word-break:break-all;">${escapeHtml(course.live_url)}</a></p>`
-        : ''}
-      <div id="live-action-msg" style="display:none;font-size:0.85rem;padding:8px 12px;border-radius:8px;"></div>
-      <div>
-        <button class="btn btn-lime" id="btn-finalizar-clase" onclick="finalizarClase('${escapeHtml(course.id)}')">
-          ✅ Finalizar clase y liberar certificado
-        </button>
-      </div>
-    </div></div>`;
+  const originalLabel = btn.textContent;
+  btn.disabled    = true;
+  btn.textContent = 'Guardando...';
+
+  const { error } = await sb.from('course_lives')
+    .update({ recording_url: url || null })
+    .eq('id', liveId);
+
+  if (error) {
+    console.error('saveLiveRecording error:', error);
+    alert('Error al guardar la grabación: ' + error.message);
+    btn.disabled    = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+  btn.textContent = '✅ Guardado';
+  setTimeout(() => {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+  }, 1500);
 }
 
 async function finalizarClase(courseId) {

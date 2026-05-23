@@ -65,7 +65,7 @@ hblab/
 | `public.courses` | `id, slug, title, description, cover_url, banner_text, price_ars, price_usd, scheduled_prices JSONB DEFAULT '[]' (Etapa X.38 — array `[{date: 'YYYY-MM-DD', price_ars, price_usd}]` con incrementos automáticos por fecha), is_active, is_coming_soon, is_live, live_url, live_date, recording_url (legacy single), recordings JSONB DEFAULT '[]' (array `[{title, url}]`), live_completed, total_videos, videos JSONB, learning_points JSONB, syllabus JSONB, certificate_url, course_type ENUM('videos','modules','live')` |
 | `public.course_modules` | `id, course_id, title, order_num, unlock_at, created_at` — agrupa lecciones cuando `course_type='modules'` (Sesión 48). `unlock_at TIMESTAMPTZ` (Etapa X.38) controla el drip: si está set y `> now`, el módulo está "bloqueado" (lógica del filtro queda pendiente del lado alumno). NULL = disponible siempre. |
 | `public.course_lessons` | `id, module_id, title, video_url, order_num, created_at` — videos individuales dentro de cada módulo. ⚠️ La columna se llama **`video_url`** (NO `url`) — usar siempre `video_url` en SELECTs y en los payloads de INSERT/UPDATE (Sesión 50 fix) |
-| `public.course_lives` | `id, module_id, live_url, live_date, recording_url, created_at` (Etapa X.38) — 0..1 por módulo. Para el link Meet/Zoom previo al live + grabación posterior. FK con `ON DELETE CASCADE` desde `course_modules`. ⚠️ **Sin RLS configurada** — queda public-readable por default (pendiente agregar policies). El render del lado alumno en `curso.html` (Etapa X.42) muestra 3 estados: live futura (botón lime "📡 Unirse"), pasada con grabación (botón violet "▶ Ver grabación"), pasada sin grabación ("⏳ Grabación próximamente"). |
+| `public.course_lives` | `id, module_id, live_url, live_date, recording_url, live_ended (Etapa X.45 — BOOLEAN DEFAULT FALSE, controla cuándo se habilita la asistencia para alumnos), created_at` — 0..1 por módulo. Para el link Meet/Zoom previo al live + grabación posterior. FK con `ON DELETE CASCADE` desde `course_modules`. ⚠️ **Sin RLS configurada** — queda public-readable y public-writable por default (pendiente agregar policies). El alumno marca asistencia con `video_progress.video_index = -1 * order_num` (Etapa X.44 — convención que reusa la columna sin migración). Render alumno en `curso.html` con gate `!live_ended` (Etapa X.45) — el botón "Asistí al live" solo aparece cuando el coach explícitamente finalizó el live. |
 | `public.user_courses` | `user_id, course_id, payment_status, payment_method, amount_paid, currency, status` — acceso: `paid + active` |
 | `public.coach_courses` | `coach_id, course_id, commission_pct` — asigna coaches a cursos |
 | `public.forum_posts` | `course_id, user_id, parent_id, content, is_anonymous, image_urls TEXT[]` — árbol a un nivel |
@@ -1358,6 +1358,90 @@ Helpers nuevos: `formatLiveDate(iso)`, `renderModuleLiveInfo(m)`, `playLiveRecor
 ### Etapa X.42b — Placeholder para lecciones sin video
 
 Fix UX: si la lección activa no tiene `video_url`, en lugar de mostrar un `<iframe>` vacío (que se ve negro), se renderiza un `.no-video-placeholder` (card con borde dashed + texto italic "📄 Esta lección aún no tiene video cargado"). En ese caso también se oculta el botón "Marcar como completado" — solo aparece cuando hay video real.
+
+---
+
+## Etapa X.43 — Drip de módulos en curso.html (aplicación de unlock_at)
+
+Cierre del feature drip: el alumno ya ve módulos bloqueados según `course_modules.unlock_at`. Helpers nuevos `isModuleLocked(m)` y `formatUnlockDate(iso)` (formato `"lunes 6 de junio"` via `toLocaleDateString('es-AR', { weekday, day, month })` con fallback manual). Global `_lockedView = { moduleId, unlock_at, title } | null` mutuamente excluyente con `_liveOverride`.
+
+**Sidebar — módulo bloqueado**: head con 🔒 antes del título, sin `.modules-lessons`, sin bloque de live, sin flecha, opacidad 0.55, cursor not-allowed. Click → `showLockedModule(m.id)`.
+
+**Main panel — prioridad** `_lockedView > _liveOverride > lección activa`. Branch nuevo: `.locked-module-panel` con ícono 🔒 grande + "Este módulo estará disponible el **{fecha}**" + "Vas a recibir una notificación cuando se habilite."
+
+**Fix default**: `activeLessonId` ahora defaultea a la primera lección de un módulo NO bloqueado (filtro vía `lockedModIds` Set). Evita filtrar contenido por defaultear a una lección de módulo locked.
+
+**Pendientes**: notif automática cuando se desbloquea, enforcement server-side (hoy es soft-lock cliente — un user técnico puede leer `video_url` de `MODULES`), auto-refresh cuando pasa la fecha sin recargar, indicador "se desbloquea en X días".
+
+---
+
+## Etapa X.44 — Asistencia a lives + certificado por módulo
+
+**Convención de identificación** (sin migración nueva): la asistencia a live de un módulo se guarda en `video_progress.video_index = -1 * order_num` (signo negativo para no colisionar con lecciones reales que usan índices ≥ 0).
+
+**5 estados del bloque de live en `curso.html`** (`renderModuleLiveInfo`): futura/asistida o no, pasada/asistida o no, con/sin grabación. Botón `✅ Asistí al live` (lime soft) cuando aplica, badge "✅ Asististe a este live", o "⏳ La grabación estará disponible en las próximas 72hs".
+
+**Main panel — `_liveOverride` activo**: si el alumno está viendo la grabación de un live no asistido, aparece `<button class="btn-video">Marcar como completado</button>` debajo del iframe.
+
+**`updateProgress` rediseñado**:
+- `realCount = [...completedSet].filter(i => i >= 0).length` — los índices negativos (asistencias) no inflan el % de la barra.
+- Cert gate en modo módulos: `areAllModulesCompleted()` (loose — un módulo se considera completo si tiene ≥1 lección hecha O el live asistido O no tiene ni lecciones ni live). En no-módulos sigue siendo `pct >= 100`.
+- Trade-off documentado: alumno con todos los lives asistidos + 1 lección por módulo → barra al 30% pero cert visible (matches spec).
+
+**Load inicial de `video_progress`**: ahora acepta también `idx < 0` para cargar asistencias previas.
+
+**Pendientes**: tabla `live_attendance` dedicada (hoy reusamos `video_progress` con índices negativos), validación server-side de asistencia (el botón es self-reportado), cancelar asistencia (hoy es solo forward), copy de "72hs" hardcoded.
+
+---
+
+## Etapa X.45 — Finalizar live (live_ended) — coach/admin + gate de asistencia
+
+**SQL ejecutado**:
+```sql
+ALTER TABLE public.course_lives ADD COLUMN IF NOT EXISTS live_ended BOOLEAN DEFAULT FALSE;
+```
+
+Cambia el control del flujo de asistencia: antes el botón "✅ Asistí al live" aparecía con `live_date > now` (raro: el alumno marcaba ANTES de que empezara). Ahora aparece SOLO cuando el coach finaliza explícitamente el live (`live_ended = true`).
+
+**`coach.html` (tab Mi curso → módulos)**: cada `.mod-card` con live `live_date <= now` muestra arriba un `.coach-live-status`:
+- `!live_ended` → botón **🔴 Finalizar live** (coral `#fc8181`) + meta "Live realizado el {fecha}".
+- `live_ended` → badge **✅ Live finalizado** (lime) + "Realizado el {fecha}".
+- Futuro o sin live → nada.
+
+`loadCoachModulesForCourse` hace `Promise.all` con lessons + lives. `addCoachModuleRow(modId, title, lessons, live)` recibe el cuarto arg. Helpers nuevos `renderCoachLiveStatus`, `formatCoachLiveDate`, `finalizarLive(liveId, btn)` (confirm → UPDATE → reemplaza bloque inline).
+
+**`admin.html` (wizard de cursos)**: espejo en `addModuleRow`. Críticamente, `live_ended` se persiste en `card.dataset.liveEnded` y se incluye en el `livePayload` del sync — sino un "Guardar curso" posterior pisaría el flag a false con el default de la columna.
+
+**`curso.html` (alumno)**: SELECT extendido con `live_ended`. Nuevo gate `isFuture || !ended` en `renderModuleLiveInfo` — el alumno solo ve "📡 Unirse al live" + fecha hasta que el coach finalice. Recién después se habilitan asistencia / grabación / badges.
+
+**Pendientes**: RLS de `course_lives` (sigue pendiente desde X.38), reabrir live finalizado, notif al alumno cuando se finaliza, auto-finalize tras X horas.
+
+---
+
+## Etapa X.46 — Sección "Clase en vivo" del coach rediseñada (lives por módulo)
+
+Reemplazo completo de `loadLiveSection` en `coach.html`. **Antes** leía `courses.is_live` + `courses.live_url` + `courses.recording_url` (legacy: un único live por curso, modelo de Sesiones 37–40). **Ahora** consulta `course_lives` filtrado por los módulos del curso actual y lista cada live independientemente.
+
+**Flujo:**
+1. SELECT `course_modules` del curso (id, title, order_num).
+2. Si no hay módulos → "No hay lives configurados para este curso."
+3. SELECT `course_lives` `.in('module_id', modIds)`.
+4. Si no hay lives → mismo mensaje.
+5. Sort por `order_num` del módulo padre.
+6. Render por live: card con título del módulo + fecha formateada (`toLocaleString('es-AR', { weekday, day, month, year, hour, minute })`) + link al `live_url` si existe + acción según estado.
+
+**Estados:**
+- `!live_ended && live_date <= now` → botón **🔴 Finalizar live**.
+- `!live_ended && live_date > now` → texto gris italic "⏳ Live programado".
+- `live_ended` → texto verde "✅ Live finalizado" + `<input type="url">` con la `recording_url` actual (placeholder admite YouTube o Drive) + botón "Guardar grabación".
+
+**Funciones nuevas:**
+- `finalizarLiveAndReload(liveId, btn)` — diferencia con el `finalizarLive` de la sección Módulos: tras UPDATE recarga toda la sección para que aparezca el input de grabación. (La sección Módulos hace reemplazo inline porque el contexto es distinto.)
+- `saveLiveRecording(liveId, btn)` — UPDATE `course_lives.recording_url`. Feedback "✅ Guardado" 1.5s tras éxito, luego vuelve al label original.
+
+**Decisión:** la sección legacy para `course_type='live'` (con `courses.live_url` + `live_completed` + `recordings JSONB`) queda **deprecada del lado coach**. Si en el futuro hay un curso legacy de ese tipo, el coach no verá nada útil ahí — la edición sigue disponible desde admin si hace falta. Las funciones `finalizarClase` y `addRecRow`/`renderRecRows`/`saveRecordings` siguen en el código por compat pero ya no se invocan.
+
+**Pendientes:** RLS de `course_lives` (UPDATE de `recording_url` lo hace cualquier authenticated cliente con el id — falta policy `role IN ('coach','admin') AND assigned`), notif al alumno cuando se sube la grabación, validación del formato de URL (hoy se acepta cualquier string como recording_url).
 
 ---
 

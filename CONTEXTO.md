@@ -3383,3 +3383,52 @@ Mismo bloque `.coach-live-status` + `.btn-finalize-live` definido en ambos archi
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa — Sección "Clase en vivo" del coach con lives por módulo
+
+**Fecha:** 23 de mayo de 2026. Cierre del flujo del coach: la sección "Clase en vivo" del tab Mi curso estaba leyendo `courses.is_live` (legacy de Sesiones 37–40, un único live por curso). Con la migración a `course_lives` (Etapa X.38+), esa sección quedó obsoleta. Ahora se rediseña para listar TODOS los lives de los módulos del curso seleccionado.
+
+### Cambios en `coach.html`
+
+Reemplazo completo de `loadLiveSection(seq)`:
+
+1. **SELECT `course_modules`** del curso actual (id, title, order_num).
+   - Sin módulos → mensaje "No hay lives configurados para este curso."
+2. **SELECT `course_lives`** filtrando por `.in('module_id', modIds)` con todas las columnas relevantes: `id, module_id, live_url, live_date, recording_url, live_ended`.
+   - Sin lives → mismo mensaje.
+3. **Sort** por `order_num` del módulo padre (los lives heredan el orden visual de su módulo).
+4. **Render por live** — card `.live-row` con:
+   - **Título del módulo** (resuelto vía `modById[lv.module_id].title`).
+   - **Fecha formateada**: `toLocaleString('es-AR', { weekday, day, month, year, hour, minute })`. Si no hay fecha → "Sin fecha".
+   - **Link al `live_url`** si existe (lime, target `_blank`).
+   - **Estado / acción** según condición:
+     - `!live_ended && live_date <= now` → botón **🔴 Finalizar live** (clase `.btn-finalize-live`, mismo CSS que ya existía en la sección Módulos).
+     - `!live_ended && live_date > now` → texto gris italic **"⏳ Live programado"**.
+     - `live_ended` → texto verde **"✅ Live finalizado"** + label "URL de la grabación (YouTube o Drive)" + `<input type="url" class="field-input live-recording-input">` con la `recording_url` actual + botón "Guardar grabación".
+
+### Funciones nuevas
+
+- **`finalizarLiveAndReload(liveId, btn)`** — confirm + UPDATE `course_lives SET live_ended = true` + `loadLiveSection()` para recargar la sección entera. Diferencia con el `finalizarLive` ya existente en la sección Módulos: ese hace reemplazo inline (sin recargar); este recarga para que aparezca el input de grabación que no existía antes.
+- **`saveLiveRecording(liveId, btn)`** — UPDATE `course_lives.recording_url`. UX: botón pasa a "Guardando..." durante el await; si OK, "✅ Guardado" por 1.5s y vuelve al label original; si error, `alert` + revert. Si el input está vacío, se persiste `null` (limpia la URL previa).
+
+### Decisiones de diseño
+
+- **Legacy `course_type='live'` queda sin gestión desde coach panel**. Las funciones `finalizarClase`, `addRecRow`, `renderRecRows`, `saveRecordings` siguen en el código por compatibilidad pero ya no se invocan desde `loadLiveSection`. Si un curso legacy sigue activo y necesita gestión, se hace desde admin.
+- **No se editan `live_url` ni `live_date` desde acá** — esa edición sigue en el editor del wizard (admin) o el módulo de la sección "Mi curso" (coach). Esta sección es operativa: finalizar el live y subir la grabación post-clase.
+- **El input de grabación admite YouTube o Drive** — `getEmbedUrl` (curso.html, Etapa X.40) ya normaliza ambos al render. El placeholder describe los dos formatos válidos.
+- **Reload completo** tras `finalizarLiveAndReload`: simple y robusto. Costo es 2 queries adicionales (modules + lives) pero el wrap suele tener pocos items.
+
+### Lo que NO se hizo en esta etapa
+
+- **Notificación al alumno cuando se sube la grabación**: hoy el alumno se entera al recargar la página. Podría sumarse un INSERT en `notifications` dentro de `saveLiveRecording`.
+- **Preview de la URL antes de guardar**: el coach puede pegar cualquier string. Validación mínima vía `type="url"` del HTML pero no más. Si pegan basura, el alumno verá un iframe roto.
+- **RLS de `course_lives`**: sigue pendiente desde X.38/X.45. Tanto el UPDATE de `live_ended` como el de `recording_url` son public-writable hoy.
+- **Auto-detección de YouTube/Drive y embed inline en la card del coach**: solo se muestra como link. Si el coach quiere ver la grabación previa al alumno, debe abrir el link.
+- **Historial de cambios**: si el coach edita la URL varias veces, no hay trazabilidad. Probablemente innecesario.
+
+**Archivos modificados:**
+- `coach.html` — reemplazo completo de `loadLiveSection` (~110 líneas), funciones nuevas `finalizarLiveAndReload` + `saveLiveRecording`. Las funciones legacy quedan en el código pero sin referrer.
+- `CLAUDE.md` — sección X.43 + X.44 + X.45 + X.46 agregadas (estaban faltando de etapas previas) + fila de schema de `course_lives` actualizada con `live_ended` y referencias a las etapas.
+- `CONTEXTO.md` — esta sección.
+
+---
