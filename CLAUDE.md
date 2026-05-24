@@ -2058,6 +2058,26 @@ Modificar la RPC `get_all_users` para retornar `course_ids[]` paralelo sería m�
 
 ---
 
+## Etapa X.62 — Action menu admin: flip-up cuando no entra abajo
+
+Bug reportado: el dropdown "⋮" de la última fila de cualquier tabla del admin (Cursos, Alumnos, etc.) se cortaba contra el borde inferior del viewport — los items "Activar / Eliminar" quedaban ocultos abajo.
+
+Causa: el menú usa `position: fixed; top: btnRect.bottom + 4` (Etapa X.4). Cuando la fila está cerca del bottom del viewport, los `~5-7` items del menú (incluyendo los nuevos sub-items X.60) sobrepasan el `window.innerHeight`.
+
+### Fix: helper `positionActionMenu(menu, btnRect)`
+
+Tras mostrar el menú (necesario para medir su altura real), decide:
+
+- **Espacio suficiente abajo** → `top = btnRect.bottom + 4` (default).
+- **No entra abajo AND hay más espacio arriba** → flip-up: `top = btnRect.top - menuHeight - 4` (con piso `8px`).
+- **No entra abajo pero arriba tampoco** (viewport chico) → mantiene abajo + agrega `max-height: spaceBelow - 12px; overflow-y: auto` para scroll interno.
+
+`toggleRowMenu` (cursos) y `toggleUserRowMenu` (alumnos) llaman al helper después de `.classList.add('open')` (necesita estar visible para que `menu.offsetHeight` funcione).
+
+**Sin cambios en el CSS** — el `position: fixed` ya estaba. Solo se ajusta dinámicamente el `top` y opcionalmente `max-height` / `overflow-y` cuando el menú no entra.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

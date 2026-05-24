@@ -3280,13 +3280,38 @@
       const wasOpen = menu.classList.contains('open');
       closeAllRowMenus();
       if (!wasOpen) {
-        // Etapa X.4: el menú es position:fixed, así que calculamos coords viewport-relative
-        // a partir del bounding rect del botón ⋮ (alineado a la derecha del botón, justo debajo).
+        // Etapa X.4 + X.62: position:fixed con flip-up cuando no entra abajo.
         const btn = ev.currentTarget;
         const r   = btn.getBoundingClientRect();
-        menu.style.top   = (r.bottom + 4) + 'px';
         menu.style.right = (window.innerWidth - r.right) + 'px';
-        menu.classList.add('open');
+        menu.classList.add('open');                      // visible para poder medir alto
+        positionActionMenu(menu, r);
+      }
+    }
+
+    // Etapa X.62 — calcula `top` del action-menu y flipea hacia arriba si el
+    // menú no entra por abajo del viewport. Requiere que `menu` ya esté visible.
+    function positionActionMenu(menu, btnRect) {
+      const margin     = 4;
+      const vh         = window.innerHeight;
+      const menuHeight = menu.offsetHeight;
+      const spaceBelow = vh - btnRect.bottom;
+      const spaceAbove = btnRect.top;
+      // Por default: abrir hacia abajo. Si el menú se sale por abajo Y hay más
+      // espacio arriba que abajo → flipear arriba.
+      if (menuHeight + margin > spaceBelow && spaceAbove > spaceBelow) {
+        // Flip-up
+        menu.style.top = Math.max(8, btnRect.top - menuHeight - margin) + 'px';
+      } else {
+        menu.style.top = (btnRect.bottom + margin) + 'px';
+        // Si aun así no entra (viewport chico), limitamos altura con scroll.
+        if (menuHeight + margin > spaceBelow) {
+          menu.style.maxHeight = (spaceBelow - margin - 8) + 'px';
+          menu.style.overflowY = 'auto';
+        } else {
+          menu.style.maxHeight = '';
+          menu.style.overflowY = '';
+        }
       }
     }
     function closeAllRowMenus() {
@@ -3578,9 +3603,9 @@
       if (!wasOpen) {
         const btn = ev.currentTarget;
         const r   = btn.getBoundingClientRect();
-        menu.style.top   = (r.bottom + 4) + 'px';
         menu.style.right = (window.innerWidth - r.right) + 'px';
         menu.classList.add('open');
+        positionActionMenu(menu, r);   // Etapa X.62 — flip-up si no entra
       }
     }
 
