@@ -2016,6 +2016,48 @@ CSS de `.btn-quitar-curso-alumno` (X.59) **eliminado** — ya no se renderiza.
 
 ---
 
+## Etapa X.61 — Fix: resolver course_id real para sub-items "Quitar curso"
+
+Bug post-X.60: el sub-menú "🗑 Quitar curso" no aparecía en el action menu del alumno aunque tuviera cursos visibles en las pills. Causa: la RPC `get_all_users` retorna `course_titles[]` SIN `course_ids[]` (caso 3 del normalizador en `loadAlumnos`), entonces cada `c.id = null`, y el filtro `removableCourses = u.courses.filter(c => !!c.id)` retornaba vacío → no se renderaban los sub-items.
+
+### Fix en `loadAlumnos` (admin.html)
+
+Tras llamar `get_all_users` y normalizar `allUsers`, se hace una query batch a `user_courses`:
+
+```js
+const { data: ucData } = await sb.from('user_courses')
+  .select('user_id, course_id, courses(id, title)')
+  .in('user_id', userIds)
+  .eq('payment_status', 'paid')
+  .eq('status', 'active');
+
+const coursesByUser = {};
+(ucData || []).forEach(r => {
+  const cid   = r.course_id || r.courses?.id;
+  const title = r.courses?.title || '(sin título)';
+  if (!cid) return;
+  if (!coursesByUser[r.user_id]) coursesByUser[r.user_id] = [];
+  coursesByUser[r.user_id].push({ id: cid, title });
+});
+allUsers.forEach(u => {
+  if (coursesByUser[u.user_id]) u.courses = coursesByUser[u.user_id];
+});
+```
+
+**Características:**
+- **1 sola query batch** por carga del tab, no N+1.
+- **Filtrada por `payment_status='paid'` + `status='active'`** — solo se ofrece quitar cursos actualmente asignados.
+- **Sobrescribe `u.courses` solo cuando hay datos resueltos** — si la query falla por RLS o devuelve vacío para un user, se conservan los titles del RPC original (degradación grácil).
+- Wrapped en `try/catch` — un fallo del side-query no rompe la carga del tab; se loguea warning y se sigue.
+
+**Estado posterior:** `u.courses` ahora siempre tiene `{ id, title }` cuando hay cursos asignados → el `removableCourses.filter(c => !!c.id)` matchea → los sub-items "🗑 Quitar 'X'" aparecen en el dropdown ⋮.
+
+### Alternativa descartada
+
+Modificar la RPC `get_all_users` para retornar `course_ids[]` paralelo sería más eficiente (una sola query menos) pero requiere SQL y migración. El fix del lado cliente cierra el bug sin tocar la DB.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

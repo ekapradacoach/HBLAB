@@ -3429,7 +3429,6 @@
       //   1) u.courses[] = [{id, title}]                              (objetos)
       //   2) u.course_ids[] + u.course_titles[]                       (parallel arrays)
       //   3) u.course_titles[] solo (sin ids)                         ← lo que devuelve get_all_users()
-      // En la variante 3 los pills NO tienen botón × (sin id no podemos llamar remove_user_course).
       allUsers = (data || []).map(u => {
         let courses = [];
         if (Array.isArray(u.courses)) {
@@ -3445,7 +3444,7 @@
           courses = u.course_titles
             .filter(t => t != null && String(t).trim() !== '')
             .map((title, i) => ({
-              id:    ids[i] || null,   // null → render sin botón ×
+              id:    ids[i] || null,
               title: title || '(sin título)',
             }));
         }
@@ -3458,6 +3457,34 @@
           courses,
         };
       });
+
+      // Etapa X.61 — Fix: get_all_users retorna course_titles[] sin course_ids[].
+      // Hacemos un side-query batch a user_courses para resolver los course_id reales
+      // y enriquecer u.courses con el id (necesario para "Quitar curso" del action menu).
+      try {
+        const userIds = allUsers.map(u => u.user_id).filter(Boolean);
+        if (userIds.length) {
+          const { data: ucData } = await sb.from('user_courses')
+            .select('user_id, course_id, courses(id, title)')
+            .in('user_id', userIds)
+            .eq('payment_status', 'paid')
+            .eq('status', 'active');
+          const coursesByUser = {};
+          (ucData || []).forEach(r => {
+            const cid   = r.course_id || r.courses?.id;
+            const title = r.courses?.title || '(sin título)';
+            if (!cid) return;
+            if (!coursesByUser[r.user_id]) coursesByUser[r.user_id] = [];
+            coursesByUser[r.user_id].push({ id: cid, title });
+          });
+          // Sobrescribir u.courses solo cuando tengamos datos resueltos para ese user.
+          allUsers.forEach(u => {
+            if (coursesByUser[u.user_id]) u.courses = coursesByUser[u.user_id];
+          });
+        }
+      } catch (e) {
+        console.warn('loadAlumnos: enrich user_courses failed, sigo con titles sin ids:', e);
+      }
 
       renderAlumnosRows();
     }
