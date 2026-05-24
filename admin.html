@@ -310,23 +310,8 @@
       border-radius: 100px;
       font-size: 0.78rem; font-weight: 600;
     }
-    /* Etapa X.59 — botón "🗑 Quitar curso" inline en cada pill de curso del alumno */
-    .btn-quitar-curso-alumno {
-      background: transparent;
-      border: 1px solid rgba(252,129,129,0.35);
-      color: var(--red, #fc8181);
-      cursor: pointer;
-      padding: 3px 8px;
-      border-radius: 100px;
-      font-family: inherit; font-size: 0.72rem; font-weight: 700;
-      letter-spacing: 0.02em;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
-    }
-    .btn-quitar-curso-alumno:hover {
-      background: rgba(252,129,129,0.12);
-      border-color: rgba(252,129,129,0.6);
-      color: #ff6b6b;
-    }
+    /* Etapa X.60 — el botón "🗑 Quitar curso" se movió al action-menu (sub-items
+       por cada curso asignado). El CSS de pills queda solo informativo. */
     .badge-student {
       background: rgba(148,163,184,0.12);
       border: 1px solid rgba(148,163,184,0.3);
@@ -771,6 +756,16 @@
     .action-menu-item:hover { background: rgba(255,255,255,0.06); }
     .action-menu-item.danger { color: var(--red); }
     .action-menu-item.danger:hover { background: rgba(252,129,129,0.08); }
+    /* Etapa X.60 — divider + label de sección dentro del action-menu */
+    .action-menu-divider {
+      height: 1px; background: var(--card-border);
+      margin: 4px 6px;
+    }
+    .action-menu-section-label {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--gray-text);
+      padding: 6px 12px 2px; user-select: none;
+    }
 
     /* Filter toolbar (Tab Cursos) */
     .cursos-filters {
@@ -3485,21 +3480,32 @@
         const isAdmin = u.role === 'admin';
         const canDelete = !isSelf && !isAdmin;
 
+        // Etapa X.60 — las pills ahora son solo visuales (sin botón). El "Quitar curso"
+        // se movió al action-menu como sub-items por cada curso asignado.
         const coursesHtml = u.courses.length
           ? `<div class="alumnos-pills">${u.courses.map(c => `
-              <span class="alumnos-pill">
-                <span>${escapeAttr(c.title)}</span>
-                ${c.id
-                  ? `<button class="btn-quitar-curso-alumno" title="Quitar curso a este alumno"
-                            onclick="removeUserCourse('${u.user_id}','${c.id}','${escapeAttr(c.title)}')">🗑 Quitar curso</button>`
-                  : ''}
-              </span>`).join('')}</div>`
+              <span class="alumnos-pill">${escapeAttr(c.title)}</span>
+            `).join('')}</div>`
           : `<span style="color:var(--gray-text);font-style:italic;font-size:0.82rem;">Sin cursos</span>`;
 
         const safeNombre = escapeAttr(u.full_name || u.email || '(sin nombre)');
         const deleteItem = canDelete
           ? `<button class="action-menu-item danger" onclick="confirmDeleteUser('${u.user_id}','${safeNombre}'); closeAllRowMenus();">🗑 Eliminar usuario</button>`
           : `<button class="action-menu-item" disabled style="opacity:.45;cursor:not-allowed;" title="${isSelf ? 'No podés eliminar tu propio usuario' : 'No se permite eliminar a otro admin'}">🗑 Eliminar usuario</button>`;
+
+        // Etapa X.60 — Sub-items "Quitar curso" por cada curso asignado.
+        // Solo cursos con `c.id` válido (los huérfanos sin id no son removibles).
+        const removableCourses = u.courses.filter(c => !!c.id);
+        const quitarCursosItems = removableCourses.length
+          ? `<div class="action-menu-divider"></div>
+             <div class="action-menu-section-label">Cursos asignados</div>
+             ${removableCourses.map(c => `
+               <button class="action-menu-item danger"
+                       onclick="removeUserCourse('${u.user_id}','${c.id}','${escapeAttr(c.title)}'); closeAllRowMenus();">
+                 🗑 Quitar "${escapeAttr(c.title)}"
+               </button>`).join('')}
+             <div class="action-menu-divider"></div>`
+          : `<div class="action-menu-divider"></div>`;
 
         return `
           <tr>
@@ -3513,6 +3519,7 @@
                 <button class="action-menu-btn" onclick="toggleUserRowMenu(event,'${u.user_id}')" title="Acciones">⋮</button>
                 <div class="action-menu" id="user-menu-${u.user_id}">
                   <button class="action-menu-item" onclick="openAsignarCurso('${u.user_id}','${safeNombre}'); closeAllRowMenus();">➕ Asignar curso</button>
+                  ${quitarCursosItems}
                   ${deleteItem}
                 </div>
               </div>

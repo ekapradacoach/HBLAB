@@ -1976,6 +1976,46 @@ En `dashboard.html`, las tarjetas mostraban una barra que usaba `course.total_vi
 
 ---
 
+## Etapa X.60 — "Quitar curso" mudado al action-menu (admin Tab Alumnos)
+
+Bug reportado tras X.59: las pills de cursos en la columna "Cursos asignados" no eran clickeables — el botón "🗑 Quitar curso" dentro de la pill no respondía al click. Causa probable: la pill envuelta en un `<span>` interceptaba el evento por el flex layout. Solución: en lugar de insistir con el botón inline, mover la acción al menú "⋮" donde el patrón ya funciona consistente con el resto del UI.
+
+### Cambios en `admin.html` (Tab Alumnos → render de cada fila)
+
+**Pills simplificadas:** las pills ahora son solo visuales (chip con título del curso) — sin botón dentro. Quedan limpias y consistentes con otras pills del proyecto.
+
+**Action menu ampliado:** el dropdown "⋮" de cada alumno ahora muestra:
+
+```
++ Asignar curso
+──────────────────
+CURSOS ASIGNADOS
+🗑 Quitar "Fuerza Híbrida"
+🗑 Quitar "Bases y Programación..."
+──────────────────
+🗑 Eliminar usuario
+```
+
+Cada sub-item de "Quitar curso" llama directo a `removeUserCourse(user_id, course_id, course_title)` (función ya implementada en X.59 con confirm `"¿Quitar acceso a '${courseTitle}'?"` + DELETE directo + fallback RPC).
+
+**Cuando el alumno no tiene cursos:** se omite la sección "Cursos asignados" — solo queda un divider entre "Asignar curso" y "Eliminar usuario".
+
+**Cursos huérfanos:** los cursos sin `c.id` (registros zombi en `user_courses` apuntando a un curso borrado) no se renderan como sub-item — no son removibles desde acá (habría que limpiarlos via SQL).
+
+### CSS nuevo en `.action-menu`
+
+- `.action-menu-divider` — `height: 1px; background: var(--card-border); margin: 4px 6px;` — separador horizontal.
+- `.action-menu-section-label` — `font-size: 0.68rem; uppercase; tracked; color: gray-text; padding: 6px 12px 2px; user-select: none;` — etiqueta de sección "CURSOS ASIGNADOS".
+
+CSS de `.btn-quitar-curso-alumno` (X.59) **eliminado** — ya no se renderiza.
+
+### Lo que NO se hizo
+
+- **Confirmar con el nombre del alumno también**: hoy el confirm dice `"¿Quitar acceso a '${courseTitle}'?"` — no aclara a quién. Como la acción se dispara desde el menú del alumno, el contexto está implícito. Si se vuelve confuso, ampliar a `"¿Quitar acceso de ${alumno} a '${curso}'?"`.
+- **Bulk quitar**: si el alumno tiene muchos cursos, hay que clickear uno por uno. Una opción "Quitar todos" sería rara (UX peligroso) — se deja un-curso-por-vez.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
