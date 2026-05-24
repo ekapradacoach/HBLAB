@@ -1627,6 +1627,26 @@ Sin cambios en `renderModuleLiveInfo` ni en `loadStudentModules` — el fix es 1
 
 ---
 
+## Etapa X.53 — `saveLiveRecording` en coach.html: normalización + diagnóstico
+
+Bug reportado: `saveLiveRecording(liveId, btn)` en la sección "Clase en vivo" del coach panel fallaba silenciosamente. La hipótesis inicial (`currentCourseId` null) era incorrecta — la función no usa `currentCourseId`: el UPDATE es directo sobre `course_lives WHERE id = liveId` y no necesita el `course_id` del padre. Pero la falla silenciosa existía por otra causa: el cliente Supabase no reporta error cuando un UPDATE matchea 0 filas (caso típico de RLS bloqueando), y antes no había forma de detectarlo desde el coach.
+
+**Fixes aplicados (coach.html):**
+
+- **Nueva función `getEmbedUrl(url)`** — espejo de la de curso.html (Etapa X.40). Normaliza URLs YouTube (`watch?v=ID` / `youtu.be/ID` / `embed/ID` → `https://www.youtube.com/embed/ID`) y Drive (`file/d/ID/...` → `https://drive.google.com/file/d/ID/preview`). Cualquier otra URL se devuelve tal cual; vacío → `''`.
+- **`saveLiveRecording` rediseñado**:
+  - Aplica `getEmbedUrl(rawUrl)` ANTES del UPDATE → la URL guardada en BD es la canónica embed. El input se actualiza con la URL normalizada como feedback visual.
+  - `.update(...).eq('id', liveId).select()` — el `.select()` encadenado retorna las filas afectadas. Si `data.length === 0`, sabemos que el UPDATE no impactó ningún registro (RLS bloqueando o liveId inválido). Antes el cliente reportaba "success" sin error y el coach pensaba que se había guardado.
+  - Manejo explícito de los 4 casos: faltan args (warn), input no encontrado (warn), `error` de Supabase (alert + revert), 0 filas afectadas (alert + revert + log con liveId), éxito (✅ Guardado + setTimeout para volver al label).
+  - `console.log('[saveLiveRecording]', { liveId, rawUrl, embedUrl })` antes del UPDATE para diagnóstico en consola.
+- **Verificado**: `saveLiveRecording` NO usa `currentCourseId`. La función es self-contained — solo necesita el `liveId` que viene del onclick generado en `loadLiveSection` y la URL del input que vive en la misma `.live-row`.
+
+**Verificación del selector `#mi-curso-sel`**: el handler `onCursoChange()` → `loadCursoCompleto(courseId)` → `currentCourseId = courseId`. El curso activo queda seteado correctamente al cambiar el select. Esto no afecta a `saveLiveRecording` (que no lo usa), pero sí afecta a `loadLiveSection` que se invoca dentro de `loadCursoCompleto` y necesita `currentCourseId` para traer los módulos del curso. Ese flujo ya funciona.
+
+**Próximo paso si el UPDATE sigue retornando 0 filas:** verificar policies de RLS en `course_lives`. Hoy la tabla está sin RLS configurada (heredado de X.38) — el UPDATE debería pasar por la policy default `authenticated` que en Supabase es bastante permisiva. Si está bloqueado, el log dirá explícitamente "UPDATE retornó 0 filas".
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

@@ -2438,20 +2438,36 @@ async function finalizarLiveAndReload(liveId, btn) {
 }
 
 // Etapa X.46 — Guardar la URL de grabación de un live ya finalizado.
+// Etapa X.53 — Guarda la URL de grabación de un live.
+// IMPORTANTE: solo necesita `liveId` (PK de course_lives) y la URL del input —
+// NO depende de `currentCourseId` ni de ninguna variable global de curso. El
+// UPDATE es directo sobre `course_lives WHERE id = liveId`. Aplica getEmbedUrl
+// para normalizar YouTube/Drive al formato embed antes de guardar.
 async function saveLiveRecording(liveId, btn) {
-  if (!liveId || !btn) return;
+  if (!liveId || !btn) {
+    console.warn('saveLiveRecording: faltan args', { liveId, btn });
+    return;
+  }
   const row   = btn.closest('.live-row');
   const input = row?.querySelector('.live-recording-input');
-  if (!input) return;
-  const url = (input.value || '').trim();
+  if (!input) {
+    console.warn('saveLiveRecording: input no encontrado en .live-row');
+    return;
+  }
+
+  const rawUrl   = (input.value || '').trim();
+  const embedUrl = rawUrl ? getEmbedUrl(rawUrl) : null;
 
   const originalLabel = btn.textContent;
   btn.disabled    = true;
   btn.textContent = 'Guardando...';
 
-  const { error } = await sb.from('course_lives')
-    .update({ recording_url: url || null })
-    .eq('id', liveId);
+  console.log('[saveLiveRecording]', { liveId, rawUrl, embedUrl });
+
+  const { data, error } = await sb.from('course_lives')
+    .update({ recording_url: embedUrl })
+    .eq('id', liveId)
+    .select();  // .select() retorna las filas afectadas (visibilidad del UPDATE)
 
   if (error) {
     console.error('saveLiveRecording error:', error);
@@ -2460,6 +2476,15 @@ async function saveLiveRecording(liveId, btn) {
     btn.textContent = originalLabel;
     return;
   }
+  if (!data || data.length === 0) {
+    console.warn('saveLiveRecording: UPDATE retornó 0 filas. ¿RLS bloqueando? liveId=', liveId);
+    alert('No se actualizó ningún registro. Posiblemente falta permiso (RLS) sobre course_lives.');
+    btn.disabled    = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+  // Reflejar la URL normalizada en el input por si el coach pegó una variante.
+  input.value = embedUrl || '';
   btn.textContent = '✅ Guardado';
   setTimeout(() => {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
@@ -2500,6 +2525,22 @@ async function finalizarClase(courseId) {
 function toYoutubeEmbed(url) {
   const match = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
   return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+}
+
+// Etapa X.53 — espejo del getEmbedUrl de curso.html (Etapa X.40).
+// Normaliza URLs de YouTube y Google Drive al formato embed antes de guardar.
+// - YouTube (watch / youtu.be / embed) → https://www.youtube.com/embed/ID
+// - Drive (file/d/ID/...) → https://drive.google.com/file/d/ID/preview
+// - Vacío → ''
+// - Cualquier otra URL → tal cual
+function getEmbedUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
+  return s;
 }
 
 // ── Helpers de la lista de grabaciones (post-live) ──
