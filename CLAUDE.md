@@ -1816,6 +1816,60 @@ function liveCompletionIndex(m) {
 
 ---
 
+## Etapa X.57 — Fix: cert no se disparaba en cursos solo-lives (`updateProgress` con guard erróneo)
+
+Bug reportado: al marcar como completado el último ítem (live o lección), el certificado no aparece. Causa raíz: `updateProgress()` tenía un early-return `if (!TOTAL_VIDEOS) return;` que disparaba antes de chequear el cert gate. `TOTAL_VIDEOS = LESSONS_FLAT.length`, así que un curso con módulos que **solo tienen live** (sin lecciones) → `TOTAL_VIDEOS === 0` → bailaba sin invocar `areAllModulesCompleted` ni `checkQuizGateAndShowCert`.
+
+### Fix en `updateProgress()`
+
+```js
+function updateProgress() {
+  // No bailar en modo módulos: un curso puede tener solo lives (sin lecciones)
+  // y aun así el cert debe dispararse cuando todos los módulos están completos.
+  if (!TOTAL_VIDEOS && !isModulesMode) return;
+  if (!TOTAL_VIDEOS && isModulesMode && !MODULES?.length) return;
+
+  const realCount = [...completedSet].filter(i => i >= 0).length;
+  const pct       = TOTAL_VIDEOS > 0 ? Math.round(realCount / TOTAL_VIDEOS * 100) : 0;
+  if (fill) fill.style.width = pct + '%';
+
+  const certEligible = isModulesMode
+    ? areAllModulesCompleted()
+    : (TOTAL_VIDEOS > 0 && pct >= 100);
+
+  if (certEligible) {
+    if (label) { label.textContent = '¡Curso completado! 🎉'; label.classList.add('completed'); }
+    checkQuizGateAndShowCert();   // → showCertSection() si no hay quiz pendiente
+    return;
+  }
+  // Render del label según haya o no lecciones...
+}
+```
+
+**Cambios concretos:**
+- Early-return solo en modo no-modules sin videos, o módulos sin módulos.
+- En modo módulos con `TOTAL_VIDEOS=0` (solo-lives) → sigue al check del cert.
+- `pct` calculado con guard `TOTAL_VIDEOS > 0` para evitar `/0`.
+- Cert dispara basado en `areAllModulesCompleted()` (modules) o `pct >= 100` (no-modules).
+- Label nuevo: "En curso" cuando hay módulos solo-lives sin nada para mostrar progreso de lecciones.
+
+### Verificación del flujo end-to-end
+
+| Paso | Estado |
+|---|---|
+| `markLiveCompleted(liveId)` | UPSERT a `video_progress` con `video_index = -1 * order_num`, `completed = true`. `completedSet.add(idx)`. Re-render + `updateProgress()`. |
+| `markLessonComplete(lessonId)` | UPSERT con `video_index = LESSON_IDX_BY_ID[lessonId]` (entero >= 0). `completedSet.add(flatIdx)`. Re-render + `updateProgress()`. |
+| `updateProgress()` | Ahora siempre chequea `certEligible` en modo módulos. |
+| `areAllModulesCompleted()` | `MODULES.every(isModuleCompleted)`. |
+| `isModuleCompleted(m)` | Sin contenido → true · live completado → true · alguna lección completada → true · sino false. |
+| `checkQuizGateAndShowCert()` | Si hay quiz activo y no aprobado → muestra quiz. Sino → `showCertSection()`. |
+
+Load inicial (`init`) ya carga TODOS los `video_index` (positivos y negativos) en `completedSet` (X.54) y llama `updateProgress()` después del primer render, así que el cert también se dispara al recargar la página con todo ya completado.
+
+**Pendiente:** el label "En curso" para cursos solo-lives es un placeholder pasivo. Idealmente mostraría algo como "X de Y lives realizados" — pero requiere contar lives por módulo y % de módulos completados (otra métrica). Mejora futura.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

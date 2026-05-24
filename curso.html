@@ -966,31 +966,49 @@
     // avance real, pero el cert puede dispararse antes del 100% si el alumno hizo
     // lo mínimo de cada módulo (ej. asistir al live de cada módulo).
     function updateProgress() {
-      if (!TOTAL_VIDEOS) return;
-      const count = completedSet.size;
-      // El count crudo incluye también los video_index negativos (asistencia a
+      // Etapa X.57 — Fix: NO bailear si TOTAL_VIDEOS=0 cuando estamos en modo
+      // módulos (un curso puede tener solo lives, sin lecciones, y aun así el
+      // cert debe dispararse cuando todos los módulos están completos).
+      // Solo bailamos en modo no-modules sin videos (nada que completar).
+      if (!TOTAL_VIDEOS && !isModulesMode) return;
+      if (!TOTAL_VIDEOS && isModulesMode && !MODULES?.length) return;
+
+      // El count crudo incluye también los video_index negativos (completado de
       // lives). Para que el % no se infle, contamos solo los índices >= 0
       // (lecciones reales o videos sueltos).
       const realCount = [...completedSet].filter(i => i >= 0).length;
-      const pct       = Math.round(realCount / TOTAL_VIDEOS * 100);
+      const pct       = TOTAL_VIDEOS > 0 ? Math.round(realCount / TOTAL_VIDEOS * 100) : 0;
       const label = document.getElementById('progress-label');
       const fill  = document.getElementById('progress-fill');
 
-      fill.style.width = pct + '%';
+      if (fill) fill.style.width = pct + '%';
 
-      const certEligible = isModulesMode ? areAllModulesCompleted() : (pct >= 100);
+      // Cert: en modules mode → todos los módulos completos (lecciones O lives).
+      // En no-modules mode → 100% de los videos.
+      const certEligible = isModulesMode
+        ? areAllModulesCompleted()
+        : (TOTAL_VIDEOS > 0 && pct >= 100);
 
       if (certEligible) {
-        label.textContent = '¡Curso completado! 🎉';
-        label.classList.add('completed');
+        if (label) {
+          label.textContent = '¡Curso completado! 🎉';
+          label.classList.add('completed');
+        }
         // Etapa U: si el curso tiene quiz activo, gateamos el certificado detrás del quiz.
-        // checkQuizGateAndShowCert() consulta course_quizzes + intentos y decide qué mostrar.
         checkQuizGateAndShowCert();
-      } else {
-        const noun = isModulesMode
-          ? `lección${TOTAL_VIDEOS !== 1 ? 'es' : ''} completada${realCount !== 1 ? 's' : ''}`
-          : `video${TOTAL_VIDEOS !== 1 ? 's' : ''} completado${realCount !== 1 ? 's' : ''}`;
-        label.textContent = `${realCount} de ${TOTAL_VIDEOS} ${noun}`;
+        return;
+      }
+
+      if (label) {
+        if (TOTAL_VIDEOS > 0) {
+          const noun = isModulesMode
+            ? `lección${TOTAL_VIDEOS !== 1 ? 'es' : ''} completada${realCount !== 1 ? 's' : ''}`
+            : `video${TOTAL_VIDEOS !== 1 ? 's' : ''} completado${realCount !== 1 ? 's' : ''}`;
+          label.textContent = `${realCount} de ${TOTAL_VIDEOS} ${noun}`;
+        } else {
+          // Modo módulos solo con lives → label genérico hasta que el alumno marque todos.
+          label.textContent = 'En curso';
+        }
         label.classList.remove('completed');
       }
     }
