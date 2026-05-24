@@ -1031,70 +1031,67 @@
       }
     }
 
-    /* ── Vista de módulos (Sesión 48) ─────────────── */
-    // Etapa X.42 + X.50 — además de lecciones, también trae course_lives (1:0..1 por módulo).
-    // X.50: logging explícito de errores Supabase + normalización defensiva de
-    // module_id (trim + lowercase) para descartar cualquier mismatch sutil al hacer
-    // el merge por id en el cliente.
+    /* ── Vista de módulos (Sesión 48 — Etapa X.51) ────
+       3 queries separadas en paralelo (después del primer SELECT a module_ids):
+         1) course_modules (filtrado por course_id)        ← solo
+         2) course_lessons (filtrado por module_id IN ...) ┐
+         3) course_lives   (filtrado por module_id IN ...) ┘ paralelos via Promise.all
+
+       Asociación en cliente: mapas keyed por module_id para evitar mismatches
+       y cualquier interferencia del cliente Supabase. */
     async function loadStudentModules(courseId) {
-      const { data: modules, error: errMods } = await sb
+      // 1) Módulos
+      const modulesRes = await sb
         .from('course_modules')
         .select('id, title, order_num, unlock_at')
         .eq('course_id', courseId)
         .order('order_num');
-      if (errMods) console.error('loadStudentModules · course_modules error:', errMods);
-      if (!modules?.length) {
+      if (modulesRes.error) console.error('loadStudentModules · course_modules:', modulesRes.error);
+      const modules = modulesRes.data || [];
+      if (!modules.length) {
         console.warn('loadStudentModules: sin módulos para course_id=' + courseId);
         return [];
       }
 
-      const modIds = modules.map(m => m.id);
-
-      const [resLessons, resLives] = await Promise.all([
+      // 2) Lecciones + Lives en paralelo
+      const moduleIds = modules.map(m => m.id);
+      const [lessonsRes, livesRes] = await Promise.all([
         sb.from('course_lessons')
           .select('id, module_id, title, video_url, order_num')
-          .in('module_id', modIds)
+          .in('module_id', moduleIds)
           .order('order_num'),
         sb.from('course_lives')
           .select('id, module_id, live_url, live_date, recording_url, live_ended')
-          .in('module_id', modIds),
+          .in('module_id', moduleIds),
       ]);
+      if (lessonsRes.error) console.error('loadStudentModules · course_lessons:', lessonsRes.error);
+      if (livesRes.error)   console.error('loadStudentModules · course_lives:',   livesRes.error);
 
-      if (resLessons.error) console.error('loadStudentModules · course_lessons error:', resLessons.error);
-      if (resLives.error)   console.error('loadStudentModules · course_lives error:',   resLives.error);
-
-      const lessons = resLessons.data || [];
-      const lives   = resLives.data   || [];
+      const lessons = lessonsRes.data || [];
+      const lives   = livesRes.data   || [];
 
       console.log('[loadStudentModules]', {
-        modulos:  modules.length,
+        modulos:   modules.length,
         lecciones: lessons.length,
-        lives:    lives.length,
-        modIds,
+        lives:     lives.length,
+        moduleIds,
       });
 
-      // Helper de normalización: el id puede venir con espacios extras o
-      // mayúsculas si el cliente Supabase cambia. Postgres devuelve UUIDs
-      // lowercase, pero normalizamos por las dudas.
-      const norm = (v) => String(v ?? '').trim().toLowerCase();
-
-      const lessonsByMod = {};
+      // 3) Asociación por module_id
+      const lessonsByModule = {};
       lessons.forEach(l => {
-        const k = norm(l.module_id);
-        if (!lessonsByMod[k]) lessonsByMod[k] = [];
-        lessonsByMod[k].push(l);
+        if (!lessonsByModule[l.module_id]) lessonsByModule[l.module_id] = [];
+        lessonsByModule[l.module_id].push(l);
       });
-      const liveByMod = {};
-      lives.forEach(lv => { liveByMod[norm(lv.module_id)] = lv; });
 
-      return modules.map(m => {
-        const k = norm(m.id);
-        return {
-          ...m,
-          lessons: lessonsByMod[k] || [],
-          live:    liveByMod[k]    || null,
-        };
-      });
+      const liveByModule = {};
+      lives.forEach(l => { liveByModule[l.module_id] = l; });
+
+      return modules.map(m => ({
+        ...m,
+        lessons: lessonsByModule[m.id] || [],
+        live:    liveByModule[m.id]    || null,
+      }));
     }
 
     // Etapa X.42 — formatear fecha/hora del live (ej. "Jue 23 May · 19:30")

@@ -1552,6 +1552,54 @@ Bug reportado: tras X.49, los módulos del alumno (curso.html) aparecen en el si
 
 ---
 
+## Etapa X.51 — Fix definitivo: 3 queries separadas en `loadStudentModules`
+
+Continuación del bug de X.49/X.50 en `curso.html`. Tras X.49 los módulos se rendereaban pero sus lecciones aparecían como "Sin contenido disponible todavía" — el JOIN/asociación cliente entre `course_modules` y `course_lessons` no estaba mergeando las lecciones al módulo.
+
+**Cambio**: rewrite limpio de `loadStudentModules` con la estructura canónica:
+
+```js
+// 1) Módulos (sequential — necesitamos moduleIds antes que el resto)
+const modulesRes = await sb.from('course_modules')
+  .select('id, title, order_num, unlock_at')
+  .eq('course_id', courseId)
+  .order('order_num');
+const modules   = modulesRes.data || [];
+const moduleIds = modules.map(m => m.id);
+
+// 2) Lecciones + Lives en PARALELO (Promise.all)
+const [lessonsRes, livesRes] = await Promise.all([
+  sb.from('course_lessons').select('id, module_id, title, video_url, order_num').in('module_id', moduleIds).order('order_num'),
+  sb.from('course_lives').select('id, module_id, live_url, live_date, recording_url, live_ended').in('module_id', moduleIds),
+]);
+
+// 3) Asociación por module_id (sin normalización adicional — postgres devuelve UUIDs ya consistentes)
+const lessonsByModule = {};
+lessons.forEach(l => {
+  if (!lessonsByModule[l.module_id]) lessonsByModule[l.module_id] = [];
+  lessonsByModule[l.module_id].push(l);
+});
+const liveByModule = {};
+lives.forEach(l => { liveByModule[l.module_id] = l; });
+
+return modules.map(m => ({
+  ...m,
+  lessons: lessonsByModule[m.id] || [],
+  live:    liveByModule[m.id]    || null,
+}));
+```
+
+**Diferencia con X.50:**
+- Se eliminó la normalización `norm(v) = String(v ?? '').trim().toLowerCase()` que aplicaba al `module_id` antes del map. Era defensiva pero introducía complejidad innecesaria — postgres devuelve UUIDs en formato canónico y los IDs son comparables directamente.
+- Estructura más limpia: variables `modulesRes/lessonsRes/livesRes` y `modules/moduleIds` con nombres explícitos, fácil de auditar.
+- Logging mantenido (`console.error` por query + `console.log('[loadStudentModules]', { ... })`) para que el debugging futuro siga visible en consola.
+
+Lógica de drip (`unlock_at`), lives por módulo y render de lecciones **no cambia** — solo la forma de cargar y mergear datos.
+
+Si el bug **persiste** después de este fix, la causa más probable es **RLS** bloqueando `course_lessons` o `course_lives` para el rol del alumno (las queries no tiran error pero retornan `[]`). Próxima solución: agregar policies o crear RPC SECURITY DEFINER `get_student_modules(p_course_id)`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
