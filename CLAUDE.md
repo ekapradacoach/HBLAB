@@ -1532,6 +1532,26 @@ El resto del render sigue funcionando porque ya manejaba el caso `activeLessonId
 
 ---
 
+## Etapa X.50 — Módulos del alumno: logging + normalización + fallback visible
+
+Bug reportado: tras X.49, los módulos del alumno (curso.html) aparecen en el sidebar pero al expandirlos el contenido queda vacío — no se ven ni las lecciones ni el bloque de live. El panel coach sí muestra todo correctamente.
+
+**Diagnóstico**: el render del módulo arma `lessonsHtml` desde `m.lessons` y `liveHtml` desde `renderModuleLiveInfo(m)`. Si ambos terminan vacíos (`m.lessons.length===0` y el live no cae en una de las ramas con texto), el módulo se ve hueco. Las causas posibles son:
+
+1. **RLS** bloquea `course_lessons` / `course_lives` para el rol del alumno (la query no tira error visible pero retorna `[]`).
+2. **Mismatch de UUID** en el merge JS por `module_id` (improbable porque postgres devuelve UUIDs lowercase, pero defensivo no daña).
+3. **Combinación válida pero sin contenido visible**: live pasada + `!live_ended` (que por spec X.48 retorna ''), módulo sin lecciones → render legítimamente vacío.
+
+**Fixes aplicados (curso.html):**
+
+- **Logging explícito en `loadStudentModules`**: cada query (`course_modules`, `course_lessons`, `course_lives`) ahora destructura `{ data, error }` y hace `console.error` si hay error. Al final loguea un resumen `[loadStudentModules] { modulos, lecciones, lives, modIds }` para que el usuario pueda abrir la consola y ver exactamente qué se cargó. Esto destraba el debugging de RLS.
+- **Normalización defensiva de `module_id`**: helper `norm(v) = String(v ?? '').trim().toLowerCase()` aplicado al mergear `lessonsByMod[k]` y `liveByMod[k]`. Es no-op en la mayoría de casos (postgres devuelve UUIDs lowercase + sin espacios), pero garantiza que cualquier mismatch sutil se evite.
+- **Fallback visible en `renderModulesView`**: si un módulo tiene `lessons.length === 0` Y `renderModuleLiveInfo(m)` retorna `''`, en lugar de un `<div class="modules-lessons">` vacío se renderiza `<div class="modules-empty-hint">Sin contenido disponible todavía.</div>`. Italic + gris. Así el alumno entiende que el módulo está sin contenido y no parece un bug.
+
+**Próxima diagnosis posible (no resuelta acá):** si los console.log muestran `lecciones: 0` cuando sí hay lecciones en BD, es RLS. Solución: ya sea (a) agregar policy de SELECT a `course_lessons` para `authenticated` con join a `user_courses.payment_status='paid'`, (b) crear RPC SECURITY DEFINER `get_student_modules(p_course_id)` que bypasea RLS. Mismo análisis para `course_lives`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
