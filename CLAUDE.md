@@ -2101,6 +2101,24 @@ Refinamiento de X.55/X.48 — la condición para mostrar el link al meet pasaba 
 
 ---
 
+## Etapa X.64 — Live: normalización de URL + visibilidad del link
+
+Bug reportado: tras X.63 el botón "📡 Unirse al live" se muestra correctamente cuando `!live_ended`, pero el click no abre el meet (o abre algo raro). Causa probable: el coach pegó la URL sin `https://` (ej. `meet.google.com/abc-def`), y el `href` resultante se interpreta como **ruta relativa** del navegador → click no funciona.
+
+### Cambios en `renderLiveMainPanel(m)` (estado 1, curso.html)
+
+- **Normalización del URL**: si `live.live_url` no empieza con `http://` o `https://`, se prefija `https://` automáticamente antes de armar el `href`.
+- **URL visible como texto**: debajo del botón se renderiza el link como anchor visible en lime con `word-break: break-all`. Sirve como:
+  - Diagnóstico inmediato — el alumno ve qué URL está cargada.
+  - Plan B si el click del botón no funciona — puede clickear el link en texto o copiarlo.
+- **Copy actualizado**: "Te lleva directo a la sala de Meet/Zoom. Si el botón no abre, copiá este link:" (antes solo "Te lleva directo...").
+- **`rel="noopener noreferrer"`** (antes solo `noopener`) — mejor higiene para target=_blank.
+- **`console.log('[live] live_url:', live.live_url, '→ href:', urlForHref)`** para diagnóstico — el alumno (o coach) puede abrir F12 y verificar la URL que se está usando.
+
+Sin cambios en los otros estados (live_ended con/sin recording) ni en `renderModuleLiveRow`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

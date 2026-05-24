@@ -1220,14 +1220,26 @@
 
       // Estado 1: coach todavía NO finalizó → mostrar siempre link al meet + fecha
       if (!live.live_ended) {
-        const safeUrl = escHtml(live.live_url || '#');
+        // Etapa X.64 — sanitización + visibilidad del URL para diagnóstico.
+        // Si el URL no empieza con http(s):// el browser lo trata como relativo
+        // y el botón no navega — normalizamos prefijando https:// como fallback.
+        const rawUrl = (live.live_url || '').trim();
+        let urlForHref = rawUrl;
+        if (urlForHref && !/^https?:\/\//i.test(urlForHref)) {
+          urlForHref = 'https://' + urlForHref;
+        }
+        const safeUrl    = escHtml(urlForHref || '#');
+        const safeUrlTxt = escHtml(rawUrl);
+        console.log('[live] live_url:', live.live_url, '→ href:', urlForHref);
         return `
           <div class="modules-active-title">📡 Clase en vivo</div>
           <div class="live-main-card">
             ${fecha ? `<p class="live-main-fecha">${escHtml(fecha)}</p>` : ''}
-            ${live.live_url
-              ? `<a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
-                 <p class="live-main-sub">Te lleva directo a la sala de Meet/Zoom.</p>`
+            ${rawUrl
+              ? `<a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener noreferrer">📡 Unirse al live</a>
+                 <p class="live-main-sub">Te lleva directo a la sala de Meet/Zoom. Si el botón no abre, copiá este link:</p>
+                 <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
+                    style="font-size:0.78rem;color:var(--lime,#C8E600);word-break:break-all;text-decoration:underline;">${safeUrlTxt}</a>`
               : '<p class="live-main-sub">El link del live va a estar disponible antes de la clase.</p>'}
           </div>`;
       }
