@@ -1299,25 +1299,25 @@
       if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
       return false;
     }
-    // Etapa X.65 + X.66 — Regla estricta del certificado:
-    //   - Solo cuentan módulos DESBLOQUEADOS (sin unlock_at o unlock_at <= ahora).
-    //   - De esos, solo los que tienen CONTENIDO (lecciones o live) deben estar completos.
-    //   - Módulos bloqueados por fecha → ignorados (no aportan ni bloquean).
-    //   - Módulos sin contenido (certificación) → ignorados.
-    //   - Si no quedan módulos relevantes → false (no cert).
-    //
-    // Comportamiento implícito: si un módulo se desbloquea durante la sesión
-    // (poco común — requiere recargar) o entre cargas, el próximo `updateProgress`
-    // re-evalúa automáticamente y oculta/muestra el cert según corresponda.
+    // Etapa X.65 + X.66 + X.67 — Regla estricta del certificado:
+    //   - Solo cuentan módulos DISPONIBLES PARA COMPLETAR:
+    //       a) Desbloqueados por fecha (sin unlock_at o unlock_at <= ahora), Y
+    //       b) Con contenido (lecciones o live), Y
+    //       c) Si tienen live → live.live_ended === true (el coach lo finalizó).
+    //   - Módulos bloqueados por fecha → ignorados.
+    //   - Módulos con live pendiente de finalizar por el coach → ignorados.
+    //   - Módulos sin contenido (cert) → ignorados.
+    //   - Si no queda ninguno relevante → false (no cert).
     function areAllModulesCompleted() {
       const now = new Date();
-      const unlockedWithContent = (MODULES || []).filter(m => {
-        const unlocked   = !m.unlock_at || new Date(m.unlock_at) <= now;
-        const hasContent = (m.lessons?.length > 0) || !!m.live;
-        return unlocked && hasContent;
+      const availableWithContent = (MODULES || []).filter(m => {
+        const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
+        const hasContent     = (m.lessons?.length > 0) || !!m.live;
+        const liveReady      = !m.live || m.live.live_ended === true;
+        return unlockedByDate && hasContent && liveReady;
       });
-      if (!unlockedWithContent.length) return false;
-      return unlockedWithContent.every(isModuleCompleted);
+      if (!availableWithContent.length) return false;
+      return availableWithContent.every(isModuleCompleted);
     }
 
     // ════════════════════════════════════════════════
@@ -1331,18 +1331,18 @@
       return !!m && (!m.lessons || m.lessons.length === 0) && !m.live;
     }
     function isCertModuleUnlocked() {
-      // Etapa X.65 + X.66 — coherente con areAllModulesCompleted: solo
-      // contamos módulos DESBLOQUEADOS con contenido. Los locked por drip no
-      // aportan al desbloqueo del módulo de certificación (el alumno completa
-      // lo disponible, el cert se habilita).
+      // Etapa X.65 + X.66 + X.67 — coherente con areAllModulesCompleted.
+      // El módulo de certificación se desbloquea cuando TODOS los módulos
+      // disponibles (drip ok + live finalizado) con contenido están completos.
       const now = new Date();
-      const unlockedWithContent = (MODULES || []).filter(m => {
-        const unlocked   = !m.unlock_at || new Date(m.unlock_at) <= now;
-        const hasContent = (m.lessons?.length > 0) || !!m.live;
-        return unlocked && hasContent;
+      const availableWithContent = (MODULES || []).filter(m => {
+        const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
+        const hasContent     = (m.lessons?.length > 0) || !!m.live;
+        const liveReady      = !m.live || m.live.live_ended === true;
+        return unlockedByDate && hasContent && liveReady;
       });
-      if (!unlockedWithContent.length) return false;
-      return unlockedWithContent.every(isModuleCompleted);
+      if (!availableWithContent.length) return false;
+      return availableWithContent.every(isModuleCompleted);
     }
     let _certView = false;  // true cuando el alumno está viendo el cert en el main panel
 

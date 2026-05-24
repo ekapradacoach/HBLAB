@@ -2211,6 +2211,47 @@ El `updateProgress()` se invoca al final del init después de cargar módulos + 
 
 ---
 
+## Etapa X.67 — Cert gate: ignorar módulos con live pendiente (`!live_ended`)
+
+Refinamiento adicional sobre X.66. Cuando un módulo tiene un live programado y el coach todavía no lo finalizó (`live_ended=false`), el alumno NO PUEDE marcarlo como completado (el botón "Marcar como completado" solo aparece en el panel principal del live cuando `live_ended=true`, ver Etapa X.63). Sin embargo, `areAllModulesCompleted` lo incluía en el conteo → el cert quedaba bloqueado indefinidamente esperando que el alumno complete algo que la UI no le permite.
+
+### Nueva regla del cert (X.67)
+
+Un módulo se considera "disponible para completar" solo si:
+1. Está **desbloqueado por fecha** (`unlock_at` null o pasado).
+2. Tiene **contenido** (lecciones o live).
+3. Si tiene live → `live.live_ended === true` (el coach finalizó).
+
+```js
+function areAllModulesCompleted() {
+  const now = new Date();
+  const availableWithContent = (MODULES || []).filter(m => {
+    const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
+    const hasContent     = (m.lessons?.length > 0) || !!m.live;
+    const liveReady      = !m.live || m.live.live_ended === true;
+    return unlockedByDate && hasContent && liveReady;
+  });
+  if (!availableWithContent.length) return false;
+  return availableWithContent.every(isModuleCompleted);
+}
+```
+
+Mismo filtro en `isCertModuleUnlocked()` para que el 🎓 del sidebar se desbloquee bajo el mismo criterio.
+
+### Caso edge: módulo con lecciones + live no-finalizado
+
+Si un módulo tiene lecciones (que el alumno SÍ puede completar) AND un live pendiente (`!live_ended`), por el nuevo filtro el módulo entero se ignora del cálculo del cert. Trade-off: el alumno podría tener todas las lecciones del módulo completadas pero el cert no dispara hasta que el coach finalice el live → coherente con la spec ("si tiene live → live_ended debe ser true").
+
+Esto es intencional: el live es parte del módulo, y si no se finalizó, el módulo no se considera "consumible" completamente. Si en el futuro se quiere relajar (cualquier ítem del módulo cuenta), basta cambiar la condición `liveReady` a `(m.lessons?.length > 0 || (m.live && m.live.live_ended))`.
+
+### Sin tocar
+
+- `isModuleCompleted`: sigue retornando `true` para empty modules; semántica de "completable" no cambia.
+- Barra de progreso (`updateProgress`): sigue contando contra TODOS los content modules (no aplica el filtro de "disponible"). Si se quiere alinear, agregar el mismo filtro en `contentModules = ...`.
+- `dashboard.html`: cálculo del progreso por módulos (X.59) no se actualizó — los cursos con lives pendientes de finalizar pueden mostrar progreso aparentemente "menor" en el dashboard vs. el cert real.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
