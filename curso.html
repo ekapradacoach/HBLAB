@@ -1299,6 +1299,9 @@
             </div>`;
         }
         const lessons = m.lessons || [];
+        const hasLive    = !!m.live;
+        const hasLessons = lessons.length > 0;
+
         const lessonsHtml = lessons.map((l, li) => {
           // Etapa X.3: completedSet guarda flat-index (número), no UUID.
           const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
@@ -1312,13 +1315,20 @@
         }).join('');
         // Etapa X.42 — bloque de live entre el head y las lecciones
         const liveHtml = renderModuleLiveInfo(m);
-        // Etapa X.50 — fallback si el módulo no tiene contenido visible.
-        // (Sin lecciones cargadas Y el bloque de live renderiza vacío — por
-        // ejemplo live pasada + !live_ended). Mostramos un hint para que el
-        // alumno no vea un módulo vacío sin explicación.
-        const innerHtml = (lessons.length === 0 && !liveHtml)
-          ? '<div class="modules-empty-hint">Sin contenido disponible todavía.</div>'
-          : `${liveHtml}<div class="modules-lessons">${lessonsHtml}</div>`;
+
+        // Etapa X.52 — estructura del render por módulo:
+        //   - Tiene live → mostrar bloque live (la lógica de estados ya implementada
+        //     decide qué texto/botón). Aunque renderModuleLiveInfo retorne '' en algún
+        //     estado puntual, la presencia del record en m.live es suficiente para
+        //     NO mostrar el empty-hint.
+        //   - Tiene lecciones → listarlas.
+        //   - Ni live ni lecciones → "Sin contenido disponible todavía".
+        let innerHtml;
+        if (!hasLive && !hasLessons) {
+          innerHtml = '<div class="modules-empty-hint">Sin contenido disponible todavía.</div>';
+        } else {
+          innerHtml = `${liveHtml}${hasLessons ? `<div class="modules-lessons">${lessonsHtml}</div>` : ''}`;
+        }
         return `
           <div class="modules-mod" id="modules-mod-${mi}">
             <button class="modules-mod-head" onclick="toggleModule(${mi})">

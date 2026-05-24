@@ -1600,6 +1600,33 @@ Si el bug **persiste** después de este fix, la causa más probable es **RLS** b
 
 ---
 
+## Etapa X.52 — Render del módulo: live siempre visible cuando existe el record
+
+Bug observado tras X.51: un módulo con live pero **sin lecciones** seguía mostrando "Sin contenido disponible todavía" en lugar del bloque del live. Causa: la condición del empty-hint usaba `!liveHtml` (resultado del render), no `!m.live` (presencia del record). Si `renderModuleLiveInfo(m)` retornaba `''` en un estado puntual (ej. pasada + `!live_ended`), el render del módulo caía al hint aunque hubiera un live cargado.
+
+**Estructura correcta** (curso.html — `renderModulesView`):
+
+```js
+const hasLive    = !!m.live;
+const hasLessons = lessons.length > 0;
+
+let innerHtml;
+if (!hasLive && !hasLessons) {
+  innerHtml = '<div class="modules-empty-hint">Sin contenido disponible todavía.</div>';
+} else {
+  innerHtml = `${liveHtml}${hasLessons ? `<div class="modules-lessons">${lessonsHtml}</div>` : ''}`;
+}
+```
+
+**Reglas:**
+- Si `m.live` existe → siempre se inyecta `liveHtml` en el body. El contenido depende de la lógica de 4 estados ya implementada en `renderModuleLiveInfo` (Etapa X.48). Si esa lógica retorna `''` (por ej. live pasada + coach no finalizó), el módulo queda visualmente vacío pero NO muestra el mensaje engañoso "Sin contenido".
+- Si hay lecciones → `<div class="modules-lessons">` solo se inserta cuando `hasLessons === true`. Antes se inyectaba siempre (vacío cuando no había lecciones) — ahora se omite.
+- El empty-hint solo aparece cuando NO hay live AND NO hay lecciones.
+
+Sin cambios en `renderModuleLiveInfo` ni en `loadStudentModules` — el fix es 100% en cómo el render combina los outputs.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
