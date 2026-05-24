@@ -1287,7 +1287,9 @@
     }
 
     // Módulo completado: tiene al menos una entrada completed=true en video_progress
-    // (sea lección o live — sin distinción). Módulo sin contenido = completado.
+    // (sea lección o live — sin distinción). Módulo sin contenido = devuelve true por
+    // semántica de "nada que hacer" (útil para otros checks), pero `areAllModulesCompleted`
+    // EXCLUYE explícitamente los empty modules del cálculo (Etapa X.65).
     function isModuleCompleted(m) {
       if (!m) return false;
       const hasLive    = !!m.live;
@@ -1297,9 +1299,14 @@
       if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
       return false;
     }
+    // Etapa X.65 — Regla estricta del certificado:
+    //   - Solo iteramos módulos CON contenido (lecciones o live).
+    //   - Si no hay módulos con contenido → false (nada que completar = no hay cert).
+    //   - Todos los content modules deben tener ≥1 entry completed=true.
     function areAllModulesCompleted() {
-      if (!MODULES?.length) return false;
-      return MODULES.every(isModuleCompleted);
+      const contentModules = (MODULES || []).filter(m => !isCertModule(m));
+      if (!contentModules.length) return false;
+      return contentModules.every(isModuleCompleted);
     }
 
     // ════════════════════════════════════════════════
@@ -1313,21 +1320,25 @@
       return !!m && (!m.lessons || m.lessons.length === 0) && !m.live;
     }
     function isCertModuleUnlocked() {
-      // Todos los módulos NO-cert deben estar completados.
-      return MODULES
-        .filter(x => !isCertModule(x))
-        .every(isModuleCompleted);
+      // Etapa X.65 — Todos los módulos NO-cert deben estar completados.
+      // Si no hay ningún módulo con contenido → return false (el cert module no se
+      // desbloquea solo en un curso vacío — JS `every` de array vacío retorna true,
+      // lo que sería desbloquear sin haber completado nada).
+      const contentModules = (MODULES || []).filter(x => !isCertModule(x));
+      if (!contentModules.length) return false;
+      return contentModules.every(isModuleCompleted);
     }
     let _certView = false;  // true cuando el alumno está viendo el cert en el main panel
 
     function selectCertView() {
-      if (!isCertModuleUnlocked()) return;   // safety guard
+      if (!isCertModuleUnlocked()) return;   // safety guard — solo si está desbloqueado
       _certView      = true;
       activeLessonId = null;
       activeLiveId   = null;
       _lockedView    = null;
       renderModulesView();
-      // Revelar la sección global del certificado (ya existente) y scrollear
+      // Etapa X.65 — el click directamente hace scroll a la sección del certificado.
+      // showCertSection() la hace visible (si estaba oculta) y scrollea con behavior smooth.
       try { showCertSection(); } catch (e) { console.warn('showCertSection:', e); }
     }
 
@@ -1509,15 +1520,14 @@
             <div class="lock-sub">Vas a recibir una notificación cuando se habilite.</div>
           </div>`;
       } else if (_certView) {
-        // Etapa X.58 — el alumno clickeó el módulo de certificación (desbloqueado).
-        // Mostramos un card CTA en el main panel + showCertSection() ya reveló
-        // la sección global del cert (con la lógica de descarga existente).
+        // Etapa X.58 + X.65 — el alumno clickeó el módulo de certificación.
+        // Mostramos un card simple sin CTA redundante; el scroll a la sección
+        // del certificado ya se disparó desde selectCertView() vía showCertSection().
         mainHtml = `
           <div class="modules-active-title">🎓 ¡Curso completado!</div>
           <div class="live-main-card">
             <p class="live-main-fecha">¡Felicitaciones!</p>
-            <p class="live-main-sub">Completaste todos los módulos del curso. Tu certificado está listo para descargar abajo.</p>
-            <a class="btn-live-join" href="#cert-section" onclick="event.preventDefault(); try{showCertSection();}catch(e){}">Ver y descargar certificado ↓</a>
+            <p class="live-main-sub">Completaste todos los módulos del curso. Tu certificado está debajo, listo para descargar.</p>
           </div>`;
       } else if (activeLiveId) {
         // Etapa X.55 — el alumno está viendo un live (clickeó la fila del sidebar)

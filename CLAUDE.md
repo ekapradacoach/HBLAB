@@ -2119,6 +2119,57 @@ Sin cambios en los otros estados (live_ended con/sin recording) ni en `renderMod
 
 ---
 
+## Etapa X.65 — Cert gate estricto + scroll directo al cert desde sidebar
+
+Dos fixes en `curso.html`:
+
+### 1. `areAllModulesCompleted` y `isCertModuleUnlocked` estrictos
+
+Antes: ambas funciones llamaban `MODULES.every(isModuleCompleted)`. Como `isModuleCompleted(m)` retorna `true` para módulos sin contenido (semánticamente "nada que hacer"), un curso con módulos vacíos sumaba al `every` indirectamente.
+
+Riesgo: si por algún motivo (RLS, race, mismatch de query) un módulo con contenido se cargaba con `lessons: []` y sin live, era indistinguible de un módulo de certificación vacío → `isModuleCompleted` retornaba `true` → contaba como completo → cert disparaba prematuro.
+
+**Fix explícito:**
+
+```js
+function areAllModulesCompleted() {
+  const contentModules = (MODULES || []).filter(m => !isCertModule(m));
+  if (!contentModules.length) return false;   // sin contenido → no cert
+  return contentModules.every(isModuleCompleted);
+}
+
+function isCertModuleUnlocked() {
+  const contentModules = (MODULES || []).filter(x => !isCertModule(x));
+  if (!contentModules.length) return false;
+  return contentModules.every(isModuleCompleted);
+}
+```
+
+- **Filter explícito** de empty modules antes del `every`.
+- **Guard `contentModules.length > 0`**: `[].every(fn) === true` por convención de JS — sin el guard, un curso solo-cert dispararía el cert al cargar.
+- `isModuleCompleted` no cambia (sigue retornando `true` para empty modules; útil para otros checks dentro del render).
+
+### 2. Cert module sidebar → scroll directo al cert section
+
+Cambio menor pero importante: cuando el alumno clickea el módulo de certificación desbloqueado, el panel principal mostraba un CTA "Ver y descargar certificado ↓" que el alumno tenía que clickear DE NUEVO para scrollear al cert section. Redundante.
+
+**Ahora**: `selectCertView()` ya llama `showCertSection()` (que hace `scrollIntoView` smooth). El main panel solo muestra un card celebratorio sin CTA — el scroll al cert section ocurre automáticamente al clickear el módulo en el sidebar.
+
+```js
+} else if (_certView) {
+  mainHtml = `
+    <div class="modules-active-title">🎓 ¡Curso completado!</div>
+    <div class="live-main-card">
+      <p class="live-main-fecha">¡Felicitaciones!</p>
+      <p class="live-main-sub">Completaste todos los módulos del curso. Tu certificado está debajo, listo para descargar.</p>
+    </div>`;
+}
+```
+
+El resto del flow (mutual exclusion con `activeLessonId`/`activeLiveId`/`_lockedView`, sidebar con 🔒/🎓 según `isCertModuleUnlocked`) no cambia — sigue como X.58.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
