@@ -1207,45 +1207,32 @@
         </button>`;
     }
 
-    // Etapa X.55 — Render del contenido completo del live en el PANEL PRINCIPAL.
-    // 4 estados según live_date / live_ended / recording_url:
-    //   1. Futura → link meet + fecha. Sin botón completar.
-    //   2. Pasada + !live_ended → mensaje de espera. Sin botón.
-    //   3. live_ended + sin recording → mensaje 24-72hs + botón Marcar.
-    //   4. live_ended + recording → video embed + botón Marcar.
+    // Etapa X.55 + X.63 — Render del contenido completo del live en el PANEL PRINCIPAL.
+    // 3 estados gated por live_ended (la fecha del live ya no decide la UI):
+    //   1. !live_ended → link meet + fecha (sin importar si la fecha es futura o pasada).
+    //                    Sin botón completar.
+    //   2. live_ended + sin recording_url → mensaje 24-72hs + botón "Marcar como completado".
+    //   3. live_ended + con recording_url → video embed + botón "Marcar como completado".
     function renderLiveMainPanel(m) {
       const live = m?.live;
       if (!live) return '<div class="no-videos-msg">Live no encontrado.</div>';
-      const now      = Date.now();
-      const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
-      const isFuture = !!(ts && !isNaN(ts) && ts > now);
-      const fecha    = formatLiveDate(live.live_date);
+      const fecha = formatLiveDate(live.live_date);
 
-      // Estado 1: live futura
-      if (isFuture) {
+      // Estado 1: coach todavía NO finalizó → mostrar siempre link al meet + fecha
+      if (!live.live_ended) {
         const safeUrl = escHtml(live.live_url || '#');
         return `
           <div class="modules-active-title">📡 Clase en vivo</div>
           <div class="live-main-card">
-            <p class="live-main-fecha">${escHtml(fecha)}</p>
+            ${fecha ? `<p class="live-main-fecha">${escHtml(fecha)}</p>` : ''}
             ${live.live_url
               ? `<a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
                  <p class="live-main-sub">Te lleva directo a la sala de Meet/Zoom.</p>`
-              : '<p class="live-main-sub">El link del live se va a publicar antes de la clase.</p>'}
+              : '<p class="live-main-sub">El link del live va a estar disponible antes de la clase.</p>'}
           </div>`;
       }
 
-      // Estado 2: pasada pero coach no cerró
-      if (!live.live_ended) {
-        return `
-          <div class="modules-active-title">📡 Clase en vivo</div>
-          <div class="live-main-card">
-            <p class="live-main-fecha">${escHtml(fecha)}</p>
-            <p class="live-main-sub">⏳ El coach todavía no finalizó este live. Vas a poder marcarlo como completado cuando se habilite.</p>
-          </div>`;
-      }
-
-      // Estados 3/4: live_ended === true → botón Marcar como completado
+      // Estados 2/3: live_ended === true → botón Marcar como completado
       const completed = isLiveCompleted(m);
       const safeLiveId = escHtml(live.id);
       const btnHtml = completed

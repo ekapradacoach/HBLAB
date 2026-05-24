@@ -2078,6 +2078,29 @@ Tras mostrar el menú (necesario para medir su altura real), decide:
 
 ---
 
+## Etapa X.63 — Live: link meet visible mientras !live_ended (sin importar fecha)
+
+Refinamiento de X.55/X.48 — la condición para mostrar el link al meet pasaba por `isFuture` (basada en `live_date`). Eso era confuso: si el live estaba programado a las 19:00 y el coach no lo finalizaba al pasar las 20:00, el alumno dejaba de ver el botón "Unirse al live" aunque el coach pudiera seguir en la sala.
+
+**Nueva regla**: el gate es `live_ended` (el coach decide explícitamente cuándo cierra), no la fecha.
+
+### Tabla actualizada de `renderLiveMainPanel(m)`
+
+| Condición | Panel principal |
+|---|---|
+| `!live.live_ended` (fecha futura O pasada) | Fecha + botón **"📡 Unirse al live"** (lime, target `_blank`). Sin botón completar. Si no hay `live_url` cargado todavía → sub "El link del live va a estar disponible antes de la clase." |
+| `live_ended` + sin `recording_url` | "⏳ La grabación estará disponible en las próximas 24-72hs." + botón **"✅ Marcar como completado"**. |
+| `live_ended` + `recording_url` | `<iframe>` 16:9 (vía `getEmbedUrl`) + botón **"✅ Marcar como completado"**. |
+
+### Cambios concretos
+
+- **Eliminado** el branch `if (isFuture)` y `isFuture`/`ts`/`now` ya no se calculan en `renderLiveMainPanel` (no son necesarios — `live_ended` es la única condición).
+- **Eliminado** el branch "pasada pero coach no cerró" con copy "⏳ El coach todavía no finalizó...". Ese caso ahora cae al estado 1 (link meet visible) — más útil para el alumno porque puede entrar al meet si el coach extendió la clase.
+- Estados 3 (sin grabación) y 4 (con grabación) se mantienen idénticos.
+- La fila del sidebar (`renderModuleLiveRow`) **no cambia** — sigue mostrando 📡 / ✓ según `isLiveCompleted(m)`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
