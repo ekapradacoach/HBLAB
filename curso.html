@@ -477,25 +477,29 @@
     }
     .modules-mod-live.recording { border-left-color: rgba(123,79,190,0.45); background: rgba(123,79,190,0.06); }
     .modules-mod-live.pending   { border-left-color: rgba(148,163,184,0.30); background: transparent; }
-    .btn-live-join, .btn-live-recording {
+    .btn-live-join {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 6px 10px; border-radius: 6px; font-family: inherit;
       font-size: 0.76rem; font-weight: 700; cursor: pointer;
       text-decoration: none; border: none; align-self: flex-start;
       transition: opacity 0.18s, transform 0.18s;
+      background: var(--lime, #C8E600); color: #1E2A3A;
     }
-    .btn-live-join      { background: var(--lime, #C8E600);   color: #1E2A3A; }
-    .btn-live-recording { background: var(--violet, #7B4FBE); color: #FFFFFF; }
-    .btn-live-attended  { background: rgba(200,230,0,0.18); color: var(--lime, #C8E600);
-                          border: 1px solid rgba(200,230,0,0.35); }
-    .btn-live-join:hover, .btn-live-recording:hover, .btn-live-attended:hover {
-      opacity: 0.88; transform: translateY(-1px);
+    .btn-live-join:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    /* Etapa X.54 — video embed inline en el bloque de live (estado 4) */
+    .live-recording-embed {
+      position: relative; width: 100%; padding-bottom: 56.25%;
+      background: #000; border-radius: 6px; overflow: hidden;
+      margin: 4px 0;
     }
-    /* Etapa X.44 — badge "Asististe a este live" */
-    .modules-mod-live-meta.live-attended {
-      color: var(--lime, #C8E600); font-weight: 700; font-style: normal;
+    .live-recording-embed iframe {
+      position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
     }
-    .modules-mod-live.attended-only { border-left-color: rgba(200,230,0,0.5); }
+    .modules-mod-live-actions { display: flex; justify-content: flex-start; margin-top: 4px; }
+    .modules-mod-live-actions .btn-video {
+      padding: 6px 12px; font-size: 0.78rem;
+    }
     .modules-mod-live-meta {
       font-size: 0.72rem; color: var(--gray-text);
     }
@@ -1106,23 +1110,55 @@
       return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
     }
 
-    // Etapa X.48 — render del bloque de live (4 estados):
-    // - live_date futura → "📡 Unirse al live" + fecha (live_ended no importa).
-    // - live_date pasada + !live_ended → nada (coach todavía no cerró).
-    // - live_date pasada + live_ended + NO asistió → botón lime "✅ Asistí al live".
-    // - live_date pasada + live_ended + SÍ asistió → texto verde "✅ Asististe a este live".
+    // ════════════════════════════════════════════════
+    // Etapa X.54 — Lives en curso.html (rewrite limpio)
+    // ════════════════════════════════════════════════
+    // Flujo simplificado por módulo con live (4 estados):
+    //   1. live_date futura
+    //        → link al meet destacado + fecha/hora formateada.
+    //   2. live_date pasada + !live_ended
+    //        → no mostrar nada.
+    //   3. live_ended && !recording_url
+    //        → "⏳ La grabación estará disponible en las próximas 24-72hs"
+    //          + botón "✅ Marcar como completado".
+    //   4. live_ended && recording_url
+    //        → video embed (vía getEmbedUrl) + botón "✅ Marcar como completado".
     //
-    // La asistencia se determina ÚNICAMENTE consultando completedSet, que se
-    // hidrata desde video_progress al cargar el curso. No hay ningún campo en
-    // course_lives que indique asistencia del alumno actual.
+    // El completado del live usa el MISMO mecanismo que las lecciones:
+    // UPSERT a video_progress con `completed=true`. El video_index del live se
+    // deriva del id (UUID) de course_lives mediante un hash → entero positivo en
+    // un rango alto (>= 10^9) para evitar colisión con índices de lecciones
+    // (0..N-1). Documentado: video_progress.video_index es INT, así que no
+    // podemos guardar el UUID directo — el hash es la convención pragmática
+    // mientras no se migre la columna a TEXT.
+    // ════════════════════════════════════════════════
+
+    // Hash djb2 → entero positivo en rango [10^9, 10^9+2^31].
+    // Determinístico: el mismo liveId siempre mapea al mismo índice.
+    function liveCompletionIndex(liveId) {
+      if (!liveId) return 0;
+      const s = String(liveId);
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) + h) + s.charCodeAt(i);
+        h = h | 0;   // forzar 32-bit
+      }
+      return Math.abs(h) + 1000000000;   // offset 10^9 → fuera de lecciones
+    }
+    function isLiveCompleted(live) {
+      if (!live?.id) return false;
+      return completedSet.has(liveCompletionIndex(live.id));
+    }
+
+    // Render del bloque de live para un módulo. 4 estados (ver tabla arriba).
     function renderModuleLiveInfo(m) {
       const live = m?.live;
       if (!live) return '';
-      const now = Date.now();
-      const ts  = live.live_date ? new Date(live.live_date).getTime() : 0;
+      const now      = Date.now();
+      const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
       const isFuture = !!(ts && !isNaN(ts) && ts > now);
 
-      // Live futura → Unirse al live + fecha. live_ended es irrelevante.
+      // ── Estado 1: futuro ──
       if (isFuture) {
         const safeUrl = escHtml(live.live_url || '#');
         return `
@@ -1132,51 +1168,51 @@
           </div>`;
       }
 
-      // Live pasada → depende de live_ended + asistencia
-      if (!live.live_ended) return '';   // coach todavía no cerró → nada
+      // ── Estado 2: pasado pero coach no cerró ──
+      if (!live.live_ended) return '';
 
-      if (isLiveAttended(m)) {
+      // ── Estados 3 y 4: live_ended === true ──
+      const completed = isLiveCompleted(live);
+      const safeLiveId = escHtml(live.id);
+      const btnHtml = completed
+        ? `<button class="btn-video completed" disabled>
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+             Completado
+           </button>`
+        : `<button class="btn-video" onclick="markLiveCompleted('${safeLiveId}')">
+             ✅ Marcar como completado
+           </button>`;
+
+      // Estado 4: con grabación → video embed inline + botón
+      if (live.recording_url) {
         return `
-          <div class="modules-mod-live attended-only">
-            <div class="modules-mod-live-meta live-attended">✅ Asististe a este live</div>
+          <div class="modules-mod-live recording">
+            <div class="live-recording-embed">
+              <iframe src="${escHtml(getEmbedUrl(live.recording_url))}"
+                      frameborder="0" allowfullscreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+            </div>
+            <div class="modules-mod-live-actions">${btnHtml}</div>
           </div>`;
       }
+
+      // Estado 3: sin grabación → texto + botón
       return `
-        <div class="modules-mod-live">
-          <button class="btn-live-attended" onclick="markLiveAttended('${escHtml(m.id)}')">✅ Asistí al live</button>
+        <div class="modules-mod-live pending">
+          <div class="modules-mod-live-meta">⏳ La grabación estará disponible en las próximas 24-72hs</div>
+          <div class="modules-mod-live-actions">${btnHtml}</div>
         </div>`;
     }
 
-    // Etapa X.44 — Asistencia a lives + completitud por módulo
-    // Convención: video_index = -1 * order_num del módulo identifica la "asistencia"
-    // al live de ese módulo. Negativo para no colisionar con los índices de lecciones
-    // (que arrancan en 0). order_num=0 es caso edge → usamos -1 (módulos con order_num=0
-    // mapean al mismo bucket, pero es excepcional porque order_num empieza en 0 o 1
-    // según el seeding; si hay choque, la live "asistida" se confunde con la lección 0).
-    function liveAttendanceIndex(m) {
-      const ord = Number(m?.order_num);
-      const o = Number.isFinite(ord) ? ord : 0;
-      return -1 * (o > 0 ? o : 1);
-    }
-    function isLiveAttended(m) {
-      if (!m?.live) return false;
-      return completedSet.has(liveAttendanceIndex(m));
-    }
-
-    // ¿El módulo está "completado" según la spec de Etapa X.44?
-    //   - Si tiene live y fue asistido → completado.
-    //   - Si tiene al menos 1 lección con completed=true → completado.
-    //   - Si el módulo no tiene lecciones ni live → completado (nada que hacer, no bloquea cert).
+    // Módulo completado: tiene al menos una entrada completed=true en video_progress
+    // (sea lección o live — sin distinción). Módulo sin contenido = completado.
     function isModuleCompleted(m) {
       if (!m) return false;
       const hasLive    = !!m.live;
       const hasLessons = !!(m.lessons && m.lessons.length);
       if (!hasLive && !hasLessons) return true;
-      if (hasLive && isLiveAttended(m)) return true;
-      if (hasLessons) {
-        const anyDone = m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]));
-        if (anyDone) return true;
-      }
+      if (hasLive && isLiveCompleted(m.live)) return true;
+      if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
       return false;
     }
     function areAllModulesCompleted() {
@@ -1184,12 +1220,20 @@
       return MODULES.every(isModuleCompleted);
     }
 
-    // Marca la asistencia al live de un módulo. UPSERT en video_progress con el
-    // índice convencional (-order_num) y actualiza completedSet local.
-    async function markLiveAttended(moduleId) {
-      const m = MODULES.find(x => x.id === moduleId);
-      if (!m?.live) return;
-      const idx = liveAttendanceIndex(m);
+    // Marca el live como completado para el alumno actual. UPSERT al mismo
+    // mecanismo de video_progress que markLessonComplete, usando el video_index
+    // hasheado desde live.id.
+    async function markLiveCompleted(liveId) {
+      if (!liveId) return;
+      // Encontrar el módulo dueño del live (para no perder referencia)
+      const m = MODULES.find(x => x.live?.id === liveId);
+      if (!m?.live) {
+        console.warn('markLiveCompleted: live no encontrado en MODULES', liveId);
+        return;
+      }
+      const idx = liveCompletionIndex(liveId);
+      console.log('[markLiveCompleted]', { liveId, idx });
+
       const { error } = await sb.from('video_progress').upsert({
         user_id:      currentUser.id,
         course_id:    currentCourseId,
@@ -1197,13 +1241,15 @@
         completed:    true,
         completed_at: new Date().toISOString(),
       }, { onConflict: 'user_id,course_id,video_index' });
+
       if (error) {
-        console.error('markLiveAttended error:', error.message);
+        console.error('markLiveCompleted error:', error);
+        alert('Error al marcar como completado: ' + error.message);
         return;
       }
       completedSet.add(idx);
       renderModulesView();
-      updateProgress();    // dispara checkQuizGateAndShowCert si todos los módulos están completos
+      updateProgress();   // dispara cert si todos los módulos quedan completos
     }
 
     // Etapa X.43 — Drip: helpers de módulo bloqueado
@@ -1227,27 +1273,10 @@
       }
     }
 
-    // Etapa X.42 — override del main panel para reproducir la grabación del live
-    // de un módulo. Cuando está set, renderModulesView lo usa en vez de la lesson activa.
-    // Para volver a una lección normal, selectLesson() lo limpia.
-    let _liveOverride = null;  // { moduleId, title, src } | null
     // Etapa X.43 — override del main panel para mostrar el panel de módulo bloqueado.
+    // Etapa X.54 — `_liveOverride` y `playLiveRecording` fueron removidos: el video
+    // del live ahora se renderiza inline en el bloque del sidebar (estado 4).
     let _lockedView   = null;  // { moduleId, unlock_at, title } | null
-
-    function playLiveRecording(moduleId) {
-      const m = MODULES.find(x => x.id === moduleId);
-      if (!m?.live?.recording_url) return;
-      _liveOverride = {
-        moduleId,
-        title: `🔴 ${m.title || 'Live'} — Grabación`,
-        src:   m.live.recording_url,
-      };
-      _lockedView = null;  // salir del modo bloqueado si estaba
-      renderModulesView();
-      // Scroll suave al main del player (que ahora muestra la grabación)
-      const videos = document.getElementById('videos-container');
-      if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
 
     // Etapa X.43 — al click en un módulo bloqueado, mostrar el panel en el main.
     function showLockedModule(moduleId) {
@@ -1258,7 +1287,6 @@
         unlock_at: m.unlock_at,
         title:     m.title || 'Módulo',
       };
-      _liveOverride = null;  // si estaba viendo una grabación, salir
       renderModulesView();
       const videos = document.getElementById('videos-container');
       if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1305,7 +1333,7 @@
         const lessonsHtml = lessons.map((l, li) => {
           // Etapa X.3: completedSet guarda flat-index (número), no UUID.
           const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
-          const active = l.id === activeLessonId && !_liveOverride && !_lockedView;
+          const active = l.id === activeLessonId && !_lockedView;
           const checkContent = done ? '✓' : (li + 1);
           return `
             <button class="modules-lesson ${active ? 'active' : ''}" onclick="selectLesson('${escHtml(l.id)}')">
@@ -1339,7 +1367,9 @@
           </div>`;
       }).join('');
 
-      // Main: prioridad → módulo bloqueado > grabación de live > lección activa.
+      // Main: prioridad → módulo bloqueado > lección activa.
+      // Etapa X.54 — el branch `_liveOverride` fue removido; la grabación del live
+      // se muestra inline en el sidebar (no consume el main panel).
       let mainHtml;
       if (_lockedView) {
         // Etapa X.43 — panel "módulo bloqueado"
@@ -1350,29 +1380,6 @@
             <div class="lock-msg">Este módulo estará disponible el <strong>${escHtml(fecha)}</strong></div>
             <div class="lock-sub">Vas a recibir una notificación cuando se habilite.</div>
           </div>`;
-      } else if (_liveOverride) {
-        // Etapa X.44 — cuando el alumno está viendo la grabación del live,
-        // si AÚN no marcó asistencia, mostrar botón "Marcar como completado".
-        const liveMod = MODULES.find(x => x.id === _liveOverride.moduleId);
-        const liveDone = liveMod ? isLiveAttended(liveMod) : false;
-        const liveActionsHtml = liveMod ? `
-          <div class="modules-active-actions">
-            ${liveDone
-              ? `<button class="btn-video completed" disabled>
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                   Completado
-                 </button>`
-              : `<button class="btn-video" onclick="markLiveAttended('${escHtml(liveMod.id)}')">
-                   Marcar como completado
-                 </button>`}
-          </div>` : '';
-        mainHtml = `
-          <div class="modules-active-title">${escHtml(_liveOverride.title)}</div>
-          <div class="video-wrapper">
-            <iframe src="${escHtml(getEmbedUrl(_liveOverride.src))}" frameborder="0" allowfullscreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-          </div>
-          ${liveActionsHtml}`;
       } else {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
@@ -1411,8 +1418,8 @@
         </div>`;
 
       // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
-      // Solo si estamos en el modo lección normal (sin override de live ni lock).
-      if (!_liveOverride && !_lockedView) {
+      // Solo si estamos en el modo lección normal (sin lock).
+      if (!_lockedView) {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         if (active) loadLessonMaterials(active.id);
       }
@@ -1458,7 +1465,6 @@
 
     function selectLesson(lessonId) {
       activeLessonId = lessonId;
-      _liveOverride  = null;   // Etapa X.42 — salir del modo grabación-live al elegir lección
       _lockedView    = null;   // Etapa X.43 — salir del modo módulo-bloqueado
       renderModulesView();
     }
@@ -1660,16 +1666,10 @@
         LESSON_IDX_BY_ID = {};
         LESSONS_FLAT.forEach((l, i) => { LESSON_IDX_BY_ID[l.id] = i; });
 
-        // Etapa X.47 — el load corre si hay LECCIONES o MÓDULOS (con o sin
-        // lecciones), para hidratar también las asistencias a lives en módulos
-        // que solo tienen live y ninguna lección.
+        // Etapa X.54 — load progress: aceptar TODOS los índices (lecciones 0..N-1
+        // + completados de live con índice >= 10^9). El completedSet contiene
+        // todo y los checks `has(...)` discriminan por el origen del índice.
         if (LESSONS_FLAT.length || MODULES.length) {
-          // Filtramos solo por curso + completado: video_progress es INT y los registros válidos
-          // de este curso son índices 0..N-1 en el array aplanado (lecciones).
-          // Etapa X.44 — además admitimos índices NEGATIVOS que representan
-          // asistencia al live de un módulo (video_index = -1 * order_num).
-          // Este SELECT es la ÚNICA fuente de verdad para `attended` — no hay
-          // campo en course_lives que indique asistencia del alumno actual.
           const { data: progressData } = await sb
             .from('video_progress')
             .select('video_index')
@@ -1678,13 +1678,7 @@
             .eq('completed', true);
           (progressData || []).forEach(r => {
             const idx = r.video_index;
-            if (typeof idx !== 'number') return;
-            if (idx >= 0 && idx < LESSONS_FLAT.length) {
-              completedSet.add(idx);
-            } else if (idx < 0) {
-              // Live attendance — admite cualquier negativo, isLiveAttended valida match
-              completedSet.add(idx);
-            }
+            if (typeof idx === 'number') completedSet.add(idx);
           });
         }
       } else {

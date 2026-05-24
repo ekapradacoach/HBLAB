@@ -1647,6 +1647,82 @@ Bug reportado: `saveLiveRecording(liveId, btn)` en la sección "Clase en vivo" d
 
 ---
 
+## Etapa X.54 — Rewrite limpio de lives en curso.html (4 estados, sin "Asistí al live")
+
+Rewrite total de la lógica de lives en el panel del alumno. Reemplaza las iteraciones X.44/X.47/X.48/X.52 con una versión simple y consistente: el live es un "ítem completable más" del módulo, gestionado con el mismo mecanismo de `video_progress` que las lecciones, sin terminología paralela de "asistencia".
+
+### Spec implementada — 4 estados
+
+| Condición | UI en el sidebar |
+|---|---|
+| `live_date` futura | Link destacado **"📡 Unirse al live"** (lime, abre meet en pestaña nueva) + fecha/hora formateada |
+| `live_date` pasada + `!live_ended` | **Nada** (coach todavía no cerró) |
+| `live_ended` + `!recording_url` | Texto "⏳ La grabación estará disponible en las próximas 24-72hs" + botón **"✅ Marcar como completado"** |
+| `live_ended` + `recording_url` | **Video embed inline** (vía `getEmbedUrl` — soporta YouTube y Drive) + botón **"✅ Marcar como completado"** |
+
+Si el alumno ya marcó completado en estado 3 o 4 → el botón pasa a `Completado` disabled con checkmark (mismo look que lecciones completadas).
+
+### Mecanismo de completado
+
+El botón "Marcar como completado" usa el MISMO mecanismo que `markLessonComplete`: UPSERT a `video_progress` con `completed=true`. Diferencia: el `video_index` se deriva del `course_lives.id` (UUID) mediante un hash determinístico:
+
+```js
+function liveCompletionIndex(liveId) {
+  // djb2 → entero positivo en rango [10^9, 10^9 + 2^31].
+  // Mismo liveId → mismo índice. Offset 10^9 evita colisión con índices de
+  // lecciones (que son 0..N-1, típicamente < 1000).
+  let h = 5381;
+  for (let i = 0; i < liveId.length; i++) { h = ((h << 5) + h) + liveId.charCodeAt(i); h = h | 0; }
+  return Math.abs(h) + 1000000000;
+}
+```
+
+**Justificación**: la columna `video_progress.video_index` es INTEGER (no TEXT), por lo que no podemos guardar el UUID literal. El hash determinístico cumple la semántica que pidió la spec ("usar como video_index el id del live") sin requerir migración. Si en el futuro se migra `video_index` a TEXT, se reemplaza `liveCompletionIndex(liveId)` por `liveId` directo sin cambiar nada más.
+
+### Lógica del certificado
+
+```js
+function isModuleCompleted(m) {
+  // Módulo vacío (sin lecciones ni live) → considerado completo (no bloquea cert).
+  if (!hasLive && !hasLessons) return true;
+  // Cualquier lección o el live completados → módulo completo.
+  if (hasLive && isLiveCompleted(m.live)) return true;
+  if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
+  return false;
+}
+function areAllModulesCompleted() { return MODULES.every(isModuleCompleted); }
+```
+
+Spec: "El certificado se habilita cuando todos los módulos tienen al menos una entrada completed=true en video_progress — sin distinción de si es lección o live." Implementado literal: el módulo se chequea por OR (lección completada **o** live completado).
+
+### Carga inicial de `video_progress`
+
+Simplificada — antes filtraba por rango (`idx >= 0 && idx < LESSONS_FLAT.length` o `idx < 0` para legacy). Ahora acepta TODOS los índices enteros; los checks `completedSet.has(...)` discriminan por el origen (LESSON_IDX_BY_ID[lessonId] vs liveCompletionIndex(liveId)).
+
+### Limpieza de código legacy
+
+Removidas estas funciones y variables (residuos de X.42–X.48):
+- `liveAttendanceIndex(m)` — la convención `video_index = -1 * order_num` se descarta.
+- `isLiveAttended(m)` / `markLiveAttended(moduleId)` — reemplazadas por `isLiveCompleted(live)` / `markLiveCompleted(liveId)`.
+- `_liveOverride` (global) + `playLiveRecording(moduleId)` — el video del live ya no consume el main panel; se embebe inline en el sidebar.
+- Branch del main panel `else if (_liveOverride) { ... }` — removido. `selectLesson` ya no necesita limpiar `_liveOverride`.
+- Botones CSS `.btn-live-attended` / `.btn-live-recording`, badge `.live-attended`, modifier `.attended-only` — todos sin caller.
+- `renderModuleLiveInfo` reescrito de cero con los 4 estados nuevos.
+
+### CSS nuevo
+
+- `.live-recording-embed` — wrapper aspect-ratio 56.25% (16:9) con iframe inline. Bg negro, border-radius 6px. Pensado para sidebar de 290px → embed de ~280×158px.
+- `.modules-mod-live-actions` — wrapper flex para el botón "Marcar como completado".
+- `.modules-mod-live-actions .btn-video` — padding compacto (6px 12px) y font 0.78rem, para que el botón no domine el bloque.
+
+### Lo que NO se hizo
+
+- **Migración de `video_index` a TEXT**: pragmático mantener INTEGER + hash hoy. Si crece la cantidad de lives y la coincidencia de hash empieza a importar (probabilidad despreciable), migrar.
+- **Cancelar completado del live**: una vez marcado, no se desmarca desde el UI. Igual que con lecciones.
+- **Notificación al alumno cuando el coach sube la grabación**: la grabación aparece inline al recargar; sin push real-time.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
