@@ -487,18 +487,24 @@
     }
     .btn-live-join:hover { opacity: 0.88; transform: translateY(-1px); }
 
-    /* Etapa X.54 — video embed inline en el bloque de live (estado 4) */
-    .live-recording-embed {
-      position: relative; width: 100%; padding-bottom: 56.25%;
-      background: #000; border-radius: 6px; overflow: hidden;
-      margin: 4px 0;
+    /* Etapa X.55 — fila del live en el sidebar (estilo lección con tinte lime) */
+    .modules-live-row .modules-lesson-check {
+      background: rgba(200,230,0,0.12);
     }
-    .live-recording-embed iframe {
-      position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+    .modules-live-row.active { border-left-color: var(--lime, #C8E600); }
+    .modules-live-row.active .modules-lesson-check { background: var(--lime, #C8E600); color: #1E2A3A; }
+
+    /* Etapa X.55 — card del live en el panel principal (estados 1, 2, 3 sin grabación) */
+    .live-main-card {
+      padding: 24px 22px; border: 1px dashed var(--card-border);
+      border-radius: 12px; background: rgba(47,62,82,0.25);
+      display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
     }
-    .modules-mod-live-actions { display: flex; justify-content: flex-start; margin-top: 4px; }
-    .modules-mod-live-actions .btn-video {
-      padding: 6px 12px; font-size: 0.78rem;
+    .live-main-fecha {
+      font-size: 0.9rem; font-weight: 700; color: var(--white); margin: 0;
+    }
+    .live-main-sub {
+      font-size: 0.85rem; color: var(--gray-text); margin: 0; line-height: 1.5;
     }
     .modules-mod-live-meta {
       font-size: 0.72rem; color: var(--gray-text);
@@ -809,6 +815,9 @@
     let LESSONS_FLAT  = [];   // flat de lecciones para indexar/buscar
     let LESSON_IDX_BY_ID = {}; // Etapa X.3: lesson UUID → índice numérico en LESSONS_FLAT (clave para video_progress.video_index INT)
     let activeLessonId = null;
+    // Etapa X.55 — live activo (uuid de course_lives) cuando el alumno clickea
+    // su fila en el sidebar. Mutuamente excluyente con activeLessonId.
+    let activeLiveId   = null;
 
     /* ── Tags visuales por slug (herencia de páginas legacy) ── */
     const SLUG_TAG = {
@@ -1150,28 +1159,62 @@
       return completedSet.has(liveCompletionIndex(live.id));
     }
 
-    // Render del bloque de live para un módulo. 4 estados (ver tabla arriba).
-    function renderModuleLiveInfo(m) {
+    // Etapa X.55 — Render de la FILA del live en el sidebar (al lado de las lecciones).
+    // El live es un ítem clickeable más; el contenido completo (video / link / mensaje
+    // + botón) vive en el panel principal (renderLiveMainPanel). Devuelve '' si no
+    // hay live record en el módulo.
+    function renderModuleLiveRow(m) {
       const live = m?.live;
       if (!live) return '';
+      const completed = isLiveCompleted(live);
+      const active    = (activeLiveId === live.id) && !_lockedView;
+      const check     = completed ? '✓' : '📡';
+      return `
+        <button class="modules-lesson modules-live-row ${active ? 'active' : ''}"
+                onclick="selectLive('${escHtml(live.id)}')">
+          <span class="modules-lesson-check ${completed ? 'done' : ''}">${check}</span>
+          <span class="modules-lesson-title">Clase en vivo</span>
+        </button>`;
+    }
+
+    // Etapa X.55 — Render del contenido completo del live en el PANEL PRINCIPAL.
+    // 4 estados según live_date / live_ended / recording_url:
+    //   1. Futura → link meet + fecha. Sin botón completar.
+    //   2. Pasada + !live_ended → mensaje de espera. Sin botón.
+    //   3. live_ended + sin recording → mensaje 24-72hs + botón Marcar.
+    //   4. live_ended + recording → video embed + botón Marcar.
+    function renderLiveMainPanel(live) {
+      if (!live) return '<div class="no-videos-msg">Live no encontrado.</div>';
       const now      = Date.now();
       const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
       const isFuture = !!(ts && !isNaN(ts) && ts > now);
+      const fecha    = formatLiveDate(live.live_date);
 
-      // ── Estado 1: futuro ──
+      // Estado 1: live futura
       if (isFuture) {
         const safeUrl = escHtml(live.live_url || '#');
         return `
-          <div class="modules-mod-live">
-            <a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
-            <div class="modules-mod-live-meta">${escHtml(formatLiveDate(live.live_date))}</div>
+          <div class="modules-active-title">📡 Clase en vivo</div>
+          <div class="live-main-card">
+            <p class="live-main-fecha">${escHtml(fecha)}</p>
+            ${live.live_url
+              ? `<a class="btn-live-join" href="${safeUrl}" target="_blank" rel="noopener">📡 Unirse al live</a>
+                 <p class="live-main-sub">Te lleva directo a la sala de Meet/Zoom.</p>`
+              : '<p class="live-main-sub">El link del live se va a publicar antes de la clase.</p>'}
           </div>`;
       }
 
-      // ── Estado 2: pasado pero coach no cerró ──
-      if (!live.live_ended) return '';
+      // Estado 2: pasada pero coach no cerró
+      if (!live.live_ended) {
+        return `
+          <div class="modules-active-title">📡 Clase en vivo</div>
+          <div class="live-main-card">
+            <p class="live-main-fecha">${escHtml(fecha)}</p>
+            <p class="live-main-sub">⏳ El coach todavía no finalizó este live. Vas a poder marcarlo como completado cuando se habilite.</p>
+          </div>`;
+      }
 
-      // ── Estados 3 y 4: live_ended === true ──
+      // Estados 3/4: live_ended === true → botón Marcar como completado
       const completed = isLiveCompleted(live);
       const safeLiveId = escHtml(live.id);
       const btnHtml = completed
@@ -1183,25 +1226,33 @@
              ✅ Marcar como completado
            </button>`;
 
-      // Estado 4: con grabación → video embed inline + botón
+      // Estado 4: con grabación → video embed
       if (live.recording_url) {
         return `
-          <div class="modules-mod-live recording">
-            <div class="live-recording-embed">
-              <iframe src="${escHtml(getEmbedUrl(live.recording_url))}"
-                      frameborder="0" allowfullscreen
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-            </div>
-            <div class="modules-mod-live-actions">${btnHtml}</div>
-          </div>`;
+          <div class="modules-active-title">📡 Clase en vivo — Grabación</div>
+          <div class="video-wrapper">
+            <iframe src="${escHtml(getEmbedUrl(live.recording_url))}"
+                    frameborder="0" allowfullscreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+          </div>
+          <div class="modules-active-actions">${btnHtml}</div>`;
       }
 
-      // Estado 3: sin grabación → texto + botón
+      // Estado 3: sin grabación todavía
       return `
-        <div class="modules-mod-live pending">
-          <div class="modules-mod-live-meta">⏳ La grabación estará disponible en las próximas 24-72hs</div>
-          <div class="modules-mod-live-actions">${btnHtml}</div>
-        </div>`;
+        <div class="modules-active-title">📡 Clase en vivo</div>
+        <div class="live-main-card">
+          <p class="live-main-sub">⏳ La grabación estará disponible en las próximas 24-72hs.</p>
+        </div>
+        <div class="modules-active-actions">${btnHtml}</div>`;
+    }
+
+    // Etapa X.55 — al click en la fila del live, lo activamos en el main panel.
+    function selectLive(liveId) {
+      activeLiveId   = liveId;
+      activeLessonId = null;
+      _lockedView    = null;
+      renderModulesView();
     }
 
     // Módulo completado: tiene al menos una entrada completed=true en video_progress
@@ -1341,21 +1392,20 @@
               <span class="modules-lesson-title">${escHtml(l.title || `Lección ${li + 1}`)}</span>
             </button>`;
         }).join('');
-        // Etapa X.42 — bloque de live entre el head y las lecciones
-        const liveHtml = renderModuleLiveInfo(m);
+        // Etapa X.55 — la fila del live va DENTRO de .modules-lessons como un
+        // ítem clickeable más (al principio de la lista, para que aparezca antes
+        // de las lecciones). El contenido completo se renderiza en el main panel
+        // cuando el alumno la clickea.
+        const liveRowHtml = renderModuleLiveRow(m);
 
-        // Etapa X.52 — estructura del render por módulo:
-        //   - Tiene live → mostrar bloque live (la lógica de estados ya implementada
-        //     decide qué texto/botón). Aunque renderModuleLiveInfo retorne '' en algún
-        //     estado puntual, la presencia del record en m.live es suficiente para
-        //     NO mostrar el empty-hint.
-        //   - Tiene lecciones → listarlas.
-        //   - Ni live ni lecciones → "Sin contenido disponible todavía".
+        // Estructura del render por módulo:
+        //   - Tiene live o lecciones → .modules-lessons con el live row + lecciones.
+        //   - Sin contenido → "Sin contenido disponible todavía".
         let innerHtml;
         if (!hasLive && !hasLessons) {
           innerHtml = '<div class="modules-empty-hint">Sin contenido disponible todavía.</div>';
         } else {
-          innerHtml = `${liveHtml}${hasLessons ? `<div class="modules-lessons">${lessonsHtml}</div>` : ''}`;
+          innerHtml = `<div class="modules-lessons">${liveRowHtml}${lessonsHtml}</div>`;
         }
         return `
           <div class="modules-mod" id="modules-mod-${mi}">
@@ -1367,9 +1417,9 @@
           </div>`;
       }).join('');
 
-      // Main: prioridad → módulo bloqueado > lección activa.
-      // Etapa X.54 — el branch `_liveOverride` fue removido; la grabación del live
-      // se muestra inline en el sidebar (no consume el main panel).
+      // Main: prioridad → módulo bloqueado > live activo > lección activa.
+      // Etapa X.55 — branch `activeLiveId` (nuevo): el alumno clickeó la fila del
+      // live en el sidebar, mostramos el panel principal con su contenido.
       let mainHtml;
       if (_lockedView) {
         // Etapa X.43 — panel "módulo bloqueado"
@@ -1380,6 +1430,10 @@
             <div class="lock-msg">Este módulo estará disponible el <strong>${escHtml(fecha)}</strong></div>
             <div class="lock-sub">Vas a recibir una notificación cuando se habilite.</div>
           </div>`;
+      } else if (activeLiveId) {
+        // Etapa X.55 — el alumno está viendo un live (clickeó la fila del sidebar)
+        const liveMod = MODULES.find(m => m.live?.id === activeLiveId);
+        mainHtml = renderLiveMainPanel(liveMod?.live);
       } else {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
@@ -1418,8 +1472,8 @@
         </div>`;
 
       // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
-      // Solo si estamos en el modo lección normal (sin lock).
-      if (!_lockedView) {
+      // Solo si estamos en el modo lección normal (sin lock ni live activo).
+      if (!_lockedView && !activeLiveId) {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         if (active) loadLessonMaterials(active.id);
       }
@@ -1465,6 +1519,7 @@
 
     function selectLesson(lessonId) {
       activeLessonId = lessonId;
+      activeLiveId   = null;   // Etapa X.55 — salir del modo live al elegir lección
       _lockedView    = null;   // Etapa X.43 — salir del modo módulo-bloqueado
       renderModulesView();
     }

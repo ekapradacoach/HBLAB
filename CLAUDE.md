@@ -1723,6 +1723,64 @@ Removidas estas funciones y variables (residuos de X.42–X.48):
 
 ---
 
+## Etapa X.55 — Live como ítem clickeable del sidebar (refactor X.54)
+
+Refactor de X.54 que había metido el video del live + el botón "Marcar como completado" **embebido inline en el bloque del sidebar**. UX inconsistente con las lecciones (que usan: sidebar = lista clickeable; main panel = contenido). Ahora el live se comporta exactamente como una lección: una fila clickeable en el sidebar, contenido completo en el panel principal derecho.
+
+### Estructura del sidebar
+
+Dentro de `.modules-lessons` de cada módulo, **antes** de las lecciones, se agrega una fila `<button class="modules-lesson modules-live-row">` con:
+- `<span class="modules-lesson-check">` con `📡` (o `✓` si está completado, badge lime).
+- `<span class="modules-lesson-title">Clase en vivo</span>`.
+- `active` cuando `activeLiveId === live.id`.
+
+Helper `renderModuleLiveRow(m)` devuelve este HTML, o `''` si el módulo no tiene live. Patrón análogo a `lessons.map(...)`.
+
+### Estructura del panel principal
+
+Branch nuevo en `renderModulesView`: `priority _lockedView > activeLiveId > activeLessonId`. Cuando `activeLiveId` está set, llama `renderLiveMainPanel(live)` que retorna 4 variantes según estado:
+
+| Condición | Panel principal |
+|---|---|
+| `live_date` futura | Título "📡 Clase en vivo" + fecha grande + botón "📡 Unirse al live" (lime) + sub "Te lleva directo a la sala de Meet/Zoom." Si no hay `live_url`, sub explicativo. **Sin botón completar.** |
+| `live_date` pasada + `!live_ended` | Título + fecha + sub "⏳ El coach todavía no finalizó este live. Vas a poder marcarlo como completado cuando se habilite." **Sin botón.** |
+| `live_ended` + sin `recording_url` | Título + sub "⏳ La grabación estará disponible en las próximas 24-72hs." + botón "✅ Marcar como completado". |
+| `live_ended` + `recording_url` | Título "📡 Clase en vivo — Grabación" + `<iframe>` 16:9 (vía `getEmbedUrl`) + botón "✅ Marcar como completado". |
+
+Si `markLiveCompleted` ya fue ejecutado para este live → el botón pasa a "Completado" disabled (mismo look que lecciones completadas).
+
+### Globals
+
+- **Nuevo**: `let activeLiveId = null;` — UUID de `course_lives` cuando el alumno clickeó la fila del live.
+- Mutuamente excluyente con `activeLessonId`: `selectLive(liveId)` limpia `activeLessonId`, `selectLesson(lessonId)` limpia `activeLiveId`.
+- `_lockedView` también se limpia en ambos paths.
+
+### Funciones / variables removidas vs X.54
+
+- `renderModuleLiveInfo(m)` (devolvía el bloque sidebar con embed inline + botón) → eliminada.
+- CSS `.live-recording-embed`, `.modules-mod-live-actions`, modificador `.modules-mod-live.recording/.pending` — sin caller.
+
+### Funciones nuevas
+
+- `renderModuleLiveRow(m)` — fila clickeable del sidebar (analogous to `lessons.map`).
+- `renderLiveMainPanel(live)` — HTML del panel principal con los 4 estados.
+- `selectLive(liveId)` — setter (espejo de `selectLesson`).
+
+### CSS nuevo
+
+- `.modules-live-row` — tinte lime sobre `.modules-lesson` base (check con `rgba(200,230,0,0.12)`, active → `var(--lime)` solid).
+- `.live-main-card` — card padding 24/22, borde dashed, fondo soft. Para estados 1, 2, 3 (sin video). Flex column con `gap: 12px`.
+- `.live-main-fecha` / `.live-main-sub` — tipografía del card.
+- Estado 4 (con grabación) reusa `.video-wrapper` + `.modules-active-actions` que ya existían para lecciones — máxima consistencia visual.
+
+### Lo que NO se hizo
+
+- **Botón "Unirse al live" desde el sidebar**: hoy hay que clickear la fila → ir al panel principal → ahí está el botón. Una vía rápida (botón inline en la fila del sidebar) sería más cómoda pero rompe el patrón "sidebar = lista, main = contenido". Mantenemos coherencia.
+- **Auto-seleccionar el live cuando llega su fecha**: si el alumno tiene la pestaña abierta y `live_date` cumple, el live no se auto-pone como activo. Necesitaría un setInterval.
+- **Indicador en la fila cuando el live está "en vivo ahora"**: hoy se distingue solo por click. Un badge animado "🔴 EN VIVO" sería útil — pendiente.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
