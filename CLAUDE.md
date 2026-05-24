@@ -1870,6 +1870,74 @@ Load inicial (`init`) ya carga TODOS los `video_index` (positivos y negativos) e
 
 ---
 
+## Etapa X.58 — Módulo de "Certificación" + barra de progreso por módulos
+
+Dos cambios coordinados en `curso.html`:
+
+### 1. Módulo de certificación (empty module)
+
+**Detección automática**: un módulo sin lecciones ni live (`!m.lessons.length && !m.live`) se interpreta como módulo de "Certificación". El admin lo configura simplemente creando un módulo con solo el título.
+
+**Helpers nuevos:**
+- `isCertModule(m)` → true si el módulo no tiene lecciones ni live.
+- `isCertModuleUnlocked()` → true si todos los módulos NO-cert están completados (`MODULES.filter(x => !isCertModule(x)).every(isModuleCompleted)`).
+
+**Sidebar:**
+- **Bloqueado** (`!certUnlocked`): wrapper `.modules-mod.locked.cert-locked` con opacidad `0.55` + cursor not-allowed. Head con 🔒 antes del título. NO clickeable.
+- **Desbloqueado** (`certUnlocked`): wrapper `.modules-mod.cert-unlocked` con color lime en el head. Head con 🎓 + título. Clickeable → `selectCertView()`.
+
+**Main panel** (cuando `_certView === true`): card con título "🎓 ¡Curso completado!", sub "Completaste todos los módulos del curso. Tu certificado está listo para descargar abajo." + botón "Ver y descargar certificado ↓" que llama `showCertSection()` (reutiliza la lógica existente — la sección `#cert-section` ya está fuera del layout de módulos).
+
+**Global nuevo:** `let _certView = false;`. Mutuamente excluyente con `activeLessonId`, `activeLiveId`, `_lockedView` — todos los setters limpian los otros 3. `selectCertView()` verifica `isCertModuleUnlocked()` antes de activar (safety guard).
+
+**Sin botón "Marcar como completado":** el certificado en sí es la completación. El sidebar item del módulo de cert no muestra "Completado" como las lecciones/lives — su presencia desbloqueada ya indica logro.
+
+### 2. Barra de progreso por módulos
+
+**Antes**: `pct = realCount / TOTAL_VIDEOS * 100` donde `TOTAL_VIDEOS = LESSONS_FLAT.length` (contaba lecciones). En un curso con muchas lecciones, marcar una sola movía la barra 1/N. Si había módulos solo-live, no se contaban en absoluto.
+
+**Ahora** (modo módulos):
+
+```js
+const contentModules = MODULES.filter(m => !isCertModule(m));
+const total          = contentModules.length;
+const done           = contentModules.filter(isModuleCompleted).length;
+const pct            = total > 0 ? Math.round(done / total * 100) : 0;
+```
+
+- **Total**: módulos con contenido (lecciones o live), **excluyendo módulos de certificación** (los empty modules son la meta, no aportan).
+- **Done**: módulos con al menos una entrada `completed=true` en `video_progress` — `isModuleCompleted` resuelve el chequeo OR entre lección y live.
+- **Pct**: `done / total * 100`.
+- **Label**: `"X de Y módulos completados"` (antes era "X lecciones completadas").
+
+**Cuando todos completos** (`areAllModulesCompleted()` incluyendo el módulo de cert, que cuenta como completo por defecto al ser empty) → label cambia a "¡Curso completado! 🎉" + dispara `checkQuizGateAndShowCert()`.
+
+En modo no-modules (videos sueltos / live legacy) la lógica original se preserva (por video, no por módulo).
+
+### CSS nuevo
+
+```css
+.modules-mod.cert-locked   { opacity: 0.55; }
+.modules-mod.cert-unlocked .modules-mod-head { color: var(--lime, #C8E600); }
+.modules-mod.cert-unlocked .modules-mod-head.active { background: rgba(200,230,0,0.12); }
+```
+
+### Flujo end-to-end del cert
+
+1. Alumno marca el último ítem (live o lección) del último módulo con contenido.
+2. `markLiveCompleted` / `markLessonComplete` → `completedSet.add(...)` → `renderModulesView()` + `updateProgress()`.
+3. `updateProgress` cuenta módulos completados → `done === total` → `areAllModulesCompleted()` = true → `checkQuizGateAndShowCert()` → `showCertSection()` auto-revela el cert.
+4. En el sidebar, el módulo de cert pasa de `.cert-locked` (🔒) a `.cert-unlocked` (🎓 lime, clickeable).
+5. Alumno puede clickear el módulo de cert para volver a verlo en el main panel + scroll a la sección cert.
+
+### Lo que NO se hizo
+
+- **Múltiples módulos de certificación por curso**: el detector marca CUALQUIER módulo empty como cert. Si el admin crea varios módulos empty, todos serían "cert" y el primero unlocked dispararía. Edge case improbable — admin pondría un solo módulo "Certificado" al final.
+- **Edición del título "Certificación" desde admin**: el admin escribe lo que quiera (ej: "🏆 Certificado final"); el detector solo mira contenido, no título.
+- **El layout del cert dentro del main panel**: hoy es un card simple con CTA → scroll a la sección global. Se podría embeber el cert directo (con el PNG + botón download) en el main panel, pero duplicaría código.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

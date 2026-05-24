@@ -487,6 +487,13 @@
     }
     .btn-live-join:hover { opacity: 0.88; transform: translateY(-1px); }
 
+    /* Etapa X.58 — módulo de certificación en el sidebar */
+    .modules-mod.cert-locked   { opacity: 0.55; }
+    .modules-mod.cert-unlocked .modules-mod-head { color: var(--lime, #C8E600); }
+    .modules-mod.cert-unlocked .modules-mod-head.active {
+      background: rgba(200,230,0,0.12);
+    }
+
     /* Etapa X.55 — fila del live en el sidebar (estilo lección con tinte lime) */
     .modules-live-row .modules-lesson-check {
       background: rgba(200,230,0,0.12);
@@ -965,50 +972,57 @@
     // granularidad fina (lecciones completadas / total) para que el alumno vea su
     // avance real, pero el cert puede dispararse antes del 100% si el alumno hizo
     // lo mínimo de cada módulo (ej. asistir al live de cada módulo).
+    // Etapa X.58 — Barra de progreso por MÓDULOS (en modo módulos):
+    //   Total       = módulos con contenido (lecciones o live), excluyendo módulos
+    //                 de certificación (los empty modules son la meta, no aportan).
+    //   Completados = módulos con al menos un completed=true en video_progress.
+    //   Pct         = completados / total * 100.
+    // En modo no-modules (videos sueltos / live legacy) sigue siendo por videos.
     function updateProgress() {
-      // Etapa X.57 — Fix: NO bailear si TOTAL_VIDEOS=0 cuando estamos en modo
-      // módulos (un curso puede tener solo lives, sin lecciones, y aun así el
-      // cert debe dispararse cuando todos los módulos están completos).
-      // Solo bailamos en modo no-modules sin videos (nada que completar).
-      if (!TOTAL_VIDEOS && !isModulesMode) return;
-      if (!TOTAL_VIDEOS && isModulesMode && !MODULES?.length) return;
-
-      // El count crudo incluye también los video_index negativos (completado de
-      // lives). Para que el % no se infle, contamos solo los índices >= 0
-      // (lecciones reales o videos sueltos).
-      const realCount = [...completedSet].filter(i => i >= 0).length;
-      const pct       = TOTAL_VIDEOS > 0 ? Math.round(realCount / TOTAL_VIDEOS * 100) : 0;
       const label = document.getElementById('progress-label');
       const fill  = document.getElementById('progress-fill');
 
-      if (fill) fill.style.width = pct + '%';
+      if (isModulesMode) {
+        const contentModules   = (MODULES || []).filter(m => !isCertModule(m));
+        const total            = contentModules.length;
+        const done             = contentModules.filter(isModuleCompleted).length;
+        const pct              = total > 0 ? Math.round(done / total * 100) : 0;
+        const certEligible     = areAllModulesCompleted();   // incluye cert module (empty → true)
 
-      // Cert: en modules mode → todos los módulos completos (lecciones O lives).
-      // En no-modules mode → 100% de los videos.
-      const certEligible = isModulesMode
-        ? areAllModulesCompleted()
-        : (TOTAL_VIDEOS > 0 && pct >= 100);
+        if (fill) fill.style.width = pct + '%';
 
-      if (certEligible) {
-        if (label) {
-          label.textContent = '¡Curso completado! 🎉';
-          label.classList.add('completed');
+        if (certEligible && total > 0) {
+          if (label) {
+            label.textContent = '¡Curso completado! 🎉';
+            label.classList.add('completed');
+          }
+          // Dispara el flujo del certificado (con quiz gate si aplica).
+          checkQuizGateAndShowCert();
+          return;
         }
-        // Etapa U: si el curso tiene quiz activo, gateamos el certificado detrás del quiz.
-        checkQuizGateAndShowCert();
+        if (label) {
+          if (total > 0) {
+            label.textContent = `${done} de ${total} módulo${total !== 1 ? 's' : ''} completado${done !== 1 ? 's' : ''}`;
+          } else {
+            label.textContent = 'En curso';
+          }
+          label.classList.remove('completed');
+        }
         return;
       }
 
-      if (label) {
-        if (TOTAL_VIDEOS > 0) {
-          const noun = isModulesMode
-            ? `lección${TOTAL_VIDEOS !== 1 ? 'es' : ''} completada${realCount !== 1 ? 's' : ''}`
-            : `video${TOTAL_VIDEOS !== 1 ? 's' : ''} completado${realCount !== 1 ? 's' : ''}`;
-          label.textContent = `${realCount} de ${TOTAL_VIDEOS} ${noun}`;
-        } else {
-          // Modo módulos solo con lives → label genérico hasta que el alumno marque todos.
-          label.textContent = 'En curso';
-        }
+      // Modo no-modules (videos sueltos / grabaciones de live legacy)
+      if (!TOTAL_VIDEOS) return;
+      const realCount = [...completedSet].filter(i => i >= 0).length;
+      const pct       = Math.round(realCount / TOTAL_VIDEOS * 100);
+      if (fill) fill.style.width = pct + '%';
+
+      if (pct >= 100) {
+        if (label) { label.textContent = '¡Curso completado! 🎉'; label.classList.add('completed'); }
+        checkQuizGateAndShowCert();
+      } else if (label) {
+        const noun = `video${TOTAL_VIDEOS !== 1 ? 's' : ''} completado${realCount !== 1 ? 's' : ''}`;
+        label.textContent = `${realCount} de ${TOTAL_VIDEOS} ${noun}`;
         label.classList.remove('completed');
       }
     }
@@ -1269,6 +1283,7 @@
       activeLiveId   = liveId;
       activeLessonId = null;
       _lockedView    = null;
+      _certView      = false;   // Etapa X.58
       renderModulesView();
     }
 
@@ -1286,6 +1301,35 @@
     function areAllModulesCompleted() {
       if (!MODULES?.length) return false;
       return MODULES.every(isModuleCompleted);
+    }
+
+    // ════════════════════════════════════════════════
+    // Etapa X.58 — Módulo de "Certificación" (sin contenido)
+    // ════════════════════════════════════════════════
+    // Un módulo sin lecciones ni live se interpreta como módulo de certificación.
+    // Se desbloquea automáticamente cuando todos los demás módulos (con contenido)
+    // están completados. Al clickearlo desbloqueado → muestra el certificado en
+    // el main panel + dispara showCertSection() para revelar la sección de cert.
+    function isCertModule(m) {
+      return !!m && (!m.lessons || m.lessons.length === 0) && !m.live;
+    }
+    function isCertModuleUnlocked() {
+      // Todos los módulos NO-cert deben estar completados.
+      return MODULES
+        .filter(x => !isCertModule(x))
+        .every(isModuleCompleted);
+    }
+    let _certView = false;  // true cuando el alumno está viendo el cert en el main panel
+
+    function selectCertView() {
+      if (!isCertModuleUnlocked()) return;   // safety guard
+      _certView      = true;
+      activeLessonId = null;
+      activeLiveId   = null;
+      _lockedView    = null;
+      renderModulesView();
+      // Revelar la sección global del certificado (ya existente) y scrollear
+      try { showCertSection(); } catch (e) { console.warn('showCertSection:', e); }
     }
 
     // Marca el live como completado para el alumno actual. UPSERT al mismo
@@ -1354,6 +1398,7 @@
         unlock_at: m.unlock_at,
         title:     m.title || 'Módulo',
       };
+      _certView = false;   // Etapa X.58
       renderModulesView();
       const videos = document.getElementById('videos-container');
       if (videos) videos.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1381,15 +1426,33 @@
       }
 
       // Sidebar: módulos plegables con lecciones
+      const certUnlocked = isCertModuleUnlocked();
       const sidebarHtml = MODULES.map((m, mi) => {
-        // Etapa X.43 — módulo bloqueado: head con 🔒, sin expandir, sin lecciones,
-        // sin bloque de live. Click muestra el panel "bloqueado" en el main.
+        // Etapa X.43 — módulo bloqueado por drip (unlock_at futura)
         if (isModuleLocked(m)) {
           return `
             <div class="modules-mod locked" id="modules-mod-${mi}">
               <button class="modules-mod-head" onclick="showLockedModule('${escHtml(m.id)}')">
                 <span class="modules-mod-title"><span class="modules-mod-lock-icon">🔒</span>${escHtml(m.title || `Módulo ${mi + 1}`)}</span>
                 <span class="modules-mod-arrow">▾</span>
+              </button>
+            </div>`;
+        }
+        // Etapa X.58 — módulo de certificación (sin lecciones ni live)
+        if (isCertModule(m)) {
+          if (!certUnlocked) {
+            return `
+              <div class="modules-mod locked cert-locked" id="modules-mod-${mi}">
+                <div class="modules-mod-head" style="cursor:not-allowed;">
+                  <span class="modules-mod-title"><span class="modules-mod-lock-icon">🔒</span>${escHtml(m.title || 'Certificación')}</span>
+                </div>
+              </div>`;
+          }
+          const active = _certView ? 'active' : '';
+          return `
+            <div class="modules-mod cert-unlocked" id="modules-mod-${mi}">
+              <button class="modules-mod-head ${active}" onclick="selectCertView()">
+                <span class="modules-mod-title"><span class="modules-mod-lock-icon">🎓</span>${escHtml(m.title || 'Certificación')}</span>
               </button>
             </div>`;
         }
@@ -1446,6 +1509,17 @@
             <div class="lock-msg">Este módulo estará disponible el <strong>${escHtml(fecha)}</strong></div>
             <div class="lock-sub">Vas a recibir una notificación cuando se habilite.</div>
           </div>`;
+      } else if (_certView) {
+        // Etapa X.58 — el alumno clickeó el módulo de certificación (desbloqueado).
+        // Mostramos un card CTA en el main panel + showCertSection() ya reveló
+        // la sección global del cert (con la lógica de descarga existente).
+        mainHtml = `
+          <div class="modules-active-title">🎓 ¡Curso completado!</div>
+          <div class="live-main-card">
+            <p class="live-main-fecha">¡Felicitaciones!</p>
+            <p class="live-main-sub">Completaste todos los módulos del curso. Tu certificado está listo para descargar abajo.</p>
+            <a class="btn-live-join" href="#cert-section" onclick="event.preventDefault(); try{showCertSection();}catch(e){}">Ver y descargar certificado ↓</a>
+          </div>`;
       } else if (activeLiveId) {
         // Etapa X.55 — el alumno está viendo un live (clickeó la fila del sidebar)
         const liveMod = MODULES.find(m => m.live?.id === activeLiveId);
@@ -1488,8 +1562,8 @@
         </div>`;
 
       // Etapa X.7: cargar materiales de la lección activa (async, fire-and-forget)
-      // Solo si estamos en el modo lección normal (sin lock ni live activo).
-      if (!_lockedView && !activeLiveId) {
+      // Solo si estamos en el modo lección normal (sin lock, sin live, sin cert).
+      if (!_lockedView && !activeLiveId && !_certView) {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         if (active) loadLessonMaterials(active.id);
       }
@@ -1535,8 +1609,9 @@
 
     function selectLesson(lessonId) {
       activeLessonId = lessonId;
-      activeLiveId   = null;   // Etapa X.55 — salir del modo live al elegir lección
-      _lockedView    = null;   // Etapa X.43 — salir del modo módulo-bloqueado
+      activeLiveId   = null;
+      _lockedView    = null;
+      _certView      = false;   // Etapa X.58
       renderModulesView();
     }
 
