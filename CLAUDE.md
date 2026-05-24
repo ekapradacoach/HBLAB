@@ -1781,6 +1781,41 @@ Si `markLiveCompleted` ya fue ejecutado para este live → el botón pasa a "Com
 
 ---
 
+## Etapa X.56 — Fix de `video_index` para live: `-1 * order_num` (sin migración)
+
+Bug reportado tras X.54/X.55: al marcar un live como completado, Postgres tiraba `"value is out of range for type integer"`. Causa: `liveCompletionIndex(liveId)` usaba un hash djb2 con offset `+ 1000000000`, lo que producía enteros de hasta ~3.1 mil millones — fuera del rango de `INT4` que es ±2.1 mil millones. El UPSERT a `video_progress.video_index` (INT) fallaba.
+
+**Fix elegido — Opción B del prompt:** usar `video_index = -1 * module.order_num`. Garantiza enteros pequeños y negativos (no colisionan con índices de lecciones que son `>= 0`). Sin migración de BD. Esto es esencialmente volver a la convención que tuvimos en X.44, pero limpiada y aplicada al nuevo flujo (sin la lógica de "Asistí al live" — la mecánica del completado ahora es la misma que la lección).
+
+### Cambios
+
+**`liveCompletionIndex` refactoreada de hash → order-based:**
+
+```js
+function liveCompletionIndex(m) {
+  const o = Number(m?.order_num);
+  return -1 * ((Number.isFinite(o) && o > 0) ? o : 1);
+}
+```
+
+- `order_num > 0` → `-order_num` (ej: 1→-1, 2→-2, ...).
+- `order_num = 0` / null / NaN → `-1` (fallback al primer slot negativo). Caso edge: si dos módulos tuvieran `order_num=0` y `order_num=1`, ambos mapearían a `-1` y la completitud se confundiría. En la práctica el editor de admin asigna order_num secuencial sin duplicados, así que no debería ocurrir.
+
+**Signature change:** las funciones de live ahora reciben el módulo entero (no el live ni el liveId) porque necesitan `m.order_num`:
+- `isLiveCompleted(m)` (antes `isLiveCompleted(live)`).
+- `renderLiveMainPanel(m)` (antes `renderLiveMainPanel(live)`).
+- `markLiveCompleted(liveId)` mantiene su signature pública (sigue recibiendo liveId desde el onclick HTML), pero internamente hace `MODULES.find(x => x.live?.id === liveId)` para obtener el módulo y calcular el índice.
+
+**Callsites actualizados:**
+- `renderModuleLiveRow(m)`: ya tenía `m`, llama `isLiveCompleted(m)`.
+- `isModuleCompleted(m)`: cambia `isLiveCompleted(m.live)` → `isLiveCompleted(m)`.
+- `renderLiveMainPanel`: cambia `isLiveCompleted(live)` → `isLiveCompleted(m)`.
+- Branch del main panel: `mainHtml = renderLiveMainPanel(liveMod)` (antes pasaba `liveMod?.live`).
+
+**Convivencia con registros legacy:** los registros antiguos en `video_progress` con `video_index` en el rango de hash (>10^9) quedan en la BD pero ya no son matcheados por ningún check. No causan daño. Si en el futuro se quiere limpiarlos, `DELETE FROM video_progress WHERE video_index > 1000000000`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

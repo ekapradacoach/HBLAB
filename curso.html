@@ -1142,21 +1142,19 @@
     // mientras no se migre la columna a TEXT.
     // ════════════════════════════════════════════════
 
-    // Hash djb2 → entero positivo en rango [10^9, 10^9+2^31].
-    // Determinístico: el mismo liveId siempre mapea al mismo índice.
-    function liveCompletionIndex(liveId) {
-      if (!liveId) return 0;
-      const s = String(liveId);
-      let h = 5381;
-      for (let i = 0; i < s.length; i++) {
-        h = ((h << 5) + h) + s.charCodeAt(i);
-        h = h | 0;   // forzar 32-bit
-      }
-      return Math.abs(h) + 1000000000;   // offset 10^9 → fuera de lecciones
+    // Etapa X.56 — Reemplazo del hash (que generaba ints fuera del rango INT4 de
+    // video_progress.video_index) por la convención `-1 * order_num` del módulo.
+    // El video_index del live de un módulo es un entero negativo PEQUEÑO derivado
+    // del order_num. Como las lecciones usan índices >= 0, los negativos nunca
+    // colisionan con ellas. Edge case: si order_num=0 (caso raro), usamos -1 para
+    // mantener el índice claramente negativo.
+    function liveCompletionIndex(m) {
+      const o = Number(m?.order_num);
+      return -1 * ((Number.isFinite(o) && o > 0) ? o : 1);
     }
-    function isLiveCompleted(live) {
-      if (!live?.id) return false;
-      return completedSet.has(liveCompletionIndex(live.id));
+    function isLiveCompleted(m) {
+      if (!m?.live) return false;
+      return completedSet.has(liveCompletionIndex(m));
     }
 
     // Etapa X.55 — Render de la FILA del live en el sidebar (al lado de las lecciones).
@@ -1166,7 +1164,7 @@
     function renderModuleLiveRow(m) {
       const live = m?.live;
       if (!live) return '';
-      const completed = isLiveCompleted(live);
+      const completed = isLiveCompleted(m);
       const active    = (activeLiveId === live.id) && !_lockedView;
       const check     = completed ? '✓' : '📡';
       return `
@@ -1183,7 +1181,8 @@
     //   2. Pasada + !live_ended → mensaje de espera. Sin botón.
     //   3. live_ended + sin recording → mensaje 24-72hs + botón Marcar.
     //   4. live_ended + recording → video embed + botón Marcar.
-    function renderLiveMainPanel(live) {
+    function renderLiveMainPanel(m) {
+      const live = m?.live;
       if (!live) return '<div class="no-videos-msg">Live no encontrado.</div>';
       const now      = Date.now();
       const ts       = live.live_date ? new Date(live.live_date).getTime() : 0;
@@ -1215,7 +1214,7 @@
       }
 
       // Estados 3/4: live_ended === true → botón Marcar como completado
-      const completed = isLiveCompleted(live);
+      const completed = isLiveCompleted(m);
       const safeLiveId = escHtml(live.id);
       const btnHtml = completed
         ? `<button class="btn-video completed" disabled>
@@ -1262,7 +1261,7 @@
       const hasLive    = !!m.live;
       const hasLessons = !!(m.lessons && m.lessons.length);
       if (!hasLive && !hasLessons) return true;
-      if (hasLive && isLiveCompleted(m.live)) return true;
+      if (hasLive && isLiveCompleted(m)) return true;
       if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
       return false;
     }
@@ -1272,18 +1271,17 @@
     }
 
     // Marca el live como completado para el alumno actual. UPSERT al mismo
-    // mecanismo de video_progress que markLessonComplete, usando el video_index
-    // hasheado desde live.id.
+    // mecanismo de video_progress que markLessonComplete. video_index = -1 * order_num
+    // del módulo dueño (Etapa X.56).
     async function markLiveCompleted(liveId) {
       if (!liveId) return;
-      // Encontrar el módulo dueño del live (para no perder referencia)
       const m = MODULES.find(x => x.live?.id === liveId);
       if (!m?.live) {
         console.warn('markLiveCompleted: live no encontrado en MODULES', liveId);
         return;
       }
-      const idx = liveCompletionIndex(liveId);
-      console.log('[markLiveCompleted]', { liveId, idx });
+      const idx = liveCompletionIndex(m);
+      console.log('[markLiveCompleted]', { liveId, order_num: m.order_num, idx });
 
       const { error } = await sb.from('video_progress').upsert({
         user_id:      currentUser.id,
@@ -1433,7 +1431,7 @@
       } else if (activeLiveId) {
         // Etapa X.55 — el alumno está viendo un live (clickeó la fila del sidebar)
         const liveMod = MODULES.find(m => m.live?.id === activeLiveId);
-        mainHtml = renderLiveMainPanel(liveMod?.live);
+        mainHtml = renderLiveMainPanel(liveMod);
       } else {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
         const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
