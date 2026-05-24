@@ -2170,6 +2170,47 @@ El resto del flow (mutual exclusion con `activeLessonId`/`activeLiveId`/`_locked
 
 ---
 
+## Etapa X.66 — Cert gate: ignorar módulos bloqueados por drip
+
+Refinamiento de X.65. Bug observado: si un curso tenía módulos con `unlock_at` futura (drip), el cert se calculaba contra TODOS los módulos con contenido — incluyendo los bloqueados — que el alumno literalmente no puede completar. Resultado: el cert nunca disparaba aunque el alumno hubiera completado todo lo accesible.
+
+### Nueva regla del cert
+
+1. Un módulo cuenta para el cert **solo si está desbloqueado** (`!unlock_at` O `unlock_at <= now`).
+2. De los desbloqueados, **solo los que tienen contenido** (lecciones o live) deben estar completos.
+3. Módulos **bloqueados por fecha** → ignorados (no aportan ni bloquean).
+4. Módulos **sin contenido** (cert module) → ignorados.
+5. Si no queda ningún módulo relevante → `false` (no hay cert).
+
+### Implementación
+
+```js
+function areAllModulesCompleted() {
+  const now = new Date();
+  const unlockedWithContent = (MODULES || []).filter(m => {
+    const unlocked   = !m.unlock_at || new Date(m.unlock_at) <= now;
+    const hasContent = (m.lessons?.length > 0) || !!m.live;
+    return unlocked && hasContent;
+  });
+  if (!unlockedWithContent.length) return false;
+  return unlockedWithContent.every(isModuleCompleted);
+}
+```
+
+Mismo patrón en `isCertModuleUnlocked()` para que el módulo de certificación (🎓 en el sidebar) se desbloquee bajo el mismo criterio.
+
+### Re-evaluación al cargar la página
+
+El `updateProgress()` se invoca al final del init después de cargar módulos + progreso. Como la fecha actual (`new Date()`) se evalúa dentro de `areAllModulesCompleted`, cualquier módulo cuya `unlock_at` ya pasó al momento de la carga se considera unlocked automáticamente. No requiere lógica adicional: si el alumno completa todo lo accesible y luego un módulo se desbloquea por fecha, en la siguiente recarga el cert dejará de mostrarse hasta que también complete ese módulo.
+
+### Lo que NO se cambió
+
+- **Barra de progreso (`updateProgress`)**: sigue contando contra TODOS los content modules (no excluye bloqueados). Esto preserva el "tamaño real" del curso visible al alumno. Si se quiere alinear con el cert gate, basta agregar el mismo filtro de `unlocked` en la línea `contentModules = ...`.
+- **`isModuleCompleted`**: sin cambios — sigue retornando `true` para empty modules (semántica de "nada que hacer" usada por otros checks).
+- **`dashboard.html`**: el cálculo del progreso por módulos (X.59) tampoco excluye bloqueados. Aplicar el mismo refinamiento ahí queda pendiente si el caso de uso aparece.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
