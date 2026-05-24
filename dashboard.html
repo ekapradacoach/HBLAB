@@ -557,15 +557,19 @@
 
       // Etapa X.10: 3 queries batch en paralelo (no N×3 secuenciales)
       const courseIds = rows.map(r => r.courses?.id).filter(Boolean);
-      let completedByCourse = {};
+      let completedByCourse = {};            // count crudo de video_progress por curso (no-modules)
+      let progressByCourse  = {};            // Etapa X.59 — { courseId → {completed, total, isModulesMode} }
       let activeQuizCourses = new Set();
       let passedCourses     = new Set();
 
       if (courseIds.length && user) {
         try {
+          // Etapa X.59 — el SELECT de video_progress ahora trae course_id Y video_index
+          // (necesario para el cálculo por módulos: discriminar entre lecciones positivas
+          // y lives negativos).
           const [progRes, quizRes, attRes] = await Promise.all([
             sb.from('video_progress')
-              .select('course_id')
+              .select('course_id, video_index')
               .eq('user_id', user.id)
               .eq('completed', true)
               .in('course_id', courseIds),
@@ -580,13 +584,89 @@
               .eq('passed', true)
               .in('course_id', courseIds),
           ]);
+          const completedIdxByCourse = {};   // { courseId → Set<video_index> }
           (progRes.data || []).forEach(r => {
-            completedByCourse[r.course_id] = (completedByCourse[r.course_id] || 0) + 1;
+            if (!completedIdxByCourse[r.course_id]) completedIdxByCourse[r.course_id] = new Set();
+            completedIdxByCourse[r.course_id].add(r.video_index);
+            // Contador legacy (no-modules) — cuenta solo índices >= 0
+            if (typeof r.video_index === 'number' && r.video_index >= 0) {
+              completedByCourse[r.course_id] = (completedByCourse[r.course_id] || 0) + 1;
+            }
           });
           activeQuizCourses = new Set((quizRes.data || []).map(r => r.course_id));
           passedCourses     = new Set((attRes.data  || []).map(r => r.course_id));
+
+          // Etapa X.59 — para cursos con course_type='modules', computamos el
+          // progreso REAL por módulos (igual que curso.html). Total = módulos con
+          // contenido (excluye módulos de certificación). Completados = módulos
+          // con ≥1 entry completed=true (lección o live).
+          const modulesCourseIds = rows
+            .filter(r => r.courses?.course_type === 'modules')
+            .map(r => r.courses.id);
+
+          if (modulesCourseIds.length) {
+            const { data: allModules } = await sb.from('course_modules')
+              .select('id, course_id, order_num')
+              .in('course_id', modulesCourseIds);
+            const modIds = (allModules || []).map(m => m.id);
+
+            let lessonsRes = { data: [] }, livesRes = { data: [] };
+            if (modIds.length) {
+              [lessonsRes, livesRes] = await Promise.all([
+                sb.from('course_lessons').select('id, module_id').in('module_id', modIds),
+                sb.from('course_lives').select('module_id').in('module_id', modIds),
+              ]);
+            }
+
+            const lessonsByMod = {};
+            (lessonsRes.data || []).forEach(l => {
+              if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
+              lessonsByMod[l.module_id].push(l);
+            });
+            const livesByMod = {};
+            (livesRes.data || []).forEach(lv => { livesByMod[lv.module_id] = true; });
+
+            // Agrupar módulos por curso, attach lessons + live
+            const modulesByCourse = {};
+            (allModules || []).forEach(m => {
+              if (!modulesByCourse[m.course_id]) modulesByCourse[m.course_id] = [];
+              modulesByCourse[m.course_id].push({
+                ...m,
+                lessons: lessonsByMod[m.id] || [],
+                hasLive: !!livesByMod[m.id],
+              });
+            });
+
+            // Por curso: construir LESSON_IDX_BY_ID + contar módulos completos
+            modulesCourseIds.forEach(cid => {
+              const mods = (modulesByCourse[cid] || []).slice()
+                .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+              const cSet = completedIdxByCourse[cid] || new Set();
+
+              // Flat-index por lesson UUID (idéntico al patrón de curso.html)
+              const lessonIdxById = {};
+              let i = 0;
+              mods.forEach(m => { m.lessons.forEach(l => { lessonIdxById[l.id] = i++; }); });
+
+              // Excluir módulos de certificación (sin lecciones ni live)
+              const contentMods = mods.filter(m => m.lessons.length || m.hasLive);
+              let done = 0;
+              contentMods.forEach(m => {
+                const o = Number(m.order_num);
+                const liveIdx  = -1 * ((Number.isFinite(o) && o > 0) ? o : 1);
+                const liveDone = m.hasLive && cSet.has(liveIdx);
+                const lessonDone = m.lessons.some(l => cSet.has(lessonIdxById[l.id]));
+                if (liveDone || lessonDone) done++;
+              });
+              progressByCourse[cid] = {
+                completed:     done,
+                total:         contentMods.length,
+                isModulesMode: true,
+              };
+            });
+          }
         } catch (e) {
-          console.warn('Etapa X.10: queries de progreso/quiz fallaron, render sin badges enriquecidos:', e);
+          console.warn('dashboard: queries de progreso/quiz fallaron, render sin badges enriquecidos:', e);
         }
       }
 
@@ -594,8 +674,12 @@
         const course = row.courses;
         const meta   = { tag: 'Curso · Online', page: `curso.html?slug=${course.slug}` };
 
-        const completed = completedByCourse[course.id] || 0;
-        const total     = course.total_videos || 0;
+        // Etapa X.59 — cursos modules-mode usan progressByCourse (por módulos);
+        // resto usa completedByCourse + total_videos (por lecciones/videos).
+        const modProg  = progressByCourse[course.id];
+        const isModulesMode = !!modProg;
+        const completed = isModulesMode ? modProg.completed : (completedByCourse[course.id] || 0);
+        const total     = isModulesMode ? modProg.total     : (course.total_videos || 0);
         // Cap a 100 por si video_progress quedó con índices viejos tras un reordenamiento
         const pct = total > 0 ? Math.min(100, Math.round(completed / total * 100)) : 0;
         const hasPendingQuiz = activeQuizCourses.has(course.id) && !passedCourses.has(course.id);
@@ -613,9 +697,11 @@
         }
 
         // Barra de progreso solo si total > 0
+        const unitSingular = isModulesMode ? 'módulo'  : 'clase';
+        const unitPlural   = isModulesMode ? 'módulos' : 'clases';
         const progressHtml = total > 0
           ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${pct}%"></div></div>
-             <p class="card-progress-label">${completed} de ${total} clase${total !== 1 ? 's' : ''} completada${completed !== 1 ? 's' : ''}</p>`
+             <p class="card-progress-label">${completed} de ${total} ${total !== 1 ? unitPlural : unitSingular} completado${completed !== 1 ? 's' : ''}</p>`
           : '';
 
         return `
@@ -714,7 +800,8 @@
             description,
             price_ars,
             price_usd,
-            total_videos
+            total_videos,
+            course_type
           )
         `)
         .eq('user_id', user.id)

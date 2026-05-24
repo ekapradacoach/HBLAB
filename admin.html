@@ -310,14 +310,23 @@
       border-radius: 100px;
       font-size: 0.78rem; font-weight: 600;
     }
-    .alumnos-pill-x {
-      background: transparent; border: none; color: var(--lime);
-      cursor: pointer; padding: 0 4px;
-      font-size: 1rem; line-height: 1;
-      opacity: 0.55;
-      transition: opacity 0.15s, color 0.15s;
+    /* Etapa X.59 — botón "🗑 Quitar curso" inline en cada pill de curso del alumno */
+    .btn-quitar-curso-alumno {
+      background: transparent;
+      border: 1px solid rgba(252,129,129,0.35);
+      color: var(--red, #fc8181);
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 100px;
+      font-family: inherit; font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .alumnos-pill-x:hover { opacity: 1; color: var(--red); }
+    .btn-quitar-curso-alumno:hover {
+      background: rgba(252,129,129,0.12);
+      border-color: rgba(252,129,129,0.6);
+      color: #ff6b6b;
+    }
     .badge-student {
       background: rgba(148,163,184,0.12);
       border: 1px solid rgba(148,163,184,0.3);
@@ -3481,8 +3490,8 @@
               <span class="alumnos-pill">
                 <span>${escapeAttr(c.title)}</span>
                 ${c.id
-                  ? `<button class="alumnos-pill-x" title="Quitar curso"
-                            onclick="removeUserCourse('${u.user_id}','${c.id}','${escapeAttr(c.title)}')">×</button>`
+                  ? `<button class="btn-quitar-curso-alumno" title="Quitar curso a este alumno"
+                            onclick="removeUserCourse('${u.user_id}','${c.id}','${escapeAttr(c.title)}')">🗑 Quitar curso</button>`
                   : ''}
               </span>`).join('')}</div>`
           : `<span style="color:var(--gray-text);font-style:italic;font-size:0.82rem;">Sin cursos</span>`;
@@ -3541,19 +3550,32 @@
       }
     }
 
+    // Etapa X.59 — DELETE directo a user_courses (la RPC `remove_user_course`
+    // queda como fallback si la RLS bloquea al admin desde el cliente).
     async function removeUserCourse(userId, courseId, courseTitle) {
-      if (!confirm(`¿Quitar el curso "${courseTitle}" a este usuario?`)) return;
-      const { error } = await sb.rpc('remove_user_course', {
-        p_user_id: userId, p_course_id: courseId
-      });
-      if (error) {
-        console.error('remove_user_course:', error);
+      if (!confirm(`¿Quitar acceso a "${courseTitle}"?`)) return;
+
+      const { data, error } = await sb.from('user_courses')
+        .delete()
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .select();
+
+      // Fallback a la RPC SECURITY DEFINER si el DELETE directo no afectó nada
+      // (caso típico: RLS de user_courses bloquea al admin desde el cliente).
+      if (!error && (!data || data.length === 0)) {
+        const rpcRes = await sb.rpc('remove_user_course', { p_user_id: userId, p_course_id: courseId });
+        if (rpcRes.error) {
+          console.error('remove_user_course RPC fallback:', rpcRes.error);
+          return showAlert('alert-alumnos', `Error al quitar curso: ${rpcRes.error.message}`);
+        }
+      } else if (error) {
+        console.error('removeUserCourse DELETE error:', error);
         return showAlert('alert-alumnos', `Error al quitar curso: ${error.message}`);
       }
-      // Etapa X.6: recargar PRIMERO, mostrar alert DESPUÉS para que el mensaje quede
-      // visible con la tabla nueva (sin competir con el spinner de "Cargando…").
+
       await loadAlumnos();
-      showAlert('alert-alumnos', 'Curso quitado.', 'success');
+      showAlert('alert-alumnos', 'Acceso al curso quitado.', 'success');
     }
 
     function confirmDeleteUser(userId, nombre) {

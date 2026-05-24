@@ -1938,6 +1938,44 @@ En modo no-modules (videos sueltos / live legacy) la lógica original se preserv
 
 ---
 
+## Etapa X.59 — Quitar curso a alumno (admin) + barra de progreso real (dashboard)
+
+### 1. Admin — botón "🗑 Quitar curso" en pills de alumno
+
+En `admin.html` Tab Alumnos, las pills de cursos asignados ya tenían un mini `×` para quitar el curso (Etapa X.5). Esta etapa cambia ese control por un botón visible y explícito:
+
+- **HTML**: cada pill ahora contiene `<button class="btn-quitar-curso-alumno">🗑 Quitar curso</button>` (en lugar del `×` minúsculo).
+- **Confirm nuevo**: `"¿Quitar acceso a '${courseTitle}'?"` (antes era `"¿Quitar el curso ... a este usuario?"`).
+- **DELETE directo** vía PostgREST: `sb.from('user_courses').delete().eq('user_id', X).eq('course_id', Y).select()`. Si el `.select()` devuelve 0 filas afectadas (RLS bloqueando), **fallback automático** a la RPC SECURITY DEFINER `remove_user_course` que ya estaba implementada.
+- **CSS nuevo `.btn-quitar-curso-alumno`**: borde rojo soft, fondo transparente, padding compacto, hover con bg rojo soft y borde más fuerte. Se ve como un chip de acción dentro de la pill (border-radius 100px para match con la pill).
+- **Toast**: `'Acceso al curso quitado.'` (antes `'Curso quitado.'`).
+
+### 2. Dashboard — barra de progreso real por curso
+
+En `dashboard.html`, las tarjetas mostraban una barra que usaba `course.total_videos` (count de lecciones) como denominador. Esto era impreciso para cursos `course_type='modules'` y no contaba los lives. Refactor: ahora la barra usa la **misma lógica que `curso.html`** (Etapa X.58) — cuenta módulos con contenido completados.
+
+**Cambios:**
+- SELECT a `user_courses → courses` ahora incluye `course_type` (para discriminar el modo).
+- El SELECT a `video_progress` ahora trae también `video_index` (necesario para discriminar entre lecciones positivas y lives negativos).
+- Se construye `completedIdxByCourse[courseId] = Set<video_index>` y se preserva el contador `completedByCourse[courseId]` viejo (que solo cuenta índices `>= 0`) para los cursos no-modules (compat).
+- **Para cursos `course_type='modules'`**: se hacen 3 queries adicionales en el batch:
+  - `course_modules.in('course_id', modulesCourseIds)` (id, course_id, order_num).
+  - `course_lessons.in('module_id', allModIds)` (id, module_id).
+  - `course_lives.in('module_id', allModIds)` (module_id — solo necesitamos saber si existe).
+- Por cada curso modules-mode se construye el LESSON_IDX_BY_ID local + se cuenta cuántos módulos con contenido tienen al menos una entry completada (lección con `flatIdx` en cSet, o live con `-order_num` en cSet). Los módulos sin lecciones ni live (cert modules) se excluyen del total.
+- `progressByCourse[courseId] = { completed, total, isModulesMode: true }`. El render usa este map cuando existe; sino cae al cálculo viejo.
+
+**Render**: la label dice "**X de Y módulos completados**" para modules-mode y "X de Y clases completadas" para non-modules. El badge de estado (✅ Completado / 📝 Test disponible / 🆕 Sin comenzar / ▶ En progreso) sigue usando el mismo `pct` calculado.
+
+**Performance**: 3 queries adicionales en paralelo, agregadas al `Promise.all` que ya existía. Sin N+1 — todas batch.
+
+**Lo que NO se hizo:**
+- **Caching cross-page**: cada vez que el alumno entra al dashboard se recalcula desde scratch. Pequeña optimización futura: cachear `progressByCourse` en sessionStorage con TTL corto.
+- **Sync real-time**: si el alumno completa una lección en `curso.html` y vuelve al dashboard, ve el dato actualizado en la próxima carga (la query corre en init). Sin push.
+- **Total_videos legacy desactualizado**: cursos no-modules siguen usando `course.total_videos`. Si ese campo está desactualizado vs. cantidad real de videos, la barra puede dar > 100% — el `Math.min(100, ...)` cap evita romperlo visualmente.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
