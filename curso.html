@@ -937,7 +937,7 @@
       }
 
       container.innerHTML = VIDEOS.map(video => {
-        const done = completedSet.has(video.index);
+        const done = completedSet.has(String(video.index));
         return `
           <div class="video-card" id="card-video-${video.index}">
             <div class="video-card-header">
@@ -1059,7 +1059,7 @@
         return;
       }
 
-      completedSet.add(videoIndex);
+      completedSet.add(String(videoIndex));   // Etapa X.69 — strings en el Set
       btn.innerHTML = `
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Completado`;
@@ -1186,7 +1186,7 @@
     }
     function isLiveCompleted(m) {
       if (!m?.live) return false;
-      return completedSet.has(liveCompletionIndex(m));
+      return completedSet.has(String(liveCompletionIndex(m)));   // Etapa X.69
     }
 
     // Etapa X.55 — Render de la FILA del live en el sidebar (al lado de las lecciones).
@@ -1286,38 +1286,56 @@
       renderModulesView();
     }
 
-    // Módulo completado: tiene al menos una entrada completed=true en video_progress
-    // (sea lección o live — sin distinción). Módulo sin contenido = devuelve true por
-    // semántica de "nada que hacer" (útil para otros checks), pero `areAllModulesCompleted`
-    // EXCLUYE explícitamente los empty modules del cálculo (Etapa X.65).
+    // Etapa X.69 — Reescritura definitiva (versión limpia, sin shortcuts ambiguos).
+    //
+    // isModuleCompleted(m): el módulo está completo si tiene AL MENOS una entrada
+    //   en completedSet correspondiente a alguna de sus lecciones o a su live.
+    //   - Lecciones: buscamos por UUID directo (`String(l.id)`) Y como fallback
+    //     también por flat-index (`String(LESSON_IDX_BY_ID[l.id])`). Esto cubre
+    //     ambos esquemas de almacenamiento (UUIDs si la columna es TEXT, números
+    //     si es INT — hoy es INT, almacenamos flat-index).
+    //   - Live: video_index = -1 * order_num del módulo (entero negativo).
+    //
+    // OJO: a diferencia de etapas anteriores, NO retornamos `true` cuando el
+    // módulo está vacío. Quien filtra módulos vacíos / locked / live-pendiente
+    // es `areAllModulesCompleted`, no esta función.
     function isModuleCompleted(m) {
-      if (!m) return false;
-      const hasLive    = !!m.live;
-      const hasLessons = !!(m.lessons && m.lessons.length);
-      if (!hasLive && !hasLessons) return true;
-      if (hasLive && isLiveCompleted(m)) return true;
-      if (hasLessons && m.lessons.some(l => completedSet.has(LESSON_IDX_BY_ID[l.id]))) return true;
-      return false;
+      const lessons   = m?.lessons || [];
+      const lessonDone = lessons.some(l => {
+        if (l.id && completedSet.has(String(l.id))) return true;
+        const idx = LESSON_IDX_BY_ID[l.id];
+        return (idx !== undefined) && completedSet.has(String(idx));
+      });
+      // Para el live usamos -1 * order_num (con guard 0→1 igual que markLiveCompleted).
+      const ord     = Number(m?.order_num);
+      const liveOrd = (Number.isFinite(ord) && ord > 0) ? ord : 1;
+      const liveIdx = m?.live ? String(-1 * liveOrd) : null;
+      const liveDone = liveIdx ? completedSet.has(liveIdx) : false;
+      return lessonDone || liveDone;
     }
-    // Etapa X.65 + X.66 + X.67 — Regla estricta del certificado:
-    //   - Solo cuentan módulos DISPONIBLES PARA COMPLETAR:
-    //       a) Desbloqueados por fecha (sin unlock_at o unlock_at <= ahora), Y
-    //       b) Con contenido (lecciones o live), Y
-    //       c) Si tienen live → live.live_ended === true (el coach lo finalizó).
-    //   - Módulos bloqueados por fecha → ignorados.
-    //   - Módulos con live pendiente de finalizar por el coach → ignorados.
-    //   - Módulos sin contenido (cert) → ignorados.
-    //   - Si no queda ninguno relevante → false (no cert).
+
+    // Regla estricta del certificado (Etapa X.65 → X.69):
+    //   1. Desbloqueado por fecha: !unlock_at || unlock_at <= now.
+    //   2. Tiene contenido: lessons.length > 0 || !!live.
+    //   3. Si tiene live → live.live_ended === true (coach finalizó).
+    // De los que pasan, TODOS deben tener al menos un completed=true.
     function areAllModulesCompleted() {
       const now = new Date();
-      const availableWithContent = (MODULES || []).filter(m => {
+      const available = (MODULES || []).filter(m => {
         const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
         const hasContent     = (m.lessons?.length > 0) || !!m.live;
         const liveReady      = !m.live || m.live.live_ended === true;
         return unlockedByDate && hasContent && liveReady;
       });
-      if (!availableWithContent.length) return false;
-      return availableWithContent.every(isModuleCompleted);
+      const completed = available.filter(isModuleCompleted);
+      console.log('[CERT CHECK]', {
+        availableCount:  available.length,
+        completedCount:  completed.length,
+        availableTitles: available.map(m => m.title),
+        completedTitles: completed.map(m => m.title),
+      });
+      if (!available.length) return false;
+      return completed.length === available.length;
     }
 
     // ════════════════════════════════════════════════
@@ -1331,18 +1349,8 @@
       return !!m && (!m.lessons || m.lessons.length === 0) && !m.live;
     }
     function isCertModuleUnlocked() {
-      // Etapa X.65 + X.66 + X.67 — coherente con areAllModulesCompleted.
-      // El módulo de certificación se desbloquea cuando TODOS los módulos
-      // disponibles (drip ok + live finalizado) con contenido están completos.
-      const now = new Date();
-      const availableWithContent = (MODULES || []).filter(m => {
-        const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
-        const hasContent     = (m.lessons?.length > 0) || !!m.live;
-        const liveReady      = !m.live || m.live.live_ended === true;
-        return unlockedByDate && hasContent && liveReady;
-      });
-      if (!availableWithContent.length) return false;
-      return availableWithContent.every(isModuleCompleted);
+      // Etapa X.69 — espejo de areAllModulesCompleted (mismos 3 filtros + mismo criterio).
+      return areAllModulesCompleted();
     }
     let _certView = false;  // true cuando el alumno está viendo el cert en el main panel
 
@@ -1384,7 +1392,7 @@
         alert('Error al marcar como completado: ' + error.message);
         return;
       }
-      completedSet.add(idx);
+      completedSet.add(String(idx));   // Etapa X.69
       renderModulesView();
       updateProgress();   // dispara cert si todos los módulos quedan completos
     }
@@ -1488,7 +1496,7 @@
 
         const lessonsHtml = lessons.map((l, li) => {
           // Etapa X.3: completedSet guarda flat-index (número), no UUID.
-          const done   = completedSet.has(LESSON_IDX_BY_ID[l.id]);
+          const done   = completedSet.has(String(LESSON_IDX_BY_ID[l.id]));
           const active = l.id === activeLessonId && !_lockedView;
           const checkContent = done ? '✓' : (li + 1);
           return `
@@ -1551,7 +1559,7 @@
         mainHtml = renderLiveMainPanel(liveMod);
       } else {
         const active = LESSONS_FLAT.find(l => l.id === activeLessonId);
-        const isDone = active ? completedSet.has(LESSON_IDX_BY_ID[active.id]) : false;
+        const isDone = active ? completedSet.has(String(LESSON_IDX_BY_ID[active.id])) : false;
         // Etapa X.42b — si la lección no tiene video_url, mostrar placeholder
         // en vez del iframe vacío (que se ve como pantalla negra).
         const hasVideo = !!(active && (active.video_url || '').trim());
@@ -1672,8 +1680,8 @@
         return;
       }
 
-      // Recalcular completedSet con el índice numérico (no el UUID)
-      completedSet.add(flatIdx);
+      // Etapa X.69 — completedSet ahora guarda strings (uniforme con el load)
+      completedSet.add(String(flatIdx));
 
       // Detectar siguiente lección por flat-index (Etapa X.2 — fix avance)
       const next = (flatIdx < LESSONS_FLAT.length - 1)
@@ -1847,9 +1855,12 @@
             .eq('user_id', currentUser.id)
             .eq('course_id', course.id)
             .eq('completed', true);
+          // Etapa X.69 — completedSet guarda TODOS los video_index como STRINGS.
+          // Los markers (markLessonComplete / markLiveCompleted) hacen `.add(String(idx))`
+          // para mantener consistencia. Esto unifica el tipo del Set y evita falsas
+          // coincidencias por type-juggling.
           (progressData || []).forEach(r => {
-            const idx = r.video_index;
-            if (typeof idx === 'number') completedSet.add(idx);
+            if (r.video_index != null) completedSet.add(String(r.video_index));
           });
         }
       } else {
@@ -1895,7 +1906,9 @@
             .eq('user_id', currentUser.id)
             .eq('course_id', course.id)
             .eq('completed', true);
-          (progressData || []).forEach(r => completedSet.add(r.video_index));
+          (progressData || []).forEach(r => {
+            if (r.video_index != null) completedSet.add(String(r.video_index));   // Etapa X.69
+          });
         } else {
           // Cursos en vivo sin grabación (próximos / sin URL aún): ocultar barra de progreso
           document.getElementById('progress-section').style.display = 'none';

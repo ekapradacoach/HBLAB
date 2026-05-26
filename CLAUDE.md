@@ -2309,6 +2309,87 @@ function positionActionMenu(menu, btnRect) {
 
 ---
 
+## Etapa X.69 — Cert: completedSet con strings + reescritura limpia
+
+Cierre del ciclo de bugs del certificado (X.65–X.68). Causa raíz: `completedSet` mezclaba números y strings entre callsites (load lo poblaba con `r.video_index` como número, markers también con número, pero la lógica del cert evaluaba a veces con cast implícito). Si por una race o un re-render parcial, `LESSON_IDX_BY_ID` quedaba con un mapping stale y devolvía un `undefined` que `Set.has(undefined)` resolvía como `false`, o peor, devolvía un número que coincidía con uno del set por type-juggling → cert disparaba antes de tiempo.
+
+### Solución: `completedSet` SIEMPRE guarda strings
+
+**Load inicial** (post-fetch de `video_progress`):
+
+```js
+(progressData || []).forEach(r => {
+  if (r.video_index != null) completedSet.add(String(r.video_index));
+});
+```
+
+**Markers** (`markComplete`, `markLessonComplete`, `markLiveCompleted`): ahora hacen `completedSet.add(String(idx))`.
+
+**Todos los `.has(...)`** del código (render del progreso de videos, sidebar de lecciones, lección activa, `isLiveCompleted`, `isModuleCompleted`) usan `completedSet.has(String(...))`. Type consistente en todo el flujo.
+
+### `isModuleCompleted(m)` reescrito
+
+```js
+function isModuleCompleted(m) {
+  const lessons   = m?.lessons || [];
+  const lessonDone = lessons.some(l => {
+    if (l.id && completedSet.has(String(l.id))) return true;          // por UUID
+    const idx = LESSON_IDX_BY_ID[l.id];
+    return (idx !== undefined) && completedSet.has(String(idx));      // por flat-index
+  });
+  const ord     = Number(m?.order_num);
+  const liveOrd = (Number.isFinite(ord) && ord > 0) ? ord : 1;
+  const liveIdx = m?.live ? String(-1 * liveOrd) : null;
+  const liveDone = liveIdx ? completedSet.has(liveIdx) : false;
+  return lessonDone || liveDone;
+}
+```
+
+- **Hedged**: chequea por UUID directo (futuro/forward-compat si la columna pasa a TEXT) Y como fallback por flat-index (esquema actual).
+- **Cambio semántico vs etapas anteriores**: ya **NO retorna `true` para módulos vacíos**. Solo retorna true si HAY un completed real. El filtrado de módulos vacíos / locked / live-pendiente se hace ÚNICAMENTE en `areAllModulesCompleted`.
+
+### `areAllModulesCompleted()` con triple filtro
+
+```js
+function areAllModulesCompleted() {
+  const now = new Date();
+  const available = (MODULES || []).filter(m => {
+    const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
+    const hasContent     = (m.lessons?.length > 0) || !!m.live;
+    const liveReady      = !m.live || m.live.live_ended === true;
+    return unlockedByDate && hasContent && liveReady;
+  });
+  const completed = available.filter(isModuleCompleted);
+  console.log('[CERT CHECK]', {
+    availableCount:  available.length,
+    completedCount:  completed.length,
+    availableTitles: available.map(m => m.title),
+    completedTitles: completed.map(m => m.title),
+  });
+  if (!available.length) return false;
+  return completed.length === available.length;
+}
+```
+
+**3 filtros que TIENEN que pasarse para que el módulo cuente:**
+1. Desbloqueado por fecha.
+2. Tiene contenido (lecciones o live).
+3. Si tiene live → `live_ended === true`.
+
+**`console.log('[CERT CHECK]', ...)`** antes del return — al abrir F12 y marcar cualquier ítem, el alumno (o admin) ve qué módulos están "available" y cuántos contó como completados.
+
+### `isCertModuleUnlocked` ahora es alias de `areAllModulesCompleted`
+
+Mismos 3 filtros, misma evaluación. Coherencia garantizada: el 🎓 del sidebar se desbloquea EXACTAMENTE cuando el cert se dispara.
+
+### Lo que NO cambia
+
+- `markLessonComplete` y `markLiveCompleted` siguen escribiendo INT en `video_progress.video_index` (la columna es INT, no se migró a TEXT). El cambio a strings ocurre SOLO en el `completedSet` en memoria.
+- Los registros legacy en BD con video_index hash (>10^9, residuos de X.54) siguen en BD pero ya no son matcheados por nada. Inofensivos.
+- `dashboard.html` cálculo de progreso (X.59) — sigue con números en su propio Set local; no afecta al cert de curso.html.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
