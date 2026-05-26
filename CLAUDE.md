@@ -2252,6 +2252,63 @@ Esto es intencional: el live es parte del módulo, y si no se finalizó, el mód
 
 ---
 
+## Etapa X.68 — Action-menu: flip-up más robusto (4 casos)
+
+Refinamiento de X.62. El flip-up funcionaba la mayoría de las veces, pero fallaba en algunos casos:
+- El reset de `maxHeight` se hacía DESPUÉS de medir `offsetHeight`, así que si un open previo había dejado scroll interno, la medición devolvía la altura artificialmente recortada → la decisión "cabe abajo" se cumplía erróneamente y no flipeaba.
+- `offsetHeight === 0` (menú aún no renderizado al medir) → fallback que decidía mal.
+- Lógica anterior solo flipeaba si `spaceAbove > spaceBelow`, lo que dejaba scrolls innecesarios cuando el menú entraba completo arriba aunque hubiera menos espacio.
+
+### Nueva `positionActionMenu(menu, btnRect)` — 4 casos explícitos
+
+```js
+function positionActionMenu(menu, btnRect) {
+  const margin     = 4, safe = 8;
+  const vh         = window.innerHeight;
+
+  // Reset ANTES de medir — sino un open previo deja offsetHeight chico.
+  menu.style.maxHeight = '';
+  menu.style.overflowY = '';
+
+  const menuHeight = Math.max(menu.offsetHeight, 120);  // fallback ante 0
+  const spaceBelow = vh - btnRect.bottom;
+  const spaceAbove = btnRect.top;
+
+  if (menuHeight + margin <= spaceBelow) {              // (a) Entra cómodo abajo
+    menu.style.top = (btnRect.bottom + margin) + 'px';
+    return;
+  }
+  if (menuHeight + margin <= spaceAbove) {              // (b) Cabe completo arriba → flip-up
+    menu.style.top = (btnRect.top - menuHeight - margin) + 'px';
+    return;
+  }
+  // (c) o (d): no cabe completo en ninguno → más espacio gana, con scroll interno.
+  if (spaceAbove > spaceBelow) {
+    menu.style.top       = safe + 'px';
+    menu.style.maxHeight = (spaceAbove - margin - safe) + 'px';
+    menu.style.overflowY = 'auto';
+  } else {
+    menu.style.top       = (btnRect.bottom + margin) + 'px';
+    menu.style.maxHeight = (spaceBelow - margin - safe) + 'px';
+    menu.style.overflowY = 'auto';
+  }
+}
+```
+
+### Aplicado a:
+
+- **Tab Cursos** → `toggleRowMenu(ev, courseId)` (ya lo llamaba desde X.62).
+- **Tab Alumnos** → `toggleUserRowMenu(ev, userId)` (ya lo llamaba desde X.62).
+- **Tab Coaches**: no tiene `action-menu` con menú multi-item — el botón de acciones por fila es distinto. No requiere flip-up.
+
+### Cambios clave vs X.62
+
+- Reset de `maxHeight` / `overflowY` se hace ANTES de medir `offsetHeight`. Evita el feedback de un open previo con scroll.
+- Fallback `Math.max(menu.offsetHeight, 120)` cuando la medición da 0 — la decisión nunca cae al case "cabe abajo" por error.
+- Flip-up siempre que cabe completo arriba (no requiere `spaceAbove > spaceBelow`) — UX más consistente.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

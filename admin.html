@@ -3289,29 +3289,52 @@
       }
     }
 
-    // Etapa X.62 — calcula `top` del action-menu y flipea hacia arriba si el
-    // menú no entra por abajo del viewport. Requiere que `menu` ya esté visible.
+    // Etapa X.62 + X.68 — Posicionamiento del action-menu (position:fixed):
+    // flipea hacia arriba si no entra abajo. Requiere `.open` ya aplicado para
+    // que `offsetHeight` mida el menú.
+    //
+    // 4 casos:
+    //   a) Entra abajo cómodo                    → top = btnBottom + margin.
+    //   b) No entra abajo, cabe arriba completo  → flip-up: top = btnTop - menuH - margin.
+    //   c) No entra abajo ni arriba completo, hay más espacio arriba → flip-up + maxHeight scroll.
+    //   d) No entra abajo ni arriba completo, hay más espacio abajo  → stay below + maxHeight scroll.
     function positionActionMenu(menu, btnRect) {
       const margin     = 4;
+      const safe       = 8;            // margen mínimo al borde del viewport
       const vh         = window.innerHeight;
-      const menuHeight = menu.offsetHeight;
+
+      // Reset inline de maxHeight/overflow ANTES de medir — sino un open previo
+      // con scroll deja offsetHeight artificialmente chico y la decisión falla.
+      menu.style.maxHeight = '';
+      menu.style.overflowY = '';
+
+      // offsetHeight = 0 si el menú no está visible. Forzamos un mínimo para que
+      // la decisión nunca caiga al case "entra abajo" por error.
+      const menuHeight = Math.max(menu.offsetHeight, 120);
       const spaceBelow = vh - btnRect.bottom;
       const spaceAbove = btnRect.top;
-      // Por default: abrir hacia abajo. Si el menú se sale por abajo Y hay más
-      // espacio arriba que abajo → flipear arriba.
-      if (menuHeight + margin > spaceBelow && spaceAbove > spaceBelow) {
-        // Flip-up
-        menu.style.top = Math.max(8, btnRect.top - menuHeight - margin) + 'px';
-      } else {
+
+      if (menuHeight + margin <= spaceBelow) {
+        // (a) Entra cómodo abajo
         menu.style.top = (btnRect.bottom + margin) + 'px';
-        // Si aun así no entra (viewport chico), limitamos altura con scroll.
-        if (menuHeight + margin > spaceBelow) {
-          menu.style.maxHeight = (spaceBelow - margin - 8) + 'px';
-          menu.style.overflowY = 'auto';
-        } else {
-          menu.style.maxHeight = '';
-          menu.style.overflowY = '';
-        }
+        return;
+      }
+      if (menuHeight + margin <= spaceAbove) {
+        // (b) Cabe completo arriba → flip-up
+        menu.style.top = (btnRect.top - menuHeight - margin) + 'px';
+        return;
+      }
+      // (c) o (d): no cabe completo en ninguno → elegir el que tiene más espacio y scrollear
+      if (spaceAbove > spaceBelow) {
+        // Flip-up con scroll interno
+        const h = spaceAbove - margin - safe;
+        menu.style.top       = safe + 'px';
+        menu.style.maxHeight = h + 'px';
+        menu.style.overflowY = 'auto';
+      } else {
+        menu.style.top       = (btnRect.bottom + margin) + 'px';
+        menu.style.maxHeight = (spaceBelow - margin - safe) + 'px';
+        menu.style.overflowY = 'auto';
       }
     }
     function closeAllRowMenus() {
