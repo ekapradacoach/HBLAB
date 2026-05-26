@@ -2700,6 +2700,18 @@
       return match ? `https://www.youtube.com/embed/${match[1]}` : url;
     }
 
+    // Etapa X.73 — espejo del getEmbedUrl de curso.html (Etapa X.40) y coach.html (X.53).
+    // Normaliza URLs de YouTube y Google Drive al formato embed antes de guardar.
+    function getEmbedUrl(url) {
+      if (!url) return '';
+      const s = String(url).trim();
+      const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+      const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
+      return s;
+    }
+
     // ══════════════════════════════════════════════
     // LEARNING POINTS helpers
     // ══════════════════════════════════════════════
@@ -5748,6 +5760,13 @@
       const wrap = document.getElementById('vc-videos-body');
       if (!wrap) return;
 
+      // Etapa X.73 — Si el curso es modules-mode, mostramos los módulos con sus
+      // lives (incluyendo input de grabación editable cuando live_ended=true).
+      if (course.course_type === 'modules') {
+        vcRenderModulesWithLives(course, wrap);
+        return;
+      }
+
       // Curso pregrabado → lista de videos
       if (!course.is_live) {
         const videos = Array.isArray(course.videos) ? course.videos : [];
@@ -5811,6 +5830,161 @@
             ${r.url ? `<a class="vc-video-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Ver ↗</a>` : ''}
           </div>
         `).join('')}`;
+    }
+
+    // Etapa X.73 — Vista "Ver curso" para modules-mode: lista módulos con sus
+    // lecciones + lives. Para lives con live_ended=true, muestra un input editable
+    // de recording_url con botón "Guardar grabación" (espejo del flujo de coach.html).
+    async function vcRenderModulesWithLives(course, wrap) {
+      wrap.innerHTML = '<div class="vc-spinner">Cargando módulos…</div>';
+      // 1) Módulos
+      const { data: modules, error: errMods } = await sb
+        .from('course_modules')
+        .select('id, title, order_num')
+        .eq('course_id', course.id)
+        .order('order_num');
+      if (errMods) {
+        console.error('vcRenderModulesWithLives · modules:', errMods);
+        wrap.innerHTML = `<div class="vc-empty">⚠️ Error al cargar módulos: ${escapeHtml(errMods.message)}</div>`;
+        return;
+      }
+      if (!modules?.length) {
+        wrap.innerHTML = '<div class="vc-empty">📋 Este curso aún no tiene módulos cargados.</div>';
+        return;
+      }
+      const modIds = modules.map(m => m.id);
+
+      // 2) Lecciones + lives en paralelo
+      const [lessonsRes, livesRes] = await Promise.all([
+        sb.from('course_lessons')
+          .select('id, module_id, title, video_url, order_num')
+          .in('module_id', modIds)
+          .order('order_num'),
+        sb.from('course_lives')
+          .select('id, module_id, live_url, live_date, recording_url, live_ended')
+          .in('module_id', modIds),
+      ]);
+      const lessonsByMod = {};
+      (lessonsRes.data || []).forEach(l => {
+        if (!lessonsByMod[l.module_id]) lessonsByMod[l.module_id] = [];
+        lessonsByMod[l.module_id].push(l);
+      });
+      const liveByMod = {};
+      (livesRes.data || []).forEach(lv => { liveByMod[lv.module_id] = lv; });
+
+      // 3) Render por módulo
+      wrap.innerHTML = modules.map((m, mi) => {
+        const lessons = lessonsByMod[m.id] || [];
+        const live    = liveByMod[m.id]    || null;
+
+        const lessonsHtml = lessons.length
+          ? lessons.map((l, li) => `
+              <div class="vc-video-row">
+                <div>
+                  <div class="vc-video-title">#${String(li + 1).padStart(2, '0')} · ${escapeHtml(l.title || `Lección ${li + 1}`)}</div>
+                  ${l.video_url ? `<div class="vc-video-sub">${escapeHtml(l.video_url)}</div>` : ''}
+                </div>
+                ${l.video_url ? `<a class="vc-video-link" href="${escapeHtml(l.video_url)}" target="_blank" rel="noopener noreferrer">Ver ↗</a>` : ''}
+              </div>`).join('')
+          : '<div class="vc-empty" style="padding:6px 0;">Sin lecciones.</div>';
+
+        const liveHtml = live ? vcRenderLiveBlock(live) : '';
+
+        return `
+          <div class="vc-module-block" style="margin-bottom:18px;padding:12px;border:1px solid var(--card-border);border-radius:10px;background:rgba(47,62,82,0.18);">
+            <div style="font-size:0.92rem;font-weight:800;margin-bottom:8px;">📚 ${escapeHtml(m.title || `Módulo ${mi + 1}`)}</div>
+            ${lessonsHtml}
+            ${liveHtml}
+          </div>`;
+      }).join('');
+    }
+
+    function vcRenderLiveBlock(live) {
+      const dateStr = live.live_date
+        ? new Date(live.live_date).toLocaleString('es-AR', { weekday:'long', day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' })
+        : null;
+      const safeId  = escapeHtml(live.id);
+
+      if (!live.live_ended) {
+        return `
+          <div class="vc-live-card" style="margin-top:10px;padding:10px;border:1px dashed var(--card-border);border-radius:8px;">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--gray-text);">📡 Live pendiente</div>
+            ${dateStr ? `<div style="font-size:0.85rem;margin-top:2px;">📅 ${escapeHtml(dateStr)}</div>` : ''}
+            ${live.live_url ? `<div style="margin-top:4px;"><a class="vc-video-link" href="${escapeHtml(live.live_url)}" target="_blank" rel="noopener noreferrer">Unirse a la clase ↗</a></div>` : ''}
+          </div>`;
+      }
+
+      // live_ended === true → input editable de recording_url
+      const recVal = escapeHtml(live.recording_url || '');
+      return `
+        <div class="vc-live-card" data-live-id="${safeId}"
+             style="margin-top:10px;padding:12px;border:1px solid rgba(200,230,0,0.25);border-radius:8px;background:rgba(200,230,0,0.04);">
+          <div style="font-size:0.78rem;font-weight:700;color:var(--lime);">✅ Live finalizado</div>
+          ${dateStr ? `<div style="font-size:0.78rem;color:var(--gray-text);margin-top:2px;">Realizado el ${escapeHtml(dateStr)}</div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+            <label style="font-size:0.72rem;color:var(--gray-text);font-weight:600;">URL de la grabación (YouTube o Drive)</label>
+            <input class="form-input vc-live-recording-input" type="url"
+                   placeholder="https://www.youtube.com/watch?v=... o https://drive.google.com/file/d/..."
+                   value="${recVal}" style="font-size:0.84rem;" />
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <button class="btn-primary" style="font-size:0.78rem;padding:7px 14px;"
+                      onclick="saveLiveRecordingAdmin('${safeId}', this)">
+                Guardar grabación
+              </button>
+              <span class="vc-live-rec-msg" style="font-size:0.78rem;"></span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Etapa X.73 — UPDATE course_lives.recording_url desde el admin (espejo de
+    // saveLiveRecording en coach.html). Aplica getEmbedUrl para normalizar.
+    async function saveLiveRecordingAdmin(liveId, btn) {
+      if (!liveId || !btn) return;
+      const card  = btn.closest('.vc-live-card');
+      const input = card?.querySelector('.vc-live-recording-input');
+      const msgEl = card?.querySelector('.vc-live-rec-msg');
+      if (!input) return;
+
+      const rawUrl   = (input.value || '').trim();
+      const embedUrl = rawUrl ? getEmbedUrl(rawUrl) : null;
+
+      const originalLabel = btn.textContent;
+      btn.disabled    = true;
+      btn.textContent = 'Guardando...';
+      if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; }
+
+      console.log('[saveLiveRecordingAdmin]', { liveId, rawUrl, embedUrl });
+
+      const { data, error } = await sb.from('course_lives')
+        .update({ recording_url: embedUrl })
+        .eq('id', liveId)
+        .select();
+
+      if (error) {
+        console.error('saveLiveRecordingAdmin error:', error);
+        if (msgEl) { msgEl.textContent = '⚠️ ' + error.message; msgEl.style.color = 'var(--red)'; }
+        btn.disabled    = false;
+        btn.textContent = originalLabel;
+        return;
+      }
+      if (!data || data.length === 0) {
+        if (msgEl) {
+          msgEl.textContent = '⚠️ No se actualizó ningún registro (¿RLS bloqueando?)';
+          msgEl.style.color = 'var(--red)';
+        }
+        btn.disabled    = false;
+        btn.textContent = originalLabel;
+        return;
+      }
+      // Éxito: reflejar URL normalizada + feedback
+      input.value = embedUrl || '';
+      if (msgEl) { msgEl.textContent = '✅ Grabación guardada'; msgEl.style.color = 'var(--lime)'; }
+      btn.textContent = '✓ Guardado';
+      setTimeout(() => {
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+        if (msgEl) msgEl.textContent = '';
+      }, 1800);
     }
 
     // ── Sección 2: Materiales (CRUD completo) ──────

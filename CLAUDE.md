@@ -2546,6 +2546,44 @@ No es bloqueante porque el fallback defensive de `liveCompletionIndex` los mapea
 
 ---
 
+## Etapa X.73 — Admin "Ver curso": grabación editable de lives (modules-mode)
+
+Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.html. El admin ahora puede subir/editar `recording_url` de los lives finalizados directamente desde la vista de detalle del curso, sin tener que entrar al wizard de edición.
+
+### Cambios en `admin.html`
+
+**1. `getEmbedUrl(url)`** agregado después de `toYoutubeEmbed` — espejo de la función ya existente en `curso.html` (X.40) y `coach.html` (X.53). Normaliza:
+- YouTube → `https://www.youtube.com/embed/ID`.
+- Drive → `https://drive.google.com/file/d/ID/preview`.
+- Otra URL → tal cual; vacío → `''`.
+
+**2. `vcRenderVideos(course)` extendido**: si `course.course_type === 'modules'`, delega a `vcRenderModulesWithLives(course, wrap)`. Los modos `is_live` legacy y videos sueltos siguen igual.
+
+**3. `vcRenderModulesWithLives(course, wrap)`** nueva: 3 queries en paralelo (módulos + lecciones + lives), agrupa por module_id y renderiza un card por módulo:
+- Título del módulo + lecciones (idéntico look a videos sueltos).
+- Si hay live + `!live_ended`: card dashed con "📡 Live pendiente" + fecha + link al meet.
+- Si hay live + `live_ended`: card lime con "✅ Live finalizado" + input editable de `recording_url` + botón "Guardar grabación" + span para mensaje inline.
+
+**4. `vcRenderLiveBlock(live)`** helper que genera el HTML del bloque de live (pendiente o finalizado).
+
+**5. `saveLiveRecordingAdmin(liveId, btn)`** nueva: aplica `getEmbedUrl(rawUrl)`, UPDATE `course_lives.recording_url` con `.select()` para detectar RLS, feedback inline (✅ Grabación guardada en lime / ⚠️ error en rojo). Patrón idéntico al `saveLiveRecording` de coach.html.
+
+### Flujo end-to-end
+
+1. Admin → Tab Cursos → ⋮ Ver curso → modal abierto.
+2. Sección "🎥 Contenido del curso" lista los módulos del curso modules-mode.
+3. Para cada módulo con live finalizado: input pre-poblado con el `recording_url` actual (vacío si no hay).
+4. Admin pega URL (YouTube o Drive) → "Guardar grabación" → `getEmbedUrl` normaliza → UPDATE → input se refresca con el URL canónico + "✅ Grabación guardada" 1.8s.
+5. El alumno verá la grabación en `curso.html` al recargar (sin notif real-time todavía).
+
+### Lo que NO se hizo
+
+- **Edición de `recording_url` para `course_type='live'` legacy** ya existía vía `course.recording_url` / `course.recordings`. No tocado.
+- **Notif push al alumno** cuando se sube la grabación — pendiente.
+- **Bulk upload** (subir grabaciones de varios lives a la vez) — no necesario para el caso de uso.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
