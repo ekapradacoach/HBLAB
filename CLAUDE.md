@@ -2390,6 +2390,65 @@ Mismos 3 filtros, misma evaluación. Coherencia garantizada: el 🎓 del sidebar
 
 ---
 
+## Etapa X.70 — Cert: invertir el rol de `live_ended` (bloquea en vez de excluir)
+
+Bug observado tras X.67/X.69. La regla de `liveReady` (filtrar módulos con `live_ended === false` ANTES del `every`) tenía el efecto opuesto al deseado: el módulo con live pendiente quedaba excluido del cálculo → reducía el denominador → si todos los otros módulos estaban completados, `every` devolvía `true` con un denominador chico y el cert disparaba prematuro.
+
+### El insight clave
+
+Un módulo con live pendiente (`live_ended=false`) tiene la UI **bloqueada para el alumno**: el botón "Marcar como completado" no aparece (Etapa X.63). Eso significa que **nunca va a estar en `completedSet`** hasta que el coach finalice el live. Por lo tanto:
+
+- Si NO lo filtramos antes (queda en `required`) → `every(isModuleCompleted)` falla en ese módulo → cert NO dispara. ✓
+- Si SÍ lo filtramos (sale de `required`) → desaparece del cálculo → cert puede disparar antes. ✗
+
+La regla correcta es **mantener** los módulos con live pendiente en `required` para que **bloqueen** el cert naturalmente.
+
+### Fix definitivo
+
+```js
+function areAllModulesCompleted() {
+  const now = new Date();
+  // Todos los desbloqueados por fecha con contenido. SIN filtrar por live_ended.
+  const required = (MODULES || []).filter(m => {
+    const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
+    const hasContent     = (m.lessons?.length > 0) || !!m.live;
+    return unlockedByDate && hasContent;
+  });
+  if (!required.length) return false;
+  return required.every(isModuleCompleted);
+}
+```
+
+**Diferencia con X.67/X.69:** se elimina el filtro `liveReady`. Los módulos con live `!live_ended` quedan en `required` pero no pueden completarse → `every` devuelve `false` hasta que el coach finalice y el alumno marque. Comportamiento intuitivo y consistente.
+
+### Reglas finales del cert (resumen)
+
+| Caso del módulo | ¿En `required`? | ¿Cómo se completa? |
+|---|---|---|
+| Bloqueado por fecha (`unlock_at` futura) | NO | N/A |
+| Sin contenido (módulo de certificación) | NO | N/A |
+| Con contenido + live finalizado | SÍ | Alumno marca lección o live |
+| Con contenido + live NO finalizado | SÍ | Coach finaliza → alumno marca |
+| Sin live + con lecciones | SÍ | Alumno marca alguna lección |
+
+El cert se dispara cuando **todos los módulos en `required` están completados**.
+
+`isCertModuleUnlocked` sigue siendo alias de `areAllModulesCompleted` → el 🎓 del sidebar tiene el mismo gating.
+
+### Console.log actualizado
+
+```js
+console.log('[CERT CHECK]', {
+  requiredCount, completedCount,
+  requiredTitles:  required.map(m => m.title),
+  completedTitles: completed.map(m => m.title),
+});
+```
+
+Renombrado de `available*` → `required*` para reflejar la nueva semántica.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

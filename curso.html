@@ -1314,28 +1314,33 @@
       return lessonDone || liveDone;
     }
 
-    // Regla estricta del certificado (Etapa X.65 → X.69):
+    // Regla estricta del certificado (Etapa X.70 — fix sobre X.67):
     //   1. Desbloqueado por fecha: !unlock_at || unlock_at <= now.
     //   2. Tiene contenido: lessons.length > 0 || !!live.
-    //   3. Si tiene live → live.live_ended === true (coach finalizó).
-    // De los que pasan, TODOS deben tener al menos un completed=true.
+    // De los que pasan, TODOS deben estar completados.
+    //
+    // El filtro `liveReady` (live_ended === true) FUE REMOVIDO: si un módulo
+    // tiene live pendiente de finalizar, queda en `required` pero el alumno NO
+    // puede marcarlo (el botón no existe), por lo que `every(isModuleCompleted)`
+    // devuelve false hasta que el coach lo finalice y el alumno lo marque. Eso
+    // previene el cert prematuro (que ocurría cuando el live pendiente reducía
+    // el denominador).
     function areAllModulesCompleted() {
       const now = new Date();
-      const available = (MODULES || []).filter(m => {
+      const required = (MODULES || []).filter(m => {
         const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
         const hasContent     = (m.lessons?.length > 0) || !!m.live;
-        const liveReady      = !m.live || m.live.live_ended === true;
-        return unlockedByDate && hasContent && liveReady;
+        return unlockedByDate && hasContent;
       });
-      const completed = available.filter(isModuleCompleted);
+      const completed = required.filter(isModuleCompleted);
       console.log('[CERT CHECK]', {
-        availableCount:  available.length,
+        requiredCount:   required.length,
         completedCount:  completed.length,
-        availableTitles: available.map(m => m.title),
+        requiredTitles:  required.map(m => m.title),
         completedTitles: completed.map(m => m.title),
       });
-      if (!available.length) return false;
-      return completed.length === available.length;
+      if (!required.length) return false;
+      return required.every(isModuleCompleted);
     }
 
     // ════════════════════════════════════════════════
