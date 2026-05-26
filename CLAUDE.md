@@ -2449,6 +2449,62 @@ Renombrado de `available*` → `required*` para reflejar la nueva semántica.
 
 ---
 
+## Etapa X.71 — Cert: guards duros en `showCertSection` y `checkQuizGateAndShowCert`
+
+Bug reportado tras X.70: el log `[CERT CHECK]` mostraba `completedCount:0, requiredCount:2` (correcto — cert NO debería dispararse) pero el certificado seguía apareciendo. Hay alguna ruta que escapa al gate de `updateProgress`.
+
+Posibles rutas que pueden disparar el cert:
+
+1. `updateProgress` modules mode → `checkQuizGateAndShowCert()` (guard reciente: solo `areAllModulesCompleted()`).
+2. `updateProgress` no-modules mode → `checkQuizGateAndShowCert()` cuando `pct >= 100`.
+3. `selectCertView()` → `showCertSection()` (guard `isCertModuleUnlocked()` = alias de areAllModulesCompleted).
+4. `checkQuizGateAndShowCert()` internamente → `fallbackToCert()` → `showCertSection()` cuando no hay quiz / ya pasó / etc.
+5. `showQuizResult(score, passed)` post-quiz pass → `showCertSection()` (sin guard explícito — asume que llegó al quiz porque cert era eligible).
+6. Quizá una ruta antigua que llamaba `showCertSection` directo y no se detectó.
+
+### Solución: guard DURO al entrar a `showCertSection` y `checkQuizGateAndShowCert`
+
+```js
+function isCertReady() {
+  if (isModulesMode) return areAllModulesCompleted();
+  if (!TOTAL_VIDEOS) return false;
+  const realCount = [...completedSet]
+    .filter(s => typeof s === 'string' && !s.startsWith('-'))
+    .length;
+  return realCount >= TOTAL_VIDEOS;
+}
+
+function showCertSection() {
+  if (!isCertReady()) {
+    console.warn('[showCertSection] BLOCKED — isCertReady() === false');
+    return;
+  }
+  // ... resto idéntico
+}
+
+async function checkQuizGateAndShowCert() {
+  if (!isCertReady()) {
+    console.warn('[checkQuizGateAndShowCert] BLOCKED — isCertReady() === false');
+    return;
+  }
+  // ... resto idéntico
+}
+```
+
+**Efecto**: cualquier ruta indebida que llame a `showCertSection` o `checkQuizGateAndShowCert` se corta en seco con un warning en consola. El cert solo aparece cuando `isCertReady()` (= `areAllModulesCompleted()` en modules mode) es `true`.
+
+### Simplificación de `updateProgress` (modules mode)
+
+Antes el branch decía `if (certEligible && total > 0)`. Ahora `if (areAllModulesCompleted())` sin compuertas adicionales. La variable `certEligible` se eliminó (era redundante). El guard en `showCertSection` es el último filtro.
+
+### Lo que NO se cambia
+
+- **`updateProgress` no-modules**: sigue con `if (pct >= 100) checkQuizGateAndShowCert()`. El nuevo guard en `checkQuizGateAndShowCert` valida con `isCertReady` que en no-modules mode usa `pct >= 100` también. Consistente.
+- **Post-quiz `showCertSection`** (línea 2601): la llamada tras `passed=true` queda igual. Si por alguna razón el alumno pasó el quiz pero ya no es cert-ready (revirtió completión, edge case raro), el guard bloquea. Comportamiento correcto.
+- **`selectCertView`**: el guard interno `isCertModuleUnlocked()` se mantiene. Doble seguridad con el guard de `showCertSection`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |

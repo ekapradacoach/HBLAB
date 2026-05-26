@@ -983,20 +983,20 @@
       const fill  = document.getElementById('progress-fill');
 
       if (isModulesMode) {
-        const contentModules   = (MODULES || []).filter(m => !isCertModule(m));
-        const total            = contentModules.length;
-        const done             = contentModules.filter(isModuleCompleted).length;
-        const pct              = total > 0 ? Math.round(done / total * 100) : 0;
-        const certEligible     = areAllModulesCompleted();   // incluye cert module (empty → true)
+        const contentModules = (MODULES || []).filter(m => !isCertModule(m));
+        const total          = contentModules.length;
+        const done           = contentModules.filter(isModuleCompleted).length;
+        const pct            = total > 0 ? Math.round(done / total * 100) : 0;
 
         if (fill) fill.style.width = pct + '%';
 
-        if (certEligible && total > 0) {
+        // Etapa X.71 — Trigger del cert: ÚNICA condición = areAllModulesCompleted().
+        // Sin `total > 0` redundante ni otras compuertas.
+        if (areAllModulesCompleted()) {
           if (label) {
             label.textContent = '¡Curso completado! 🎉';
             label.classList.add('completed');
           }
-          // Dispara el flujo del certificado (con quiz gate si aplica).
           checkQuizGateAndShowCert();
           return;
         }
@@ -1028,7 +1028,24 @@
     }
 
     /* ── Mostrar sección certificado ───────────────── */
+    // Etapa X.71 — Gate unificado: solo cert si TODO está completo.
+    // En modules mode → areAllModulesCompleted(). En no-modules → pct >= 100.
+    function isCertReady() {
+      if (isModulesMode) return areAllModulesCompleted();
+      if (!TOTAL_VIDEOS) return false;
+      const realCount = [...completedSet]
+        .filter(s => typeof s === 'string' && !s.startsWith('-'))
+        .length;
+      return realCount >= TOTAL_VIDEOS;
+    }
+
     function showCertSection() {
+      // Etapa X.71 — Guard duro: bloquear el cert si NO está realmente listo.
+      // Cualquier ruta indebida que llame a showCertSection se corta acá.
+      if (!isCertReady()) {
+        console.warn('[showCertSection] BLOCKED — isCertReady() === false');
+        return;
+      }
       const section = document.getElementById('cert-section');
       section.classList.add('visible');
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -2283,6 +2300,11 @@
     };
 
     async function checkQuizGateAndShowCert() {
+      // Etapa X.71 — Guard duro: no entrar al gate si NO está realmente listo.
+      if (!isCertReady()) {
+        console.warn('[checkQuizGateAndShowCert] BLOCKED — isCertReady() === false');
+        return;
+      }
       // Por defecto, si algo falla → comportamiento legacy (cert directo)
       const fallbackToCert = () => { if (currentCertUrl) showCertSection(); };
 
