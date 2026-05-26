@@ -2481,7 +2481,7 @@
         return {
           id:        card.dataset.modId || null,
           title:     titleInput.value.trim(),
-          order_num: i,
+          order_num: i + 1,                              // Etapa X.72 — empieza en 1 (no 0)
           unlock_at: unlockRaw ? new Date(unlockRaw).toISOString() : null,
           lessons,
           has_live:  hasLive,

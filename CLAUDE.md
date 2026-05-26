@@ -2505,6 +2505,47 @@ Antes el branch decía `if (certEligible && total > 0)`. Ahora `if (areAllModule
 
 ---
 
+## Etapa X.72 — `course_modules.order_num` empieza en 1 (no en 0)
+
+Convención fijada: el `order_num` de los módulos al crearlos desde el form (admin o coach) **empieza en 1**, no en 0. La razón: `liveCompletionIndex(m) = -1 * order_num` genera el `video_index` del live para `video_progress`. Si `order_num = 0` → `video_index = 0` → **colisión** con el flat-index de la primera lección (que también es 0). Resultado: marcar el live de un módulo confundía la completitud con la primera lección.
+
+### Cambio en `admin.html`
+
+`getModulesFromForm()` línea 2484:
+
+```js
+// Antes
+order_num: i,
+// Ahora
+order_num: i + 1,    // empieza en 1 — evita colisión liveCompletionIndex / lesson_flat_idx
+```
+
+### Cambio en `coach.html`
+
+`getCoachModulesFromForm()` línea 3079: idéntico cambio `i` → `i + 1`.
+
+### Defensive fallback en `curso.html` (sin cambios)
+
+`liveCompletionIndex(m)` ya tenía el fallback `(order_num > 0 ? order_num : 1)` desde X.56 — sigue ahí como red de seguridad para módulos legacy en BD con `order_num=0`. Con el fix de X.72, los módulos nuevos nunca disparan ese fallback (porque `order_num >= 1`), pero los existentes con `order_num=0` seguirían mapeando a `-1` (no a `0`). El fallback evita colisiones en el lado de lectura aunque la BD tenga datos viejos.
+
+### `order_num` de lecciones
+
+Las lecciones (`course_lessons.order_num`) **siguen empezando en 0** dentro de cada módulo. No hay colisión porque las lecciones se identifican en `completedSet` por el flat-index (calculado vía `LESSONS_FLAT`) o por su UUID, no por `order_num` directo.
+
+### Pendiente / cleanup
+
+Módulos existentes en BD con `order_num=0` pueden corregirse manualmente:
+
+```sql
+UPDATE public.course_modules
+   SET order_num = order_num + 1
+ WHERE order_num = 0;
+```
+
+No es bloqueante porque el fallback defensive de `liveCompletionIndex` los mapea a `-1` correctamente. Pero re-escribir los módulos desde el wizard del admin/coach también los corrige automáticamente (al guardar se persiste `i + 1`).
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
