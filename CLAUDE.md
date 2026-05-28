@@ -2584,6 +2584,45 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.74.1 — Toggles de "Características" configurables desde admin
+
+Follow-up de X.74. Antes los 6 bloques se mostraban hardcoded para todos los cursos. Ahora el admin elige cuáles aparecen por curso desde el wizard (Step 3 "Página de venta").
+
+### SQL requerido (pendiente de ejecutar en Supabase)
+
+```sql
+ALTER TABLE public.courses
+  ADD COLUMN IF NOT EXISTS features JSONB
+  DEFAULT '["inicio","lives","grabaciones","material","foro","certificado"]'::jsonb;
+```
+
+Si la columna no existe todavía: cursos nuevos guardan `features` con `null` (PostgREST lo ignora), y `venta-curso.html` cae al default (todos los bloques activos). Tras correr el SQL, los toggles del admin se persisten correctamente.
+
+### admin.html
+
+- **Nueva sección en Step 3 del wizard "Página de venta"** (justo antes de "Lo que vas a aprender"): "Características del curso" con 6 toggles (uno por bloque). Usa el componente `.toggle-row` existente.
+- **`FEATURE_CATALOG`** — array fijo de 6 entradas `{ key, icon, title }`.
+- **`renderFeatureCheckboxes(enabledKeys)`** — renderiza los toggles marcando los que están en `enabledKeys`. Si recibe `null`/`undefined` → todos activos por default.
+- **`getFeaturesFromForm()`** — extrae el array de `key`s activas.
+- **Wiring**: `editCurso` llama `renderFeatureCheckboxes(c.features)`, `saveCurso` agrega `features: getFeaturesFromForm()` al payload, `resetCursoForm` llama `renderFeatureCheckboxes(null)` para reset, `loadCursos` agrega `features` al SELECT.
+
+### venta-curso.html
+
+- **SELECT extendido** con `features`.
+- **`renderCaracteristicas(course)`** resuelve el set activo:
+  - `course.features` array → `new Set(course.features)`.
+  - `course.features` string JSON → parsea y luego Set.
+  - `course.features` null/undefined → **todos los 6 keys** (compat).
+- Filtra `items` por `activeSet.has(it.key)`.
+- Si `activeSet.size === 0` o `items.length === 0` después de filtrar → **oculta la sección entera** con `section.style.display = 'none'`.
+
+### Lo que NO se hizo
+
+- **Editar título / descripción / ícono por bloque desde admin**: las descripciones quedan fijas en JS de `venta-curso.html`. Esto mantiene consistencia entre cursos (el "Foro de consultas" siempre dice lo mismo, etc.). Si en el futuro se quiere editar por curso, conviene un `features JSONB` con shape `{ key, title, desc, icon }` en vez de solo array de keys.
+- **Override de la fecha de inicio**: el bloque "📅 Inicio del curso" sigue tomando la fecha del primer módulo automáticamente (no hay input manual en el admin).
+
+---
+
 ## Etapa X.74 — Sección "Características del curso" en `venta-curso.html`
 
 Nueva sección genérica entre el hero y "Lo que vas a aprender", reutilizable para cualquier curso de la plataforma. Muestra 6 bloques en grilla con info estándar del producto + 1 campo dinámico (fecha de inicio).

@@ -892,7 +892,7 @@
 
       const { data: course, error } = await sb
         .from('courses')
-        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, banner_text, learning_points, syllabus, is_live, is_active')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, banner_text, learning_points, syllabus, is_live, is_active, features')
         .eq('slug', slug)
         .eq('is_active', true)
         .maybeSingle();
@@ -1002,9 +1002,28 @@
     // ── Etapa X.74 — Render: características genéricas del curso ──
     // Bloques 3x2 con info estándar. El único campo dinámico es la fecha de
     // "Inicio del curso", que viene del primer módulo (`unlock_at` o `live_date`).
+    // El admin elige qué bloques se muestran en `courses.features` (JSONB array de keys).
+    // Si `features` es null/undefined → todos activos por default (compat con cursos viejos).
     async function renderCaracteristicas(course) {
-      const grid = document.getElementById('features-grid');
+      const grid    = document.getElementById('features-grid');
+      const section = document.getElementById('caracteristicas');
       if (!grid) return;
+
+      // Resolver qué bloques están activos
+      let enabled = course.features;
+      if (typeof enabled === 'string') {
+        try { enabled = JSON.parse(enabled); } catch { enabled = null; }
+      }
+      // null/undefined/!array → todos por default
+      const activeSet = Array.isArray(enabled)
+        ? new Set(enabled)
+        : new Set(['inicio','lives','grabaciones','material','foro','certificado']);
+
+      // Si no hay ningún bloque activo → ocultar la sección entera
+      if (activeSet.size === 0) {
+        if (section) section.style.display = 'none';
+        return;
+      }
 
       // Resolver fecha de inicio (best-effort, no bloquea el render del resto)
       let fechaInicioStr = 'Disponible ahora';
@@ -1041,37 +1060,25 @@
       }
 
       const items = [
-        {
-          icon:  '📅',
-          title: 'Inicio del curso',
-          desc:  `<span class="feature-highlight">${escHtml(fechaInicioStr)}</span>`,
-        },
-        {
-          icon:  '🎥',
-          title: 'Clases en vivo',
-          desc:  'Módulos en vivo con el coach, uno cada 15 días los domingos.',
-        },
-        {
-          icon:  '📁',
-          title: 'Grabaciones permanentes',
-          desc:  'Cada clase queda disponible en la plataforma sin vencimiento.',
-        },
-        {
-          icon:  '📊',
-          title: 'Material de cada módulo',
-          desc:  'Diapositivas descargables incluidas en cada clase.',
-        },
-        {
-          icon:  '💬',
-          title: 'Foro de consultas',
-          desc:  'Espacio dedicado para preguntas en cada módulo.',
-        },
-        {
-          icon:  '🏅',
-          title: 'Certificado de finalización',
-          desc:  'Obtenés tu certificado al completar el curso.',
-        },
-      ];
+        { key: 'inicio',      icon: '📅', title: 'Inicio del curso',
+          desc: `<span class="feature-highlight">${escHtml(fechaInicioStr)}</span>` },
+        { key: 'lives',       icon: '🎥', title: 'Clases en vivo',
+          desc: 'Módulos en vivo con el coach, uno cada 15 días los domingos.' },
+        { key: 'grabaciones', icon: '📁', title: 'Grabaciones permanentes',
+          desc: 'Cada clase queda disponible en la plataforma sin vencimiento.' },
+        { key: 'material',    icon: '📊', title: 'Material de cada módulo',
+          desc: 'Diapositivas descargables incluidas en cada clase.' },
+        { key: 'foro',        icon: '💬', title: 'Foro de consultas',
+          desc: 'Espacio dedicado para preguntas en cada módulo.' },
+        { key: 'certificado', icon: '🏅', title: 'Certificado de finalización',
+          desc: 'Obtenés tu certificado al completar el curso.' },
+      ].filter(it => activeSet.has(it.key));
+
+      // Doble check: si tras filtrar quedó vacío, ocultar la sección.
+      if (!items.length) {
+        if (section) section.style.display = 'none';
+        return;
+      }
 
       grid.innerHTML = items.map(it => `
         <div class="feature-card">

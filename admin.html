@@ -1279,6 +1279,13 @@
                STEP 3 — PÁGINA DE VENTA
           ════════════════════════════════════════ -->
           <div class="wiz-step" data-step="3">
+            <!-- Etapa X.74 — Características del curso (toggles 6 bloques) -->
+            <div class="form-section">
+              <span class="section-label" style="display:block;margin-bottom:6px">Características del curso</span>
+              <p style="font-size:0.78rem;color:var(--gray-text);margin-bottom:10px">Bloques que aparecen en la sección "Todo lo que vas a tener al inscribirte" de la página de venta. Marcá los que apliquen a este curso.</p>
+              <div id="cf-features-list" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+
             <div class="form-section">
               <span class="section-label" style="display:block;margin-bottom:6px">Lo que vas a aprender</span>
               <p style="font-size:0.78rem;color:var(--gray-text);margin-bottom:10px">Íconos emoji + texto. Aparecen en la sección "Lo que vas a aprender" de la página de venta.</p>
@@ -2679,6 +2686,8 @@
       toggleCourseTypeFields();
       document.getElementById('lp-list').innerHTML = '';
       document.getElementById('sy-list').innerHTML = '';
+      // Etapa X.74 — reset features (default: todos activos)
+      renderFeatureCheckboxes(null);
       // Wizard + nuevos toggles (Sesión 52)
       const activeEl = document.getElementById('cf-is-active');
       if (activeEl) activeEl.checked = true;
@@ -2710,6 +2719,46 @@
       const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
       return s;
+    }
+
+    // ══════════════════════════════════════════════
+    // Etapa X.74 — Features del curso (toggles 6 bloques)
+    // ══════════════════════════════════════════════
+    // Catálogo fijo. Las descripciones son fijas en venta-curso.html (la fecha
+    // del bloque "inicio" viene del primer módulo). Acá solo gestionamos
+    // qué bloques aparecen activos por curso.
+    const FEATURE_CATALOG = [
+      { key: 'inicio',       icon: '📅', title: 'Inicio del curso' },
+      { key: 'lives',        icon: '🎥', title: 'Clases en vivo' },
+      { key: 'grabaciones',  icon: '📁', title: 'Grabaciones permanentes' },
+      { key: 'material',     icon: '📊', title: 'Material de cada módulo' },
+      { key: 'foro',         icon: '💬', title: 'Foro de consultas' },
+      { key: 'certificado',  icon: '🏅', title: 'Certificado de finalización' },
+    ];
+
+    function renderFeatureCheckboxes(enabledKeys) {
+      const list = document.getElementById('cf-features-list');
+      if (!list) return;
+      // Si enabledKeys es null/undefined → todos activos (default).
+      let active;
+      if (Array.isArray(enabledKeys))      active = new Set(enabledKeys);
+      else if (typeof enabledKeys === 'string') {
+        try { active = new Set(JSON.parse(enabledKeys)); }
+        catch { active = new Set(FEATURE_CATALOG.map(f => f.key)); }
+      } else                                active = new Set(FEATURE_CATALOG.map(f => f.key));
+
+      list.innerHTML = FEATURE_CATALOG.map(f => `
+        <label class="toggle-row" style="margin:0;">
+          <input type="checkbox" class="cf-feature-cb" data-key="${f.key}" ${active.has(f.key) ? 'checked' : ''} />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label"><span style="margin-right:6px">${f.icon}</span>${f.title}</span>
+        </label>`).join('');
+    }
+
+    function getFeaturesFromForm() {
+      return Array.from(document.querySelectorAll('.cf-feature-cb'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.key);
     }
 
     // ══════════════════════════════════════════════
@@ -3013,6 +3062,8 @@
       // Learning points & syllabus
       renderLpRows(c.learning_points || []);
       renderSyModules(c.syllabus     || []);
+      // Etapa X.74 — características del curso (toggles 6 bloques)
+      renderFeatureCheckboxes(c.features != null ? c.features : null);
 
       // Próximamente + Activo (Sesión 52: cf-is-active agregado)
       document.getElementById('cf-is-coming-soon').checked = !!c.is_coming_soon;
@@ -3107,6 +3158,7 @@
         course_type:      courseType,
         has_quiz:         hasQuiz,                                  // Etapa U
         scheduled_prices: getSchedPricesFromForm(),                 // Etapa X.38 — JSONB array [{date, price_ars, price_usd}]
+        features:         getFeaturesFromForm(),                    // Etapa X.74 — JSONB array de keys activas
       };
 
       let error, savedCourseId = editingCourseId;
@@ -3162,7 +3214,7 @@
     async function loadCursos() {
       const { data, error } = await sb
         .from('courses')
-        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, created_at')
+        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, features, created_at')
         .order('created_at');
       const tbody = document.getElementById('tbody-cursos');
 
