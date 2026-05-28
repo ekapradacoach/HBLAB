@@ -327,6 +327,52 @@
 
     .buy-note { margin-top: 12px; font-size: 0.8rem; color: var(--gray-text); letter-spacing: 0.04em; }
 
+    /* ─── Etapa X.74 — Características del curso (genérico) ───── */
+    #caracteristicas { background: var(--navy); }
+    .features-header { margin-bottom: 48px; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 26px 22px;
+      display: flex; flex-direction: column; gap: 10px;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .feature-card:hover {
+      border-color: rgba(200,230,0,0.3);
+      transform: translateY(-3px);
+    }
+    .feature-icon {
+      width: 44px; height: 44px;
+      background: rgba(200,230,0,0.08);
+      border: 1px solid rgba(200,230,0,0.2);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      margin-bottom: 4px;
+    }
+    .feature-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: -0.01em;
+    }
+    .feature-desc {
+      font-size: 0.86rem;
+      font-weight: 500;
+      color: var(--gray-text);
+      line-height: 1.5;
+    }
+    .feature-desc .feature-highlight {
+      color: var(--lime);
+      font-weight: 600;
+    }
+
     /* ─── Lo que vas a aprender ────────────────────── */
     #learn { background: var(--navy-light); }
 
@@ -537,6 +583,10 @@
       .learn-grid { grid-template-columns: 1fr; }
       .temario-grid { grid-template-columns: 1fr; }
       .instructores-grid { grid-template-columns: 1fr; max-width: 460px; }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }    /* tablet → 2x3 */
+    }
+    @media (max-width: 560px) {
+      .features-grid { grid-template-columns: 1fr; }                /* mobile → 1 col */
     }
     @media (max-width: 680px) {
       section { padding: 72px 0; }
@@ -620,6 +670,19 @@
         </button>
         <p class="buy-note">Acceso inmediato · Pago seguro</p>
 
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CARACTERÍSTICAS DEL CURSO (Etapa X.74) ────── -->
+  <section id="caracteristicas">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Lo que incluye</span>
+        <h2 class="section-title">Todo lo que vas a tener al inscribirte</h2>
+      </div>
+      <div class="features-grid" id="features-grid">
+        <!-- populated by renderCaracteristicas(course) -->
       </div>
     </div>
   </section>
@@ -906,6 +969,7 @@
       }
 
       // ── Sections ─────────────────────────────────
+      renderCaracteristicas(course);   // Etapa X.74 — bloques genéricos (async, no await)
       renderLearn(course.learning_points   || []);
       renderTemario(course.syllabus        || []);
       await renderInstructores(course.id);
@@ -913,7 +977,7 @@
       hideLoading();
 
       // ── Animate on scroll ────────────────────────
-      document.querySelectorAll('.learn-item, .temario-card, .instructor-card').forEach(el => {
+      document.querySelectorAll('.learn-item, .temario-card, .instructor-card, .feature-card').forEach(el => {
         el.style.opacity = '0';
         el.style.transform = 'translateY(24px)';
         el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
@@ -933,6 +997,96 @@
           <div class="learn-icon">${escHtml(p.icon || '📌')}</div>
           <p class="learn-text">${escHtml(p.text)}</p>
         </div>`).join('');
+    }
+
+    // ── Etapa X.74 — Render: características genéricas del curso ──
+    // Bloques 3x2 con info estándar. El único campo dinámico es la fecha de
+    // "Inicio del curso", que viene del primer módulo (`unlock_at` o `live_date`).
+    async function renderCaracteristicas(course) {
+      const grid = document.getElementById('features-grid');
+      if (!grid) return;
+
+      // Resolver fecha de inicio (best-effort, no bloquea el render del resto)
+      let fechaInicioStr = 'Disponible ahora';
+      try {
+        const { data: firstMods } = await sb
+          .from('course_modules')
+          .select('id, unlock_at')
+          .eq('course_id', course.id)
+          .order('order_num')
+          .limit(1);
+        const firstMod = (firstMods || [])[0];
+        let rawDate = firstMod?.unlock_at || null;
+        // Si no hay unlock_at, miramos el live_date del live de ese módulo (si tiene)
+        if (!rawDate && firstMod?.id) {
+          const { data: liveRow } = await sb
+            .from('course_lives')
+            .select('live_date')
+            .eq('module_id', firstMod.id)
+            .maybeSingle();
+          rawDate = liveRow?.live_date || null;
+        }
+        // Fallback final: course.live_date (modo live legacy)
+        if (!rawDate && course.live_date) rawDate = course.live_date;
+        if (rawDate) {
+          const d = new Date(rawDate);
+          if (!isNaN(d.getTime())) {
+            fechaInicioStr = d.toLocaleDateString('es-AR', {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('renderCaracteristicas: error resolviendo fecha de inicio →', e);
+      }
+
+      const items = [
+        {
+          icon:  '📅',
+          title: 'Inicio del curso',
+          desc:  `<span class="feature-highlight">${escHtml(fechaInicioStr)}</span>`,
+        },
+        {
+          icon:  '🎥',
+          title: 'Clases en vivo',
+          desc:  'Módulos en vivo con el coach, uno cada 15 días los domingos.',
+        },
+        {
+          icon:  '📁',
+          title: 'Grabaciones permanentes',
+          desc:  'Cada clase queda disponible en la plataforma sin vencimiento.',
+        },
+        {
+          icon:  '📊',
+          title: 'Material de cada módulo',
+          desc:  'Diapositivas descargables incluidas en cada clase.',
+        },
+        {
+          icon:  '💬',
+          title: 'Foro de consultas',
+          desc:  'Espacio dedicado para preguntas en cada módulo.',
+        },
+        {
+          icon:  '🏅',
+          title: 'Certificado de finalización',
+          desc:  'Obtenés tu certificado al completar el curso.',
+        },
+      ];
+
+      grid.innerHTML = items.map(it => `
+        <div class="feature-card">
+          <div class="feature-icon">${it.icon}</div>
+          <div class="feature-title">${escHtml(it.title)}</div>
+          <p class="feature-desc">${it.desc}</p>
+        </div>`).join('');
+
+      // Re-attach observer a las cards recién creadas (el bloque del init ya pasó)
+      grid.querySelectorAll('.feature-card').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(el);
+      });
     }
 
     // ── Render: temario ───────────────────────────────

@@ -2584,6 +2584,64 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.74 — Sección "Características del curso" en `venta-curso.html`
+
+Nueva sección genérica entre el hero y "Lo que vas a aprender", reutilizable para cualquier curso de la plataforma. Muestra 6 bloques en grilla con info estándar del producto + 1 campo dinámico (fecha de inicio).
+
+### HTML
+
+```html
+<section id="caracteristicas">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label">Lo que incluye</span>
+      <h2 class="section-title">Todo lo que vas a tener al inscribirte</h2>
+    </div>
+    <div class="features-grid" id="features-grid"></div>
+  </div>
+</section>
+```
+
+### 6 bloques
+
+| Ícono | Título | Descripción |
+|---|---|---|
+| 📅 | Inicio del curso | **Dinámico**: fecha del primer módulo (con highlight lime) |
+| 🎥 | Clases en vivo | Módulos en vivo con el coach, uno cada 15 días los domingos. |
+| 📁 | Grabaciones permanentes | Cada clase queda disponible en la plataforma sin vencimiento. |
+| 📊 | Material de cada módulo | Diapositivas descargables incluidas en cada clase. |
+| 💬 | Foro de consultas | Espacio dedicado para preguntas en cada módulo. |
+| 🏅 | Certificado de finalización | Obtenés tu certificado al completar el curso. |
+
+### Resolución de la fecha de inicio
+
+`renderCaracteristicas(course)` async, best-effort:
+
+1. SELECT `course_modules.unlock_at` ordenado por `order_num` LIMIT 1.
+2. Si `unlock_at` null → SELECT `course_lives.live_date` para ese `module_id`.
+3. Fallback final: `course.live_date` (modo live legacy).
+4. Si no hay ninguno → "Disponible ahora".
+
+Formato: `toLocaleDateString('es-AR', { weekday, day, month, year })` → ej. `"domingo 14 de junio de 2026"`.
+
+Try/catch envuelve toda la lógica — si fallan las queries, el bloque cae al placeholder y el resto de la sección renderiza igual.
+
+### CSS
+
+Variables existentes (`--card-bg`, `--card-border`, `--lime`, `--gray-text`). Bloques con borde `1px solid var(--card-border)`, hover `border-color: rgba(200,230,0,0.3)` + `translateY(-3px)` (mismo patrón que `.learn-item`). Ícono dentro de un cuadrado lime soft (`rgba(200,230,0,0.08)` + borde `rgba(200,230,0,0.2)`).
+
+**Grid responsivo:**
+- Desktop (`>900px`) → `repeat(3, 1fr)` = 3×2.
+- Tablet (`560px–900px`) → `repeat(2, 1fr)` = 2×3.
+- Mobile (`<560px`) → `1fr` = 1 columna.
+
+### Wiring
+
+- `renderCaracteristicas(course)` se llama en `init()` justo antes de `renderLearn`, sin `await` (es async pero no bloquea el resto del render).
+- `.feature-card` agregado al selector del `IntersectionObserver` (animate-on-scroll).
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
