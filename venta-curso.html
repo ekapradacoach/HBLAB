@@ -94,6 +94,24 @@
       position: fixed;
       top: 0; left: 0; right: 0;
       z-index: 200;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    /* Etapa X.76 — Modo marquee (scroll infinito) en mobile.
+       Se activa con la clase .scrolling agregada por JS cuando viewport < 768px.
+       Patrón espejo del marquee de index.html (Sesión 55). */
+    #banner-bar.scrolling {
+      padding-left: 0; padding-right: 0;
+      text-align: left;
+    }
+    #banner-bar.scrolling .banner-text {
+      display: inline-block;
+      padding-left: 100%;
+      animation: banner-bar-scroll 22s linear infinite;
+    }
+    @keyframes banner-bar-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
     }
 
     /* ─── Navbar ───────────────────────────────────── */
@@ -601,12 +619,35 @@
     }
     @media (max-width: 680px) {
       section { padding: 72px 0; }
-      .hero-title { font-size: clamp(2rem, 8vw, 2.8rem); }
       .footer-top { flex-direction: column; }
       .temario-list li { font-size: 0.85rem; }
     }
-    @media (max-width: 440px) {
-      .btn-buy-hero { width: 100%; justify-content: center; }
+    /* Etapa X.76 — fixes mobile del hero */
+    @media (max-width: 768px) {
+      #banner-bar { font-size: 0.82rem; }
+      /* Título: clamp con valor mínimo más chico para que títulos largos no se corten. */
+      .hero-title {
+        font-size: clamp(1.6rem, 5vw, 3rem);
+        line-height: 1.15;
+        word-break: break-word;
+      }
+      /* Descripción: aseguramos visibilidad completa (sin recortes ni max-height). */
+      .hero-subtitle {
+        font-size: 1rem;
+        line-height: 1.6;
+        overflow: visible;
+        max-height: none;
+        word-break: break-word;
+      }
+      /* Botón "Comprar ahora" — texto centrado en mobile (no solo en <=440px). */
+      .btn-buy-hero {
+        display: flex;
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+        padding: 16px 24px;
+        font-size: 1rem;
+      }
     }
   </style>
 </head>
@@ -919,14 +960,27 @@
       // ── Banner bar ────────────────────────────────
       if (course.banner_text) {
         const bannerEl = document.getElementById('banner-bar');
-        bannerEl.textContent = course.banner_text;
+        // Etapa X.76 — envolver el texto en un <span> para poder animarlo con
+        // CSS (.scrolling agrega marquee infinito horizontal en mobile <768px).
+        const txt = String(course.banner_text);
+        bannerEl.innerHTML = '<span class="banner-text"></span>';
+        bannerEl.querySelector('.banner-text').textContent = txt;
         bannerEl.style.display = 'block';
+        applyBannerMode();
+        window.addEventListener('resize', applyBannerMode);
         // Allow layout to paint before measuring
         requestAnimationFrame(() => {
           const bh = bannerEl.offsetHeight;
           navbar.style.top = bh + 'px';
           document.getElementById('hero').style.paddingTop = (80 + bh) + 'px';
         });
+      }
+
+      function applyBannerMode() {
+        const el = document.getElementById('banner-bar');
+        if (!el) return;
+        if (window.innerWidth < 768) el.classList.add('scrolling');
+        else                          el.classList.remove('scrolling');
       }
 
       // ── Page title + og:title (Sesión 47) ─────────

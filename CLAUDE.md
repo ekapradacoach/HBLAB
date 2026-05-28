@@ -2584,6 +2584,75 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.76 — Fixes mobile del hero en `venta-curso.html`
+
+4 ajustes para mejorar la experiencia en pantallas chicas.
+
+### 1. Banner global → marquee animado en mobile
+
+Antes el `#banner-bar` era texto estático centrado, en mobile el texto largo se cortaba o quedaba apretado. Ahora cuando el viewport está debajo de **768px**, se convierte en marquee horizontal infinito (mismo patrón que el anuncio global de `index.html`, Sesión 55).
+
+- **HTML**: el texto se envuelve en `<span class="banner-text">` para poder animarlo con CSS.
+- **CSS**: `#banner-bar.scrolling .banner-text { animation: banner-bar-scroll 22s linear infinite }` con `transform: translateX(0 → -100%)`. `padding-left: 100%` para que el texto empiece fuera de la pantalla.
+- **JS**: `applyBannerMode()` agrega/saca `.scrolling` según `window.innerWidth < 768`. Listener `resize` para reaccionar a rotaciones de pantalla.
+- **Font-size en mobile**: `0.82rem` vía `@media (max-width: 768px) { #banner-bar }`. En desktop sigue siendo `0.82rem` también (no cambia), pero el ajuste explícito previene heredar tamaños mayores si un día se modifica el default.
+
+### 2. Hero title → clamp más flexible
+
+Antes: `clamp(2rem, 8vw, 2.8rem)` en `@media (max-width: 680px)` — mínimo 2rem (32px) que en títulos largos de 4-6 palabras se cortaba a dos+ líneas y desbordaba.
+
+Ahora (`@media (max-width: 768px)`):
+```css
+.hero-title {
+  font-size: clamp(1.6rem, 5vw, 3rem);
+  line-height: 1.15;
+  word-break: break-word;
+}
+```
+
+Mínimo más chico (1.6rem = 25.6px) + `word-break: break-word` evita que palabras largas (URLs, hashtags) rompan el layout.
+
+### 3. Botón "Comprar ahora" centrado en mobile
+
+Antes: solo `<=440px` aplicaba `width: 100%; justify-content: center`. En tablets (440–768px) el botón tenía padding ancho fijo y a veces el ícono+texto quedaba descentrado.
+
+Ahora (`@media (max-width: 768px)`):
+```css
+.btn-buy-hero {
+  display: flex;
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  padding: 16px 24px;
+  font-size: 1rem;
+}
+```
+
+`display: flex` (no `inline-flex`) + `text-align: center` + `justify-content: center` garantiza centrado tanto del SVG como del texto en cualquier ancho.
+
+### 4. Descripción visible sin recortes
+
+Antes: `.hero-subtitle` no tenía media query mobile — en pantallas chicas, el texto Playfair italic con `max-width: 620px` podía quedar con `font-size` muy chico relativo al título y se acortaba visualmente.
+
+Ahora:
+```css
+.hero-subtitle {
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow: visible;
+  max-height: none;
+  word-break: break-word;
+}
+```
+
+`overflow: visible` + `max-height: none` son defensivos — la spec del usuario explícitamente lo pedía aunque el default ya era visible. `word-break: break-word` protege contra descripciones con URLs.
+
+### Consolidación de breakpoints
+
+El media query existente `(max-width: 680px)` quedó SOLO con `section { padding }`, `.footer-top`, `.temario-list li`. Todo lo del hero se movió a `(max-width: 768px)` que es el breakpoint estándar de tablet/mobile.
+
+---
+
 ## Etapa X.75 — "Descripción de modalidad" (texto libre debajo de las características)
 
 Campo nuevo en el wizard del admin (Step 3 "Página de venta") y display en `venta-curso.html` debajo del grid de características. Texto libre para explicar formato, fechas, condiciones especiales, etc.
