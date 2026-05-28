@@ -372,6 +372,17 @@
       color: var(--lime);
       font-weight: 600;
     }
+    /* Etapa X.75 — Descripción de modalidad (texto libre debajo del grid) */
+    .modalidad-desc {
+      margin-top: 36px;
+      padding-top: 28px;
+      border-top: 1px solid var(--card-border);
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--gray-text);
+      max-width: 820px;
+      white-space: pre-line;   /* respeta saltos de línea del admin */
+    }
 
     /* ─── Lo que vas a aprender ────────────────────── */
     #learn { background: var(--navy-light); }
@@ -684,6 +695,8 @@
       <div class="features-grid" id="features-grid">
         <!-- populated by renderCaracteristicas(course) -->
       </div>
+      <!-- Etapa X.75 — descripción de modalidad: solo se renderiza si modalidad_descripcion no es vacío -->
+      <p class="modalidad-desc" id="modalidad-desc" style="display:none;"></p>
     </div>
   </section>
 
@@ -892,7 +905,7 @@
 
       const { data: course, error } = await sb
         .from('courses')
-        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, banner_text, learning_points, syllabus, is_live, is_active, features')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, banner_text, learning_points, syllabus, is_live, is_active, features, modalidad_descripcion')
         .eq('slug', slug)
         .eq('is_active', true)
         .maybeSingle();
@@ -1019,8 +1032,9 @@
         ? new Set(enabled)
         : new Set(['inicio','lives','grabaciones','material','foro','certificado']);
 
-      // Si no hay ningún bloque activo → ocultar la sección entera
-      if (activeSet.size === 0) {
+      // Si no hay ningún bloque activo Y tampoco hay modalidad → ocultar la sección entera
+      const modalidadTxt = (course.modalidad_descripcion || '').trim();
+      if (activeSet.size === 0 && !modalidadTxt) {
         if (section) section.style.display = 'none';
         return;
       }
@@ -1074,18 +1088,30 @@
           desc: 'Obtenés tu certificado al completar el curso.' },
       ].filter(it => activeSet.has(it.key));
 
-      // Doble check: si tras filtrar quedó vacío, ocultar la sección.
-      if (!items.length) {
+      // Si tras filtrar no quedó ningún feature pero hay modalidad → render solo
+      // de la modalidad (sin grid). Si no hay ni una cosa ni la otra, ocultar todo.
+      if (!items.length && !modalidadTxt) {
         if (section) section.style.display = 'none';
         return;
       }
-
+      // Render del grid (puede quedar vacío si no hay features pero sí hay modalidad)
       grid.innerHTML = items.map(it => `
         <div class="feature-card">
           <div class="feature-icon">${it.icon}</div>
           <div class="feature-title">${escHtml(it.title)}</div>
           <p class="feature-desc">${it.desc}</p>
         </div>`).join('');
+
+      // Etapa X.75 — descripción de modalidad (texto libre debajo del grid)
+      const modDescEl = document.getElementById('modalidad-desc');
+      if (modDescEl) {
+        if (modalidadTxt) {
+          modDescEl.textContent = modalidadTxt;   // textContent → escape automático; \n preservados por white-space:pre-line
+          modDescEl.style.display = '';
+        } else {
+          modDescEl.style.display = 'none';
+        }
+      }
 
       // Re-attach observer a las cards recién creadas (el bloque del init ya pasó)
       grid.querySelectorAll('.feature-card').forEach(el => {

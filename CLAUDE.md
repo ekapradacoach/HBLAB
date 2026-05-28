@@ -2584,6 +2584,57 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.75 — "Descripción de modalidad" (texto libre debajo de las características)
+
+Campo nuevo en el wizard del admin (Step 3 "Página de venta") y display en `venta-curso.html` debajo del grid de características. Texto libre para explicar formato, fechas, condiciones especiales, etc.
+
+### SQL requerido (pendiente)
+
+```sql
+ALTER TABLE public.courses
+  ADD COLUMN IF NOT EXISTS modalidad_descripcion TEXT;
+```
+
+Si la columna no existe, los cursos viejos cargan `null` y el campo no se muestra. Tras el SQL, el textarea del admin persiste su contenido.
+
+### admin.html
+
+- **Nueva form-section "Descripción de modalidad"** en Step 3, **justo debajo de "Características del curso"**. Tagline: *"Texto libre que aparece debajo de las características en la página de venta. Usalo para explicar el formato, fechas, condiciones especiales, etc."*
+- `<textarea class="form-textarea" id="cf-modalidad-descripcion" rows="6">` con placeholder de ejemplo.
+- Wiring: `editCurso` lee `c.modalidad_descripcion`, `saveCurso` agrega `modalidad_descripcion` al payload (trim + `null` si vacío), `resetCursoForm` blanquea, `loadCursos` SELECT extendido.
+
+### venta-curso.html
+
+- **SELECT extendido** con `modalidad_descripcion`.
+- **`<p class="modalidad-desc" id="modalidad-desc" style="display:none">`** agregado dentro de `#caracteristicas .container`, **después del `.features-grid`**.
+- `renderCaracteristicas`: tras pintar el grid, si `course.modalidad_descripcion` tiene texto → `modDescEl.textContent = txt; display = ''`. Sino se queda oculto.
+- `textContent` (no `innerHTML`) → escape automático. Combinado con `white-space: pre-line` en CSS, los saltos de línea del admin se respetan sin permitir HTML inyectado.
+
+### CSS
+
+```css
+.modalidad-desc {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--card-border);   /* separador sutil arriba */
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--gray-text);
+  max-width: 820px;
+  white-space: pre-line;                       /* preserva los \n del admin */
+}
+```
+
+Tipografía coherente con la descripción del hero (texto claro, color gris secundario).
+
+### Edge cases
+
+- **Sin features activos pero con modalidad** → la sección `#caracteristicas` se mantiene visible mostrando solo el párrafo de modalidad (sin grid).
+- **Sin features activos y sin modalidad** → la sección se oculta por completo (`display: none`).
+- **Con features pero sin modalidad** → grid renderiza normal, `<p>` queda oculto.
+
+---
+
 ## Etapa X.74.1 — Toggles de "Características" configurables desde admin
 
 Follow-up de X.74. Antes los 6 bloques se mostraban hardcoded para todos los cursos. Ahora el admin elige cuáles aparecen por curso desde el wizard (Step 3 "Página de venta").

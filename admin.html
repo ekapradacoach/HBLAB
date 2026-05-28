@@ -1286,6 +1286,14 @@
               <div id="cf-features-list" style="display:flex;flex-direction:column;gap:8px"></div>
             </div>
 
+            <!-- Etapa X.75 — Descripción de modalidad (texto libre debajo de las características) -->
+            <div class="form-section">
+              <span class="section-label" style="display:block;margin-bottom:6px">Descripción de modalidad</span>
+              <p style="font-size:0.78rem;color:var(--gray-text);margin-bottom:10px">Texto libre que aparece debajo de las características en la página de venta. Usalo para explicar el formato, fechas, condiciones especiales, etc.</p>
+              <textarea class="form-textarea" id="cf-modalidad-descripcion" rows="6"
+                        placeholder="Ej: El curso se dicta los domingos a las 19hs por Zoom. Las grabaciones quedan disponibles en la plataforma hasta 6 meses después de finalizado…"></textarea>
+            </div>
+
             <div class="form-section">
               <span class="section-label" style="display:block;margin-bottom:6px">Lo que vas a aprender</span>
               <p style="font-size:0.78rem;color:var(--gray-text);margin-bottom:10px">Íconos emoji + texto. Aparecen en la sección "Lo que vas a aprender" de la página de venta.</p>
@@ -2688,6 +2696,9 @@
       document.getElementById('sy-list').innerHTML = '';
       // Etapa X.74 — reset features (default: todos activos)
       renderFeatureCheckboxes(null);
+      // Etapa X.75 — reset modalidad
+      const modDescElReset = document.getElementById('cf-modalidad-descripcion');
+      if (modDescElReset) modDescElReset.value = '';
       // Wizard + nuevos toggles (Sesión 52)
       const activeEl = document.getElementById('cf-is-active');
       if (activeEl) activeEl.checked = true;
@@ -3064,6 +3075,9 @@
       renderSyModules(c.syllabus     || []);
       // Etapa X.74 — características del curso (toggles 6 bloques)
       renderFeatureCheckboxes(c.features != null ? c.features : null);
+      // Etapa X.75 — descripción de modalidad (texto libre)
+      const modDescEl = document.getElementById('cf-modalidad-descripcion');
+      if (modDescEl) modDescEl.value = c.modalidad_descripcion || '';
 
       // Próximamente + Activo (Sesión 52: cf-is-active agregado)
       document.getElementById('cf-is-coming-soon').checked = !!c.is_coming_soon;
@@ -3159,6 +3173,7 @@
         has_quiz:         hasQuiz,                                  // Etapa U
         scheduled_prices: getSchedPricesFromForm(),                 // Etapa X.38 — JSONB array [{date, price_ars, price_usd}]
         features:         getFeaturesFromForm(),                    // Etapa X.74 — JSONB array de keys activas
+        modalidad_descripcion: (document.getElementById('cf-modalidad-descripcion')?.value || '').trim() || null,   // Etapa X.75
       };
 
       let error, savedCourseId = editingCourseId;
@@ -3214,7 +3229,7 @@
     async function loadCursos() {
       const { data, error } = await sb
         .from('courses')
-        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, features, created_at')
+        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, features, modalidad_descripcion, created_at')
         .order('created_at');
       const tbody = document.getElementById('tbody-cursos');
 
