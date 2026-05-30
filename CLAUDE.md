@@ -2584,6 +2584,36 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.78 — `toLocalDatetimeInput` reescrito con getters locales
+
+El fix de X.77 usaba `new Date(d.getTime() - offset).toISOString().slice(0, 16)` para construir el string del input. Aunque conceptualmente funciona en muchos casos, mezcla métodos UTC (`toISOString`) con manipulación de offset local — frágil ante DST y propenso a errores off-by-one cuando el día cambia por el ajuste de offset.
+
+**Approach correcto** — usar directamente los getters locales del objeto `Date` (que ya respetan el timezone del sistema operativo + DST automáticamente):
+
+```js
+function toLocalDatetimeInput(isoUtc) {
+  if (!isoUtc) return '';
+  const d = new Date(isoUtc);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const min  = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+```
+
+- `new Date(isoUtc)` parsea el ISO UTC.
+- Los getters `getHours()`, `getDate()`, etc. devuelven la representación en **hora local del browser** sin que tengamos que calcular offsets manualmente — el motor JS ya lo hace, contemplando DST si aplica.
+- El string `'YYYY-MM-DDTHH:MM'` resultante es exactamente lo que el input `datetime-local` quiere.
+
+`fromLocalDatetimeInput` queda igual (X.77): `new Date(localStr).toISOString()` — el browser interpreta el string sin offset como hora local y `toISOString` lo convierte a UTC.
+
+**Callsites no cambian**: los 6 puntos del wizard (3 lecturas + 3 guardados) siguen llamando a los mismos `toLocalDatetimeInput` / `fromLocalDatetimeInput`. Solo cambió la implementación interna del primero.
+
+---
+
 ## Etapa X.77 — Fix timezone en `datetime-local` del wizard (admin.html)
 
 Bug: los campos `<input type="datetime-local">` del wizard de cursos (`cf-mod-unlock`, `cf-mod-live-date`, `cf-live-date`) cargaban valores de Supabase en UTC y los mostraban como si fueran hora local — el admin que estaba en Argentina (UTC-3) veía un live programado para las 19:00 mostrado como 22:00 (UTC literal). Igual problema en sentido inverso: al guardar, `new Date(localStr).toISOString()` ya funcionaba correctamente (interpreta local → UTC), pero quedaba inconsistente con la lectura buggy.

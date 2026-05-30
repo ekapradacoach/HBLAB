@@ -2284,25 +2284,35 @@
     }
 
     // ════════════════════════════════════════════════
-    // Etapa X.77 — Helpers timezone-aware para <input type="datetime-local">
+    // Etapa X.78 — Helpers timezone-aware para <input type="datetime-local">
     // ════════════════════════════════════════════════
-    // Supabase guarda TIMESTAMPTZ en UTC. Si seteamos un input datetime-local con
-    // el string ISO truncado (slice 0,16), el browser lo interpreta como hora
-    // LOCAL — lo que muestra al usuario hora UTC (3hs corridas en Argentina).
-    // toLocalDatetimeInput convierte UTC → hora local antes de setear el value.
-    // fromLocalDatetimeInput interpreta el value como hora local → ISO UTC.
+    // Supabase guarda TIMESTAMPTZ en UTC. Los inputs datetime-local trabajan
+    // SIEMPRE en hora local del browser.
+    //
+    // toLocalDatetimeInput: usa los getters locales (getHours, getDate, etc.)
+    // que ya respetan el timezone del SO + DST → construye el string
+    // 'YYYY-MM-DDTHH:MM' que el input necesita. Esto evita el error sutil del
+    // approach anterior (offset + toISOString) que se rompía con DST y mezclaba
+    // métodos UTC con manipulación de offset local.
+    //
+    // fromLocalDatetimeInput: el browser parsea 'YYYY-MM-DDTHH:MM' como hora
+    // local; toISOString lo convierte a UTC. Directo.
     function toLocalDatetimeInput(isoUtc) {
       if (!isoUtc) return '';
       const d = new Date(isoUtc);
       if (isNaN(d.getTime())) return '';
-      const offset = d.getTimezoneOffset() * 60000;   // ms
-      return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+      const yyyy = d.getFullYear();
+      const mm   = String(d.getMonth() + 1).padStart(2, '0');
+      const dd   = String(d.getDate()).padStart(2, '0');
+      const hh   = String(d.getHours()).padStart(2, '0');
+      const min  = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
     }
     function fromLocalDatetimeInput(localStr) {
       if (!localStr) return null;
-      const d = new Date(localStr);   // se interpreta como hora local
+      const d = new Date(localStr);   // browser parsea como hora local
       if (isNaN(d.getTime())) return null;
-      return d.toISOString();
+      return d.toISOString();          // → UTC para Supabase
     }
 
     // Etapa X.38 — addModuleRow recibe también unlock_at y un objeto `live`
