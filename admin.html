@@ -2283,10 +2283,32 @@
       document.getElementById('cf-modules-section').style.display = (t === 'modules') ? '' : 'none';
     }
 
+    // ════════════════════════════════════════════════
+    // Etapa X.77 — Helpers timezone-aware para <input type="datetime-local">
+    // ════════════════════════════════════════════════
+    // Supabase guarda TIMESTAMPTZ en UTC. Si seteamos un input datetime-local con
+    // el string ISO truncado (slice 0,16), el browser lo interpreta como hora
+    // LOCAL — lo que muestra al usuario hora UTC (3hs corridas en Argentina).
+    // toLocalDatetimeInput convierte UTC → hora local antes de setear el value.
+    // fromLocalDatetimeInput interpreta el value como hora local → ISO UTC.
+    function toLocalDatetimeInput(isoUtc) {
+      if (!isoUtc) return '';
+      const d = new Date(isoUtc);
+      if (isNaN(d.getTime())) return '';
+      const offset = d.getTimezoneOffset() * 60000;   // ms
+      return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+    }
+    function fromLocalDatetimeInput(localStr) {
+      if (!localStr) return null;
+      const d = new Date(localStr);   // se interpreta como hora local
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
+    }
+
     // Etapa X.38 — addModuleRow recibe también unlock_at y un objeto `live`
     // ({ id, live_date, live_url, recording_url }) para precargar el form
-    // de drip + live por módulo. `unlock_at` y `live.live_date` se truncan a
-    // 16 chars para el formato datetime-local (YYYY-MM-DDTHH:MM).
+    // de drip + live por módulo. `unlock_at` y `live.live_date` se convierten
+    // a hora local (Etapa X.77) antes de pasar al input datetime-local.
     function addModuleRow(modId = '', title = '', lessons = [], unlockAt = '', live = null) {
       const list = document.getElementById('cf-modules-list');
       const card = document.createElement('div');
@@ -2299,9 +2321,9 @@
       // desde los inputs del form; lo togglea con el botón "Finalizar live").
       if (live?.live_ended)    card.dataset.liveEnded    = '1';
 
-      const unlockVal    = unlockAt ? String(unlockAt).slice(0, 16) : '';
+      const unlockVal    = toLocalDatetimeInput(unlockAt);
       const hasLive      = !!(live && (live.live_date || live.live_url));
-      const liveDateVal  = live?.live_date ? String(live.live_date).slice(0, 16) : '';
+      const liveDateVal  = toLocalDatetimeInput(live?.live_date);
       const liveUrlVal   = live?.live_url || '';
 
       // Etapa X.45 — bloque "Finalizar live" (solo si el live ya pasó y existe en BD)
@@ -2497,12 +2519,12 @@
           id:        card.dataset.modId || null,
           title:     titleInput.value.trim(),
           order_num: i + 1,                              // Etapa X.72 — empieza en 1 (no 0)
-          unlock_at: unlockRaw ? new Date(unlockRaw).toISOString() : null,
+          unlock_at: fromLocalDatetimeInput(unlockRaw),
           lessons,
           has_live:  hasLive,
           live: hasLive ? {
             id:            card.dataset.liveId || null,
-            live_date:     liveDateRaw ? new Date(liveDateRaw).toISOString() : null,
+            live_date:     fromLocalDatetimeInput(liveDateRaw),
             live_url:      liveUrl || null,
             recording_url: card.dataset.liveRecording || null,
             // Etapa X.45 — preservar el flag live_ended para que el UPSERT del sync
@@ -3094,11 +3116,8 @@
       document.getElementById('cf-live-fields').classList.toggle('visible', isLive);
       document.getElementById('cf-live-url').value       = c.live_url       || '';
       document.getElementById('cf-recording-url').value  = c.recording_url  || '';
-      if (c.live_date) {
-        document.getElementById('cf-live-date').value = c.live_date.slice(0, 16);
-      } else {
-        document.getElementById('cf-live-date').value = '';
-      }
+      // Etapa X.77 — toLocalDatetimeInput convierte UTC → hora local (AR=UTC-3)
+      document.getElementById('cf-live-date').value = toLocalDatetimeInput(c.live_date);
 
       // Coaches asignados al curso (Sesión 52) — render checkboxes con asignaciones existentes
       loadCoachesForForm(c.id);
@@ -3130,7 +3149,7 @@
       const isLive      = document.getElementById('cf-is-live').checked;
       const liveUrl     = document.getElementById('cf-live-url').value.trim()      || null;
       const liveDateRaw = document.getElementById('cf-live-date').value;
-      const liveDate    = liveDateRaw ? new Date(liveDateRaw).toISOString()         : null;
+      const liveDate    = fromLocalDatetimeInput(liveDateRaw);   // Etapa X.77 — hora local → UTC
       const recordingUrl = document.getElementById('cf-recording-url').value.trim() || null;
 
       if (isLive && !liveUrl) return showAlert('alert-cursos', 'Si es clase en vivo, el link de Meet/Zoom es obligatorio.');

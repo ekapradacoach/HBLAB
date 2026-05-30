@@ -2584,6 +2584,50 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.77 — Fix timezone en `datetime-local` del wizard (admin.html)
+
+Bug: los campos `<input type="datetime-local">` del wizard de cursos (`cf-mod-unlock`, `cf-mod-live-date`, `cf-live-date`) cargaban valores de Supabase en UTC y los mostraban como si fueran hora local — el admin que estaba en Argentina (UTC-3) veía un live programado para las 19:00 mostrado como 22:00 (UTC literal). Igual problema en sentido inverso: al guardar, `new Date(localStr).toISOString()` ya funcionaba correctamente (interpreta local → UTC), pero quedaba inconsistente con la lectura buggy.
+
+### Helpers nuevos
+
+```js
+function toLocalDatetimeInput(isoUtc) {
+  if (!isoUtc) return '';
+  const d = new Date(isoUtc);
+  if (isNaN(d.getTime())) return '';
+  const offset = d.getTimezoneOffset() * 60000;       // ms
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
+function fromLocalDatetimeInput(localStr) {
+  if (!localStr) return null;
+  const d = new Date(localStr);                        // se interpreta como hora local
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+```
+
+`toLocalDatetimeInput(isoUtc)`: convierte un timestamp UTC al string que el input `datetime-local` interpreta como hora local. Resta el offset del cliente antes del `toISOString().slice(0,16)` → el resultado, parseado de nuevo por el browser, mantiene la hora local correcta.
+
+`fromLocalDatetimeInput(localStr)`: el valor de un input `datetime-local` (ej. `"2026-05-28T19:00"`) se interpreta nativamente como local. `new Date(s).toISOString()` convierte a UTC para guardar. Equivalente a `new Date(localStr).toISOString()` pero con guards null/NaN explícitos.
+
+### Aplicación
+
+**Lecturas** (Supabase UTC → input local):
+- `cf-mod-unlock` (módulo `unlock_at`) — en `addModuleRow` línea ~2302.
+- `cf-mod-live-date` (módulo `live_date`) — en `addModuleRow` línea ~2304.
+- `cf-live-date` (curso-level `live_date`) — en `editCurso` línea ~3120.
+
+**Guardados** (input local → ISO UTC):
+- `mod.unlock_at` en `getModulesFromForm` línea ~2500.
+- `mod.live.live_date` en `getModulesFromForm` línea ~2505.
+- `liveDate` en `saveCurso` línea ~3152.
+
+### Fuera de scope
+
+`cd-target` (countdown del tab Landing) y `cp-valid-until` (cupones) usan el patrón viejo (`String(...).slice(0, 16)`) pero quedan **sin tocar** porque el usuario limitó el scope al wizard de cursos. Pueden migrarse en una etapa posterior copiando los mismos helpers.
+
+---
+
 ## Etapa X.76 — Fixes mobile del hero en `venta-curso.html`
 
 4 ajustes para mejorar la experiencia en pantallas chicas.
