@@ -3432,3 +3432,17 @@ Reemplazo completo de `loadLiveSection(seq)`:
 - `CONTEXTO.md` — esta sección.
 
 ---
+
+## Etapa X.79 — Instalación del Píxel de Meta
+
+**Fecha:** 28 de mayo de 2026.
+
+Píxel ID `1909301979776543`. Se instaló el bloque base (PageView) en los 18 archivos `.html` del proyecto — ninguno lo tenía previamente. Como el sitio no tiene head compartido, fue pegado manualmente en el `<head>` de cada archivo, como primer elemento.
+
+En `checkout-success.html` se agregó además el evento `Purchase` con `value` + `currency` reales tomados de `sessionStorage.checkout_payload` (campos `final_price` + `currency` persistidos por `checkout.html` antes de redirigir a MP). Fallback a query params del PSP. Si no hay datos confiables → no dispara y loguea `console.warn` (no se hardcodea ningún valor).
+
+Nueva regla en `CLAUDE.md`: toda página `.html` nueva debe incluir el bloque base del píxel en su `<head>` — no se hereda automáticamente.
+
+**Archivos modificados:** los 18 `.html` (PageView base), `checkout-success.html` (Purchase extra), `CLAUDE.md` (sección + regla), `CONTEXTO.md` (esta entrada).
+
+---

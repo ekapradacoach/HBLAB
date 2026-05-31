@@ -2584,6 +2584,85 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.79 — Instalación del Píxel de Meta (`Meta Pixel`)
+
+> Nota: el prompt original pedía nombrar esta etapa "X.74", pero ese número ya estaba ocupado por "Sección Características del curso" — para no romper la trazabilidad histórica se usa X.79 (siguiente disponible).
+
+**ID del Píxel:** `1909301979776543`.
+
+### Qué se instaló
+
+**Evento `PageView` (base)** — pegado dentro de `<head>`, **arriba de todo**, en cada uno de los 18 archivos `.html` del proyecto:
+
+```html
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1909301979776543');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=1909301979776543&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
+```
+
+**Archivos cubiertos (los 18):**
+
+| # | Archivo | Tipo |
+|---|---|---|
+| 1 | `index.html` | landing |
+| 2 | `venta-curso.html` | venta dinámica |
+| 3 | `checkout.html` | checkout |
+| 4 | `checkout-success.html` | post-pago (+ Purchase) |
+| 5 | `checkout-pending.html` | post-pago |
+| 6 | `login.html` | auth |
+| 7 | `set-password.html` | auth (post-invite) |
+| 8 | `dashboard.html` | alumno |
+| 9 | `curso.html` | alumno (contenido) |
+| 10 | `perfil.html` | alumno |
+| 11 | `coach.html` | coach |
+| 12 | `admin.html` | admin |
+| 13 | `webinar-hipertrofia.html` | legacy redirect |
+| 14 | `carrera-hibrida.html` | legacy redirect |
+| 15 | `entrenamiento-hibrido.html` | legacy redirect |
+| 16 | `curso-webinar-hipertrofia.html` | legacy redirect |
+| 17 | `curso-carrera-hibrida.html` | legacy redirect |
+| 18 | `curso-entrenamiento-hibrido.html` | legacy redirect |
+
+Como no había píxel en ningún archivo, **los 18 son agregados nuevos** en esta etapa.
+
+### Evento `Purchase` (solo en `checkout-success.html`)
+
+Después del bloque base del píxel, se agregó un segundo `<script>` que:
+
+1. Intenta leer `sessionStorage.checkout_payload` (lo persiste `checkout.html` antes de redirigir a MP — campos `final_price` + `currency`).
+2. Fallback: query params `?amount=&currency=` (algunos PSPs los devuelven).
+3. Valida `value > 0` y `currency ∈ {ARS, USD}`.
+4. Si OK → `fbq('track', 'Purchase', { value, currency })`.
+5. Si no hay datos confiables → **NO dispara** y loguea `console.warn`. No se hardcodea ningún valor.
+
+Se dispara **una sola vez** al cargar (la página solo se renderiza si MP redirigió a `success`, lo que implica pago aprobado).
+
+NO se agregó Purchase en `checkout-pending.html` ni en ninguna otra página.
+
+### Regla a futuro (OBLIGATORIA)
+
+> **Toda página `.html` nueva DEBE incluir el bloque base del Píxel de Meta en su `<head>` (ID `1909301979776543`).**
+>
+> El sitio no tiene head compartido — cada `.html` es independiente, así que el píxel **no se hereda**. Hay que pegarlo manualmente en cada archivo nuevo (idealmente como primer elemento dentro de `<head>`, antes de cualquier `<meta>` o `<link>`).
+>
+> Si la página nueva es post-compra confirmada (equivalente a `checkout-success`), también agregar el evento `Purchase` siguiendo el mismo patrón (leer monto real de `sessionStorage.checkout_payload` o de los query params del PSP — nunca hardcodear).
+
+---
+
 ## Etapa X.78 — `toLocalDatetimeInput` reescrito con getters locales
 
 El fix de X.77 usaba `new Date(d.getTime() - offset).toISOString().slice(0, 16)` para construir el string del input. Aunque conceptualmente funciona en muchos casos, mezcla métodos UTC (`toISOString`) con manipulación de offset local — frágil ante DST y propenso a errores off-by-one cuando el día cambia por el ajuste de offset.

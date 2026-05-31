@@ -1,6 +1,65 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window, document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '1909301979776543');
+  fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=1909301979776543&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
+
+  <!-- Meta Pixel · Purchase event (Etapa X.79)
+       Lee el payload del checkout que se persistió en sessionStorage desde
+       checkout.html (campos `final_price` + `currency`). Si no hay payload,
+       intenta tomar el monto del param `?amount=` (fallback). Si tampoco hay,
+       NO dispara Purchase (no se hardcodea ningún valor). -->
+  <script>
+  (function () {
+    function getPurchaseData() {
+      // 1) sessionStorage payload (el más confiable)
+      try {
+        const raw = sessionStorage.getItem('checkout_payload');
+        if (raw) {
+          const p = JSON.parse(raw);
+          const value = Number(p?.final_price);
+          const currency = (p?.currency || '').toUpperCase();
+          if (Number.isFinite(value) && value > 0 && (currency === 'ARS' || currency === 'USD')) {
+            return { value, currency };
+          }
+        }
+      } catch (e) { /* ignore */ }
+      // 2) Fallback: query params (algunos PSP devuelven amount/currency)
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const amt = Number(sp.get('amount') || sp.get('value') || sp.get('transaction_amount'));
+        const cur = (sp.get('currency') || sp.get('currency_id') || '').toUpperCase();
+        if (Number.isFinite(amt) && amt > 0 && (cur === 'ARS' || cur === 'USD')) {
+          return { value: amt, currency: cur };
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+    // Disparamos una sola vez al cargar (la página solo se renderiza si MP
+    // redirigió a success → el pago fue aprobado).
+    const data = getPurchaseData();
+    if (data) {
+      fbq('track', 'Purchase', { value: data.value, currency: data.currency });
+    } else {
+      console.warn('[Meta Pixel] Purchase no disparado — sin monto/moneda confiables.');
+    }
+  })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>¡Pago aprobado! | HB Lab</title>
