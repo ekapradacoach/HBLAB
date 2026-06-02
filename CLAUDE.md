@@ -2584,6 +2584,83 @@ Espejo del flujo de `coach.html` (X.46/X.53) en el modal "Ver curso" de admin.ht
 
 ---
 
+## Etapa X.75 — Fix evento Purchase del Píxel de Meta
+
+> Numeración: la etapa anterior (X.79) instaló el píxel base. Este fix se nombra X.75 a pedido del usuario (continuidad con el commit que solicitó). El orden lógico es post-X.79 pero conviven sin problema.
+
+**Síntoma reportado**: hubo una compra real vía Mercado Pago. En el Administrador de Eventos de Meta apareció solo el `PageView`, **nunca el `Purchase`**.
+
+### Diagnóstico
+
+**Causa raíz #1 — `back_urls` apuntaban a dominio equivocado.**
+
+En `supabase/functions/create-preference/index.ts` los `back_urls` estaban hardcodeados a `https://ekapradacoach.github.io/HBLAB/...` (GitHub Pages legacy). El sitio real de producción es **`hblabarg.com`**. Cuando MP redirigía tras pago aprobado, mandaba al alumno al dominio viejo, no al actual.
+
+**Causa raíz #2 — `sessionStorage` cross-origin.**
+
+El payload `checkout_payload` (con `final_price` + `currency`) se persiste en `hblabarg.com/checkout.html` ANTES de redirigir a MP. Pero MP redirigía a `ekapradacoach.github.io/HBLAB/checkout-success.html` → **cross-origin**. `sessionStorage` es per-origin → los datos no estaban disponibles → `getPurchaseData()` retornaba `null` → `fbq('track', 'Purchase', ...)` nunca se ejecutaba.
+
+**Por qué `PageView` SÍ funcionaba**: GitHub Pages servía una copia del repo (incluyendo el píxel base instalado en X.79). El mismo Pixel ID (`1909301979776543`) dispara desde cualquier dominio, así que el PageView llegaba a Meta. Pero el Purchase necesita el `value` del payload, que estaba inaccesible por la frontera de origin.
+
+**Otros flujos NO afectados** (mismo origin, redirect relativo `window.location.href = 'checkout-success.html'`):
+- Cupón 100% off (`checkout.html:720`).
+- PayPal post-capture (`checkout.html:885`).
+
+### Fix doble — defensa en profundidad
+
+**1. `back_urls` corregidos** (`create-preference/index.ts`):
+
+```js
+back_urls: {
+  success: 'https://hblabarg.com/checkout-success.html',
+  failure: 'https://hblabarg.com/checkout.html',
+  pending: 'https://hblabarg.com/checkout-pending.html',
+},
+```
+
+Con esto solo, el sessionStorage del checkout original sigue siendo accesible cuando MP redirige (mismo origin). Pero por defensa adicional, también:
+
+**2. `external_reference` enriquecido con `amount` + `currency`** (`create-preference/index.ts`):
+
+```js
+const externalRef = JSON.stringify({
+  slug, email, nombre, apellido,
+  coupon_code: couponCode,
+  course_id:   course.id,
+  amount:      expectedPrice,   // ← nuevo
+  currency:    'ARS',           // ← nuevo
+});
+```
+
+MP devuelve `external_reference` URL-encoded en el back_url como query param. checkout-success.html lo lee, parsea el JSON y extrae `amount` + `currency`.
+
+`process-payment` no necesita cambios — sigue leyendo solo los campos que conoce (`slug`, `email`, `nombre`, `apellido`, `coupon_code`). Los campos extra `amount`/`currency` son ignorados sin error.
+
+**3. `checkout-success.html` con cascada de fuentes**:
+
+`getPurchaseData()` reescrita con 3 fuentes en orden de confiabilidad:
+
+| # | Fuente | Cuándo aplica |
+|---|---|---|
+| 1 | `external_reference` del query param (parseado como JSON) | MP — resiliente a cross-origin |
+| 2 | `sessionStorage.checkout_payload` | Cupón 100%, PayPal, MP same-origin |
+| 3 | Query params sueltos `?amount=`/`?currency=` | Defensivo (si MP empieza a mandarlos directos) |
+
+Si ninguna devuelve `value > 0` + `currency ∈ {ARS, USD}` → **NO dispara** (sin hardcodear) + `console.warn` con la query string para debugging.
+
+Logging activo (`console.log('[Meta Pixel] Purchase →', data)`) para verificar en producción tras el deploy.
+
+### ⚠️ Deploy pendiente
+
+**Re-deploy manual de `create-preference`** en Supabase Dashboard:
+1. Edge Functions → `create-preference` → Code.
+2. Pegar el contenido actualizado.
+3. Deploy updates.
+
+Sin este re-deploy, MP sigue redirigiendo al dominio viejo. El cambio en `checkout-success.html` (cascada de fuentes) ya funciona para el branch del cupón 100% y PayPal, pero los pagos MP siguen rotos hasta que se redeploye la Edge Function.
+
+---
+
 ## Etapa X.79 — Instalación del Píxel de Meta (`Meta Pixel`)
 
 > Nota: el prompt original pedía nombrar esta etapa "X.74", pero ese número ya estaba ocupado por "Sección Características del curso" — para no romper la trazabilidad histórica se usa X.79 (siguiente disponible).

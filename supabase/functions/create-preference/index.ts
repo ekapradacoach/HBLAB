@@ -176,10 +176,16 @@ serve(async (req: Request) => {
   // external_reference llega como string en el webhook; codificamos los
   // datos del comprador para que process-payment los pueda recuperar
   // y crear el invite + UPSERT en user_courses.
+  // Etapa X.75 — agregamos `amount` y `currency` para que checkout-success.html
+  // pueda disparar el fbq('track', 'Purchase', { value, currency }) leyéndolos
+  // del query param que MP devuelve en el back_url (sessionStorage no sobrevive
+  // si el redirect cruza de origin).
   const externalRef = JSON.stringify({
     slug, email, nombre, apellido,
     coupon_code: couponCode,
     course_id:   course.id,
+    amount:      expectedPrice,
+    currency:    'ARS',
   });
 
   const prefPayload = {
@@ -194,10 +200,14 @@ serve(async (req: Request) => {
       name:    nombre,
       surname: apellido,
     },
+    // Etapa X.75 — back_urls al dominio de producción REAL (hblabarg.com).
+    // Antes apuntaban a ekapradacoach.github.io (legacy) → MP redirigía cross-
+    // origin, sessionStorage del checkout no estaba disponible y el evento
+    // fbq('track', 'Purchase') nunca disparaba.
     back_urls: {
-      success: 'https://ekapradacoach.github.io/HBLAB/checkout-success.html',
-      failure: 'https://ekapradacoach.github.io/HBLAB/checkout.html',
-      pending: 'https://ekapradacoach.github.io/HBLAB/checkout-pending.html',
+      success: 'https://hblabarg.com/checkout-success.html',
+      failure: 'https://hblabarg.com/checkout.html',
+      pending: 'https://hblabarg.com/checkout-pending.html',
     },
     auto_return: 'approved',
     notification_url: 'https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/process-payment',

@@ -3446,3 +3446,39 @@ Nueva regla en `CLAUDE.md`: toda página `.html` nueva debe incluir el bloque ba
 **Archivos modificados:** los 18 `.html` (PageView base), `checkout-success.html` (Purchase extra), `CLAUDE.md` (sección + regla), `CONTEXTO.md` (esta entrada).
 
 ---
+
+## Etapa X.75 — Fix evento Purchase del Píxel de Meta
+
+**Fecha:** 28 de mayo de 2026.
+
+### Síntoma
+
+Hubo una compra real vía Mercado Pago. En el Administrador de Eventos de Meta apareció solo `PageView`, nunca `Purchase`.
+
+### Diagnóstico
+
+Doble problema combinado:
+
+1. **`back_urls` apuntaban a dominio legacy** — `create-preference/index.ts` tenía hardcoded `https://ekapradacoach.github.io/HBLAB/checkout-success.html` (GitHub Pages viejo) en lugar de `https://hblabarg.com/checkout-success.html` (prod real).
+
+2. **`sessionStorage` cross-origin** — el payload del checkout se persistía en `hblabarg.com` pero MP redirigía a `ekapradacoach.github.io`. sessionStorage es per-origin, así que `getPurchaseData()` no podía leerlo y `fbq(track, 'Purchase')` nunca se ejecutaba.
+
+El `PageView` SÍ disparaba porque GitHub Pages servía la copia legacy del repo (con el píxel base ya instalado en X.79) y el mismo Pixel ID dispara desde cualquier dominio. Pero Purchase requería el monto, que vivía solo en sessionStorage del origin original.
+
+Flujos NO afectados (redirect relativo same-origin): cupón 100% off y PayPal capture.
+
+### Fix doble
+
+1. **`back_urls` corregidos a `hblabarg.com`** en `create-preference/index.ts`.
+2. **`external_reference` enriquecido** con `amount` (= expectedPrice) y `currency` (= 'ARS'). MP devuelve el external_reference URL-encoded como query param en el back_url → checkout-success lo lee, parsea el JSON y extrae monto + moneda.
+3. **`checkout-success.html` con cascada de fuentes** (`getPurchaseData()` reescrita): 1) external_reference (resiliente cross-origin), 2) sessionStorage (works same-origin para cupón/PayPal), 3) query params sueltos como fallback. Logging activo para debug.
+
+`process-payment` no requiere cambios — sigue ignorando los campos extra del external_reference.
+
+### Deploy pendiente
+
+Re-deploy manual de `create-preference` en Supabase Dashboard → Edge Functions. Sin ese deploy los pagos MP siguen rotos.
+
+**Archivos modificados:** `supabase/functions/create-preference/index.ts`, `checkout-success.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

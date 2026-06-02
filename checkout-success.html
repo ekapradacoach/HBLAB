@@ -19,27 +19,46 @@
   /></noscript>
   <!-- End Meta Pixel Code -->
 
-  <!-- Meta Pixel · Purchase event (Etapa X.79)
-       Lee el payload del checkout que se persistió en sessionStorage desde
-       checkout.html (campos `final_price` + `currency`). Si no hay payload,
-       intenta tomar el monto del param `?amount=` (fallback). Si tampoco hay,
-       NO dispara Purchase (no se hardcodea ningún valor). -->
+  <!-- Meta Pixel · Purchase event (Etapa X.75 — fix del cross-origin)
+       Cascada de fuentes (en orden de confiabilidad) para obtener value+currency:
+         1. `external_reference` del query param que devuelve Mercado Pago
+            (resiliente a cross-origin redirects — la URL siempre llega completa).
+            En create-preference se enriqueció con amount + currency.
+         2. sessionStorage `checkout_payload` (works solo si same-origin: cupón
+            100% y PayPal redirigen relativos, MP ya no — pero queda como fallback).
+         3. Query params sueltos (?amount=, ?value=) — defensivo si MP empieza
+            a devolverlos directamente en el futuro.
+       Si ninguna fuente da datos confiables → NO dispara (sin hardcodear). -->
   <script>
   (function () {
-    function getPurchaseData() {
-      // 1) sessionStorage payload (el más confiable)
+    function tryExternalRef() {
       try {
-        const raw = sessionStorage.getItem('checkout_payload');
-        if (raw) {
-          const p = JSON.parse(raw);
-          const value = Number(p?.final_price);
-          const currency = (p?.currency || '').toUpperCase();
-          if (Number.isFinite(value) && value > 0 && (currency === 'ARS' || currency === 'USD')) {
-            return { value, currency };
-          }
+        const sp = new URLSearchParams(window.location.search);
+        const raw = sp.get('external_reference');
+        if (!raw) return null;
+        const p = JSON.parse(raw);   // URLSearchParams ya decodea el URL-encoding
+        const value = Number(p?.amount);
+        const currency = (p?.currency || '').toUpperCase();
+        if (Number.isFinite(value) && value > 0 && (currency === 'ARS' || currency === 'USD')) {
+          return { value, currency };
         }
       } catch (e) { /* ignore */ }
-      // 2) Fallback: query params (algunos PSP devuelven amount/currency)
+      return null;
+    }
+    function trySessionStorage() {
+      try {
+        const raw = sessionStorage.getItem('checkout_payload');
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        const value = Number(p?.final_price);
+        const currency = (p?.currency || '').toUpperCase();
+        if (Number.isFinite(value) && value > 0 && (currency === 'ARS' || currency === 'USD')) {
+          return { value, currency };
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+    function tryQueryAmount() {
       try {
         const sp = new URLSearchParams(window.location.search);
         const amt = Number(sp.get('amount') || sp.get('value') || sp.get('transaction_amount'));
@@ -50,13 +69,13 @@
       } catch (e) { /* ignore */ }
       return null;
     }
-    // Disparamos una sola vez al cargar (la página solo se renderiza si MP
-    // redirigió a success → el pago fue aprobado).
-    const data = getPurchaseData();
+
+    const data = tryExternalRef() || trySessionStorage() || tryQueryAmount();
     if (data) {
+      console.log('[Meta Pixel] Purchase →', data);
       fbq('track', 'Purchase', { value: data.value, currency: data.currency });
     } else {
-      console.warn('[Meta Pixel] Purchase no disparado — sin monto/moneda confiables.');
+      console.warn('[Meta Pixel] Purchase NO disparado — sin monto/moneda confiables. Query:', window.location.search);
     }
   })();
   </script>
