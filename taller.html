@@ -314,6 +314,19 @@
     .currency-btn:last-of-type { margin-bottom: 4px; }
     .cm-foot-note { font-size: 0.74rem; color: var(--gray-text); text-align: center; margin-top: 14px; }
 
+    /* ─── Modalidad (descripción libre del admin) ──── */
+    #modalidad { background: var(--navy); }
+    .modalidad-header { text-align: center; margin-bottom: 28px; }
+    .modalidad-desc {
+      font-size: 1.05rem;
+      line-height: 1.8;
+      color: var(--gray-text);
+      max-width: 760px;
+      margin: 0 auto;
+      text-align: center;
+      white-space: pre-line;   /* respeta los saltos de línea del admin */
+    }
+
     /* ─── ¿Para quién es? ──────────────────────────── */
     #learn { background: var(--navy-light); }
     .learn-header { margin-bottom: 56px; }
@@ -555,6 +568,17 @@
     </div>
   </section>
 
+  <!-- ─── MODALIDAD (dinámico — debajo de las características, antes del temario) ─── -->
+  <section id="modalidad" style="display:none">
+    <div class="container">
+      <div class="modalidad-header">
+        <span class="section-label">Modalidad</span>
+        <h2 class="section-title">Cómo es el taller</h2>
+      </div>
+      <p class="modalidad-desc" id="modalidad-desc"><!-- populated by JS --></p>
+    </div>
+  </section>
+
   <!-- ─── ¿QUÉ VAS A APRENDER? ─────────────────────── -->
   <section id="learn">
     <div class="container">
@@ -777,7 +801,7 @@
 
       const { data: course, error } = await sb
         .from('courses')
-        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, learning_points, syllabus, live_date, location, max_seats, is_workshop, is_active')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, learning_points, syllabus, live_date, location, max_seats, is_workshop, is_active, modalidad_descripcion')
         .eq('slug', slug)
         .eq('is_workshop', true)
         .eq('is_active', true)
@@ -811,6 +835,9 @@
 
       // Datos del taller (chips de fecha / lugar / cupos)
       renderFacts(course);
+
+      // Descripción de modalidad (debajo de las características, antes del temario)
+      renderModalidad(course);
 
       // Cover image
       if (course.cover_url) {
@@ -858,6 +885,21 @@
       const pagoFacts = document.getElementById('pago-facts');
       if (heroFacts) heroFacts.innerHTML = html;
       if (pagoFacts) pagoFacts.innerHTML = html;
+    }
+
+    // Descripción de modalidad (texto libre cargado desde el admin → courses.modalidad_descripcion).
+    // Solo se muestra si tiene contenido. textContent → escape automático; \n preservados por white-space:pre-line.
+    function renderModalidad(course) {
+      const section = document.getElementById('modalidad');
+      const el      = document.getElementById('modalidad-desc');
+      if (!section || !el) return;
+      const txt = (course.modalidad_descripcion || '').trim();
+      if (txt) {
+        el.textContent = txt;
+        section.style.display = '';
+      } else {
+        section.style.display = 'none';
+      }
     }
 
     // Cuenta regresiva hasta scheduled_prices[0].date. Al vencer → precio regular (price_ars).

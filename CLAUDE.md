@@ -3054,6 +3054,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.83 — instructor dinámico en taller.html**: la sección `#instructor` ya no está hardcodeada con Erika. `renderInstructores(course.id)` llama la RPC `get_course_coaches` (misma que venta-curso.html) y renderiza un `.instructor-card` por coach asignado (foto o iniciales + nombre + bio). Soporta N coaches; si no hay ninguno → oculta la sección (`display:none`).
 
+**Etapa X.84 — descripción de modalidad en taller.html**: `taller.html` ahora trae `modalidad_descripcion` en su SELECT y la renderiza con `renderModalidad(course)` en la sección `#modalidad` (badge "Modalidad" + título "Cómo es el taller"), ubicada entre el hero (características fecha/lugar/cupos) y la sección "¿Qué vas a aprender?", antes del temario. Si el campo está vacío → la sección queda oculta. `white-space: pre-line` preserva los saltos de línea del admin.
+
 ---
 
 ## Usuarios registrados

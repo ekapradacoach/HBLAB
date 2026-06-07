@@ -3597,3 +3597,20 @@ La imagen `IMG_2393__1_-removebg-preview.png` ya no se referencia desde `taller.
 **Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.84 — Descripción de modalidad en taller.html
+
+El campo `courses.modalidad_descripcion` (texto libre cargado desde el admin, Etapa X.75) se guardaba pero **no se mostraba** en `taller.html` — la página ni siquiera lo traía en su SELECT. Ahora se renderiza igual que en `venta-curso.html`.
+
+### Cambios en `taller.html`
+
+- **SELECT extendido** con `modalidad_descripcion`.
+- **Nueva sección `#modalidad`** insertada **entre el hero (que contiene las características: fecha/lugar/cupos) y la sección "¿Qué vas a aprender?" (learn) → antes del temario**. Mismo orden relativo que venta-curso.html (modalidad va después de las características y antes de "Lo que vas a aprender"). Header con badge "Modalidad" + título "Cómo es el taller" + `<p id="modalidad-desc">`. La sección arranca con `style="display:none"`.
+- **`renderModalidad(course)`** nueva: si `course.modalidad_descripcion` tiene texto (trim) → `el.textContent = txt` + muestra la sección; si está vacío → la deja oculta. `textContent` escapa HTML automáticamente; los saltos de línea del admin se respetan vía CSS `white-space: pre-line`. Se llama en `init()` justo después de `renderFacts(course)`.
+- **CSS** `.modalidad-desc` (centrado, `max-width: 760px`, `white-space: pre-line`) + `.modalidad-header` + `#modalidad { background: var(--navy) }` para alternar con la sección learn (navy-light) que le sigue.
+
+> Nota: la consigna lo llamó `modal_description`; la columna real es `modalidad_descripcion` (la misma que usan admin.html y venta-curso.html).
+
+**Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
