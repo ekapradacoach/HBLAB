@@ -3482,3 +3482,63 @@ Re-deploy manual de `create-preference` en Supabase Dashboard → Edge Functions
 **Archivos modificados:** `supabase/functions/create-preference/index.ts`, `checkout-success.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.80 — Talleres presenciales (in-person workshops)
+
+Feature completo de talleres presenciales que reusa la infraestructura de cursos pero con UX diferenciada. Un taller es un `courses` row con `is_workshop = true`.
+
+### SQL ejecutado (manual, confirmado por el usuario)
+
+```sql
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS is_workshop BOOLEAN DEFAULT false;
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS max_seats INT;
+-- + INSERT del taller 'taller-post-rehabilitacion' con is_workshop = true.
+```
+
+- **`is_workshop BOOLEAN DEFAULT false`** — distingue taller presencial de curso online.
+- **`location TEXT`** — dirección/lugar del encuentro.
+- **`max_seats INT`** — cupos máximos.
+- Fecha/hora del taller reusa `courses.live_date` (no se agregó columna nueva).
+
+### 1. `taller.html` — página de venta dinámica (NUEVO)
+
+Modelada sobre `venta-curso.html`. Lee `?slug=` (NO `?course=`), query `courses WHERE slug = X AND is_workshop = true`. Hero con badge violeta "🏋️ Presencial", fecha formateada (`live_date`), lugar (`location`), CTA "Reservar lugar" → `checkout.html?slug=X&currency=ARS`. Soporta `?buy=1` para auto-abrir el flujo de compra (mismo patrón que venta-curso.html). Aplica `getEffectivePrice` para precios programados.
+
+### 2. `admin.html` — Tab Cursos extendido
+
+- **Badge violeta "🏋️ Presencial"** en la columna Estado de la tabla para filas con `is_workshop = true`.
+- **Toggle "Es taller presencial"** (`cf-is-workshop`) en el wizard que revela los campos `location` (`cf-location`) y `max_seats` (`cf-max-seats`).
+- **Botón "👥 Inscritos"** por fila de taller → modal que lista los inscritos (query `user_courses` join `profiles`) con **exportación CSV** (BOM UTF-8, nombre `inscritos-{slug}-YYYY-MM-DD.csv`).
+- Wiring en `editCurso` / `saveCurso` / `resetCursoForm` / `loadCursos` (SELECT extendido con `is_workshop, location, max_seats`).
+
+### 3. `dashboard.html` — card de taller diferenciada
+
+Cuando `course.is_workshop = true`, la card del alumno muestra: badge violeta, fecha + lugar, **sin barra de progreso**, y botón "Ver entrada" que abre un modal-ticket con los datos del encuentro (título, fecha, dirección) en vez de "Ir al curso →".
+
+### 4. `process-payment/index.ts` — email diferenciado para talleres
+
+Cuando el curso comprado tiene `is_workshop = true`, se envía un email distinto al de bienvenida de curso online:
+- **Subject**: `🎟️ ¡Tu lugar está reservado! — {courseTitle}`.
+- **Body** (mismo dark theme inline): confirmación de reserva, fecha formateada, dirección del lugar, instrucción de presentar el ticket/entrada, + credenciales de acceso al portal (magic link, igual que el flujo normal).
+- Reusa la lógica de creación de usuario + magic link; solo cambia el template del email según `is_workshop`.
+
+### 5. `index.html` — sección "Talleres presenciales"
+
+Sección `#talleres` insertada antes del footer. `loadTalleres()` query `is_workshop = true AND is_active = true` ordenado por `display_order` + `created_at`. Renderiza cards (badge violeta, fecha vía `formatTallerDate`, lugar, precio efectivo, CTA "Reservar lugar") que linkean a `taller.html?slug=X`. La sección se auto-oculta (`display:none`) si no hay talleres. Los talleres se **excluyen** de `loadCursos()` con un `.or('is_workshop.is.null,is_workshop.eq.false')` para no aparecer en ambas secciones.
+
+### ⚠️ Deploy pendiente
+
+Re-deploy manual de `process-payment` en Supabase Dashboard → Edge Functions (cambió el template de email para talleres). Sin el deploy, los compradores de talleres reciben el email genérico de curso online.
+
+### Cómo crear un taller desde el admin
+
+1. Tab Cursos → Nuevo curso → completar identidad.
+2. Activar toggle "Es taller presencial" → completar `location` (dirección) y `max_seats` (cupos).
+3. Setear `live_date` (fecha/hora del encuentro) y precio.
+4. Guardar → aparece en `index.html` sección Talleres y en `taller.html?slug=X`.
+5. Ver inscritos con el botón "👥 Inscritos" (exporta CSV).
+
+**Archivos modificados:** `taller.html` (nuevo), `admin.html`, `dashboard.html`, `index.html`, `supabase/functions/process-payment/index.ts`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

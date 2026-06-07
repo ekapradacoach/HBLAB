@@ -1232,6 +1232,31 @@
                 <span class="toggle-label">Activo <span style="font-size:0.8rem;font-weight:400;color:var(--gray-text)">(visible en la landing y en la página de venta)</span></span>
               </label>
             </div>
+
+            <!-- Taller presencial (is_workshop) — usa taller.html en vez de venta-curso.html -->
+            <div class="form-section">
+              <label class="toggle-row" for="cf-is-workshop">
+                <input type="checkbox" id="cf-is-workshop" onchange="toggleWorkshopFields()" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">🏋️ Es taller presencial <span style="font-size:0.8rem;font-weight:400;color:var(--gray-text)">(página de venta dinámica taller.html · usa la fecha y hora del Step 2 como fecha del taller)</span></span>
+              </label>
+
+              <div id="cf-workshop-fields" style="display:none;margin-top:14px">
+                <div class="form-grid">
+                  <div class="form-group col2">
+                    <label class="form-label">Lugar del taller <span class="form-hint">(dirección física)</span></label>
+                    <input class="form-input" id="cf-location" placeholder="Riobamba 186, Temperley — High Bamba Fitness" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Cupos máximos</label>
+                    <input class="form-input" id="cf-max-seats" type="number" min="1" placeholder="30" />
+                  </div>
+                </div>
+                <p class="live-note" style="margin-top:4px">
+                  📌 La fecha y hora del taller se toma del campo "Clase en vivo → Fecha y hora" en el Step 2. Activá "Clase en vivo" allí y cargá la fecha del taller.
+                </p>
+              </div>
+            </div>
           </div>
 
           <!-- ════════════════════════════════════════
@@ -2074,6 +2099,21 @@
     </div>
   </div>
 
+  <!-- Modal: Inscritos a un taller presencial -->
+  <div class="modal-overlay" id="modal-inscritos">
+    <div class="modal">
+      <h3 class="modal-title">Inscritos al taller</h3>
+      <p class="modal-sub"><strong id="inscritos-curso-nombre"></strong> · <span id="inscritos-count">0</span> inscritos</p>
+      <div id="inscritos-list" style="max-height:50vh;overflow-y:auto;margin:10px 0;">
+        <div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Cargando…</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('modal-inscritos')">Cerrar</button>
+        <button class="btn-primary" id="btn-export-inscritos" onclick="exportInscritosCSV()">⬇ Exportar CSV</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Agregar coach -->
   <div class="modal-overlay" id="modal-agregar-coach">
     <div class="modal">
@@ -2291,6 +2331,12 @@
     function toggleLiveFields() {
       const checked = document.getElementById('cf-is-live').checked;
       document.getElementById('cf-live-fields').classList.toggle('visible', checked);
+    }
+
+    function toggleWorkshopFields() {
+      const checked = document.getElementById('cf-is-workshop').checked;
+      const wrap = document.getElementById('cf-workshop-fields');
+      if (wrap) wrap.style.display = checked ? '' : 'none';
     }
 
     // ── Modules manager (course_type='modules' — Sesión 48) ──
@@ -2731,6 +2777,11 @@
       document.getElementById('cf-live-date').value = '';
       document.getElementById('cf-is-live').checked = false;
       document.getElementById('cf-is-coming-soon').checked = false;
+      // Taller presencial
+      document.getElementById('cf-is-workshop').checked = false;
+      document.getElementById('cf-location').value = '';
+      document.getElementById('cf-max-seats').value = '';
+      toggleWorkshopFields();
       const hasQuizEl = document.getElementById('cf-has-quiz');
       if (hasQuizEl) hasQuizEl.checked = false;
       document.getElementById('cf-live-fields').classList.remove('visible');
@@ -3133,6 +3184,12 @@
       const activeEl = document.getElementById('cf-is-active');
       if (activeEl) activeEl.checked = (c.is_active !== false);
 
+      // Taller presencial
+      document.getElementById('cf-is-workshop').checked = !!c.is_workshop;
+      document.getElementById('cf-location').value  = c.location  || '';
+      document.getElementById('cf-max-seats').value = c.max_seats != null ? c.max_seats : '';
+      toggleWorkshopFields();
+
       // Evaluación (Etapa U)
       const hasQuizEl = document.getElementById('cf-has-quiz');
       if (hasQuizEl) hasQuizEl.checked = !!c.has_quiz;
@@ -3188,6 +3245,12 @@
       const isComingSoon = document.getElementById('cf-is-coming-soon').checked;
       const isActiveEl   = document.getElementById('cf-is-active');
       const isActive     = isActiveEl ? isActiveEl.checked : true;  // default true (Sesión 52)
+
+      // Taller presencial
+      const isWorkshop   = document.getElementById('cf-is-workshop').checked;
+      const location     = document.getElementById('cf-location').value.trim() || null;
+      const maxSeatsRaw  = document.getElementById('cf-max-seats').value;
+      const maxSeats     = maxSeatsRaw !== '' ? parseInt(maxSeatsRaw, 10) : null;
       const hasQuizEl    = document.getElementById('cf-has-quiz');
       const hasQuiz      = hasQuizEl ? hasQuizEl.checked : false;   // Etapa U
 
@@ -3208,7 +3271,7 @@
         videos:           courseType === 'modules' ? [] : videos,
         is_live:          isLive,
         live_url:         isLive ? liveUrl      : null,
-        live_date:        isLive ? liveDate      : null,
+        live_date:        (isLive || isWorkshop) ? liveDate : null,   // talleres usan live_date como fecha del taller
         recording_url:    isLive ? recordingUrl  : null,
         total_videos:     courseType === 'modules'
                             ? (formModules || []).reduce((acc, m) => acc + m.lessons.length, 0)
@@ -3220,6 +3283,9 @@
         scheduled_prices: getSchedPricesFromForm(),                 // Etapa X.38 — JSONB array [{date, price_ars, price_usd}]
         features:         getFeaturesFromForm(),                    // Etapa X.74 — JSONB array de keys activas
         modalidad_descripcion: (document.getElementById('cf-modalidad-descripcion')?.value || '').trim() || null,   // Etapa X.75
+        is_workshop:      isWorkshop,                                // Talleres presenciales
+        location:         isWorkshop ? location  : null,
+        max_seats:        isWorkshop ? maxSeats  : null,
       };
 
       let error, savedCourseId = editingCourseId;
@@ -3275,7 +3341,7 @@
     async function loadCursos() {
       const { data, error } = await sb
         .from('courses')
-        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, features, modalidad_descripcion, created_at')
+        .select('id, title, slug, description, cover_url, certificate_url, banner_text, learning_points, syllabus, price_ars, price_usd, is_active, is_coming_soon, is_live, live_url, live_date, recording_url, recordings, live_completed, videos, total_videos, course_type, has_quiz, scheduled_prices, features, modalidad_descripcion, is_workshop, location, max_seats, created_at')
         .order('created_at');
       const tbody = document.getElementById('tbody-cursos');
 
@@ -3322,6 +3388,73 @@
       try { await refreshCursosFilterCoaches(); } catch (e) { console.warn('refreshCursosFilterCoaches failed:', e); }
     }
 
+    // ── Inscritos a un taller presencial ──────────────
+    // Reusa el RPC get_ventas() (SECURITY DEFINER) — matchea por course_title
+    // porque el RPC no expone course_id. Filtra paid + active y dedupe por email.
+    let _inscritosRows = [];     // [{ full_name, email }]
+    let _inscritosTitle = '';
+
+    async function openInscritosModal(courseId, title) {
+      _inscritosTitle = title || '';
+      _inscritosRows = [];
+      document.getElementById('inscritos-curso-nombre').textContent = _inscritosTitle;
+      document.getElementById('inscritos-count').textContent = '0';
+      const listEl = document.getElementById('inscritos-list');
+      listEl.innerHTML = `<div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Cargando…</div>`;
+      openModal('modal-inscritos');
+
+      const { data, error } = await sb.rpc('get_ventas');
+      if (error) {
+        listEl.innerHTML = `<div style="padding:14px 0;color:var(--red,#ef4444);font-size:0.85rem;">Error al cargar inscritos: ${escHtmlAdmin(error.message)}</div>`;
+        return;
+      }
+      const seen = new Set();
+      _inscritosRows = (data || [])
+        .filter(r => (r.course_title || '') === _inscritosTitle
+                  && (r.payment_status || '').toLowerCase() === 'paid'
+                  && (r.status || '').toLowerCase() === 'active')
+        .filter(r => { const k = (r.email || '').toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+        .map(r => ({ full_name: r.full_name || '—', email: r.email || '—' }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+      document.getElementById('inscritos-count').textContent = String(_inscritosRows.length);
+      if (!_inscritosRows.length) {
+        listEl.innerHTML = `<div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Todavía no hay inscritos a este taller.</div>`;
+        return;
+      }
+      listEl.innerHTML = `
+        <table class="data-table" style="width:100%">
+          <thead><tr><th>Nombre</th><th>Email</th></tr></thead>
+          <tbody>${_inscritosRows.map(r => `
+            <tr><td>${escHtmlAdmin(r.full_name)}</td><td style="color:var(--gray-text)">${escHtmlAdmin(r.email)}</td></tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function exportInscritosCSV() {
+      if (!_inscritosRows.length) return;
+      const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const lines = [['Nombre', 'Email'].map(esc).join(',')];
+      _inscritosRows.forEach(r => lines.push([esc(r.full_name), esc(r.email)].join(',')));
+      const csv = '﻿' + lines.join('\r\n');   // BOM para Excel
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (_inscritosTitle || 'taller').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      a.href = url;
+      a.download = `inscritos-${safeName || 'taller'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function escHtmlAdmin(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     // Render de filas a partir de allCourses (con _salesCount, _coachIds) — Sesión 52
     function renderCursosRows(courses) {
       const tbody = document.getElementById('tbody-cursos');
@@ -3335,11 +3468,12 @@
         const liveBadge   = c.is_live      ? `<span class="badge badge-lime" style="margin-left:6px">🔴 En vivo</span>`     : '';
         const soonBadge   = c.is_coming_soon ? `<span class="badge badge-violet" style="margin-left:6px">Próximamente</span>` : '';
         const quizBadge   = c.has_quiz      ? `<span class="badge badge-violet" style="margin-left:6px;font-size:0.7rem">📝 Test</span>` : '';
+        const workshopBadge = c.is_workshop ? `<span class="badge badge-violet" style="margin-left:6px">🏋️ Presencial</span>` : '';
         const safeC = JSON.stringify(c).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
         const created = c.created_at ? new Date(c.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' }) : '—';
         return `
           <tr>
-            <td><strong>${c.title}</strong>${liveBadge}${soonBadge}${quizBadge}</td>
+            <td><strong>${c.title}</strong>${liveBadge}${soonBadge}${quizBadge}${workshopBadge}</td>
             <td><code style="font-size:0.78rem;color:var(--gray-text)">${c.slug}</code></td>
             <td>${fmtARS(c.price_ars)}</td>
             <td>${fmtUSD(c.price_usd)}</td>
@@ -3355,6 +3489,7 @@
                 <div class="action-menu" id="row-menu-${c.id}">
                   <button class="action-menu-item" onclick="vcOpen('${c.id}'); closeAllRowMenus();">👁 Ver curso</button>
                   <button class="action-menu-item" data-c='${safeC}' onclick='editCurso(JSON.parse(this.dataset.c)); closeAllRowMenus();'>✏️ Editar</button>
+                  ${c.is_workshop ? `<button class="action-menu-item" onclick="openInscritosModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">👥 Inscritos</button>` : ''}
                   <button class="action-menu-item" onclick="toggleCursoActive('${c.id}', ${c.is_active}); closeAllRowMenus();">
                     ${c.is_active ? '❌ Desactivar' : '✅ Activar'}
                   </button>

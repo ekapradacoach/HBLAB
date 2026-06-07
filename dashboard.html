@@ -319,6 +319,51 @@
     }
     .card-progress-label { font-size: 0.72rem; color: var(--gray-text); margin: 0; }
 
+    /* ── Taller presencial ── */
+    .card-status-badge.workshop {
+      background: rgba(123,79,190,0.18);
+      border: 1px solid rgba(123,79,190,0.4);
+      color: var(--violet-light);
+    }
+    .workshop-meta { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .ws-meta-row { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--gray-text); }
+    .ws-meta-row span:first-child { font-size: 1rem; }
+
+    /* Modal entrada */
+    .entrada-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
+      padding: 20px; backdrop-filter: blur(4px);
+    }
+    .entrada-overlay.open { display: flex; }
+    .entrada-ticket {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 18px; max-width: 420px; width: 100%; position: relative;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6); overflow: hidden;
+    }
+    .entrada-head {
+      background: linear-gradient(135deg, var(--violet,#7B4FBE) 0%, var(--violet-light,#9B6FDE) 100%);
+      padding: 24px 28px; text-align: center;
+    }
+    .entrada-head .et-badge { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; opacity: 0.9; }
+    .entrada-head h3 { font-size: 1.25rem; font-weight: 800; color: #fff; margin-top: 6px; }
+    .entrada-body { padding: 24px 28px; }
+    .entrada-field { margin-bottom: 16px; }
+    .entrada-field .ef-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gray-text); display: block; margin-bottom: 3px; }
+    .entrada-field .ef-val { font-size: 1rem; font-weight: 600; color: var(--white); }
+    .entrada-instruccion {
+      margin-top: 8px; padding: 14px; border-radius: 12px;
+      background: rgba(200,230,0,0.1); border: 1px dashed rgba(200,230,0,0.4);
+      text-align: center; font-size: 0.9rem; font-weight: 700; color: var(--lime);
+    }
+    .entrada-close {
+      position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(0,0,0,0.25); border: none; color: #fff; cursor: pointer; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .entrada-actions { padding: 0 28px 24px; }
+    .entrada-actions .btn-ir { width: 100%; justify-content: center; }
+
     /* ── Empty state ─────────────────────────────── */
     .empty-state {
       background: var(--card-bg);
@@ -545,6 +590,40 @@
       });
     }
 
+    // ── Talleres presenciales ───────────────────────
+    let _studentName = '';
+
+    function escHtmlDash(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // live_date → "Sábado 4 de julio · 15:00 hs"
+    function formatWorkshopDate(raw) {
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return '';
+      const fecha = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+      const cap = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+      const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${cap} · ${hora} hs`;
+    }
+
+    function showEntrada(w) {
+      const fechaStr = w.live_date ? formatWorkshopDate(w.live_date) : 'Fecha a confirmar';
+      const lugarStr = w.location || 'Lugar a confirmar';
+      document.getElementById('entrada-alumno').textContent = _studentName || '—';
+      document.getElementById('entrada-taller').textContent = w.title || '';
+      document.getElementById('entrada-fecha').textContent  = fechaStr;
+      document.getElementById('entrada-lugar').textContent  = lugarStr;
+      document.getElementById('modal-entrada').classList.add('open');
+    }
+
+    function closeEntrada() {
+      document.getElementById('modal-entrada').classList.remove('open');
+    }
+
     // ── Renderizar cursos comprados ─────────────────
     // Etapa X.10: async + queries en paralelo para progreso (video_progress)
     // y test pendiente (course_quizzes + quiz_attempts).
@@ -689,6 +768,37 @@
 
       const cards = rows.map(row => {
         const course = row.courses;
+
+        // ── Taller presencial: card diferenciada (sin progreso ni certificado) ──
+        if (course.is_workshop) {
+          const fechaStr = course.live_date ? formatWorkshopDate(course.live_date) : 'Fecha a confirmar';
+          const lugarStr = course.location || 'Lugar a confirmar';
+          const safeCourse = JSON.stringify({
+            title: course.title, live_date: course.live_date || '', location: course.location || '',
+          }).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+          return `
+            <div class="course-card workshop-card">
+              <div class="card-body">
+                <span class="card-status-badge workshop">🏋️ Taller presencial</span>
+                <h3 class="card-title" style="margin-top:12px">${escHtmlDash(course.title)}</h3>
+                <div class="workshop-meta">
+                  <div class="ws-meta-row"><span>📅</span><span>${escHtmlDash(fechaStr)}</span></div>
+                  <div class="ws-meta-row"><span>📍</span><span>${escHtmlDash(lugarStr)}</span></div>
+                </div>
+              </div>
+              <div class="card-divider"></div>
+              <div class="card-footer">
+                <div class="badge-access">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Lugar reservado
+                </div>
+                <button class="btn-ir" data-w='${safeCourse}' onclick='showEntrada(JSON.parse(this.dataset.w))'>
+                  🎟️ Ver entrada
+                </button>
+              </div>
+            </div>`;
+        }
+
         const meta   = { tag: 'Curso · Online', page: `curso.html?slug=${course.slug}` };
 
         // Etapa X.59 — cursos modules-mode usan progressByCourse (por módulos);
@@ -794,6 +904,7 @@
                 || user.user_metadata?.name
                 || user.email.split('@')[0];
 
+      _studentName = name;
       document.getElementById('greeting-name').textContent = name;
       document.getElementById('nav-email').textContent     = user.email;
       document.getElementById('account-email').textContent = user.email;
@@ -818,7 +929,11 @@
             price_ars,
             price_usd,
             total_videos,
-            course_type
+            course_type,
+            is_workshop,
+            live_date,
+            location,
+            max_seats
           )
         `)
         .eq('user_id', user.id)
@@ -887,6 +1002,35 @@
   <a class="support-fab"
      href="mailto:ekapradacoach@gmail.com?subject=Consulta%20HB%20Lab&body=Hola%2C%20tengo%20una%20consulta%20sobre..."
      aria-label="Soporte por email">✉</a>
+
+  <!-- ─── Modal: Entrada al taller presencial ─── -->
+  <div class="entrada-overlay" id="modal-entrada" onclick="if(event.target===this) closeEntrada()">
+    <div class="entrada-ticket">
+      <button class="entrada-close" onclick="closeEntrada()" aria-label="Cerrar">×</button>
+      <div class="entrada-head">
+        <span class="et-badge">🎟️ Entrada · Taller presencial</span>
+        <h3 id="entrada-taller"></h3>
+      </div>
+      <div class="entrada-body">
+        <div class="entrada-field">
+          <span class="ef-label">Alumno</span>
+          <span class="ef-val" id="entrada-alumno"></span>
+        </div>
+        <div class="entrada-field">
+          <span class="ef-label">Fecha y hora</span>
+          <span class="ef-val" id="entrada-fecha"></span>
+        </div>
+        <div class="entrada-field">
+          <span class="ef-label">Dirección</span>
+          <span class="ef-val" id="entrada-lugar"></span>
+        </div>
+        <div class="entrada-instruccion">Presentá esta pantalla en la puerta</div>
+      </div>
+      <div class="entrada-actions">
+        <button class="btn-ir" onclick="closeEntrada()">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

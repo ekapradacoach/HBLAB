@@ -213,6 +213,119 @@ async function sendConfirmationEmail(opts: {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Etapa Talleres — Email de RESERVA para talleres presenciales
+// ─────────────────────────────────────────────────────────────
+// Se dispara cuando el curso comprado tiene `is_workshop = true`. Reemplaza
+// al welcome/confirmation email estándar. Incluye: confirmación de la reserva,
+// fecha formateada, dirección, instrucción de presentar el email como entrada,
+// y credenciales de acceso al portal (magic link si es alumno nuevo, o aviso de
+// usar la contraseña existente si ya tenía cuenta).
+function formatWorkshopDateEmail(iso?: string | null): string {
+  if (!iso) return 'Fecha a confirmar';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'Fecha a confirmar';
+  const dias  = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const dia   = dias[d.getDay()];
+  const num   = d.getDate();
+  const mes   = meses[d.getMonth()];
+  const hh    = String(d.getHours()).padStart(2, '0');
+  const min   = String(d.getMinutes()).padStart(2, '0');
+  return `${dia} ${num} de ${mes} · ${hh}:${min} hs`;
+}
+
+async function sendWorkshopEmail(opts: {
+  email:        string;
+  fullName?:    string;
+  courseTitle:  string;
+  workshopDate?: string | null;   // ISO (courses.live_date)
+  location?:    string | null;
+  magicLink?:   string | null;    // si está set → alumno nuevo (CTA "Crear mi contraseña")
+}): Promise<{ ok: boolean; error?: string }> {
+  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+  if (!RESEND_API_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY no configurado en env' };
+  }
+  const safeName     = (opts.fullName || '').trim() || 'alumna/o';
+  const safeTitle    = (opts.courseTitle || '(tu taller)').replace(/</g, '&lt;');
+  const fechaTxt     = formatWorkshopDateEmail(opts.workshopDate).replace(/</g, '&lt;');
+  const lugarTxt     = (opts.location || 'Lugar a confirmar').replace(/</g, '&lt;');
+  const dashboardUrl = 'https://hblabarg.com/dashboard.html';
+
+  // Bloque de acceso al portal: distinto según alumno nuevo (magic link) vs existente.
+  const accessBlock = opts.magicLink
+    ? `
+          <p style="margin:0 0 12px;font-size:15px;color:#94A3B8;line-height:1.55;">Creá tu contraseña para acceder al portal de HB Lab, donde vas a encontrar el material del taller:</p>
+          <p style="margin:0 0 12px;"><a href="${opts.magicLink}" style="display:inline-block;background:#C8E600 !important;color:#1E2A3A !important;text-decoration:none;font-weight:700;padding:16px 32px;border-radius:8px;font-size:15px;font-family:'Inter',Arial,Helvetica,sans-serif;">Crear mi contraseña →</a></p>
+          <p style="margin:0 0 8px;font-size:12px;color:#94A3B8;line-height:1.55;">¿El botón no funciona? Copiá y pegá este link en tu navegador:</p>
+          <p style="margin:0 0 8px;font-size:12px;color:#C8E600;word-break:break-all;line-height:1.4;">${opts.magicLink}</p>
+          <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.55;">El link expira en 1 hora. Si vence, pedí uno nuevo desde "¿Olvidaste tu contraseña?" en la pantalla de login.</p>`
+    : `
+          <p style="margin:0 0 12px;font-size:15px;color:#94A3B8;line-height:1.55;">Entrá al portal de HB Lab para ver el material del taller:</p>
+          <p style="margin:0 0 12px;"><a href="${dashboardUrl}" style="display:inline-block;background:#C8E600 !important;color:#1E2A3A !important;text-decoration:none;font-weight:700;padding:16px 32px;border-radius:8px;font-size:15px;font-family:'Inter',Arial,Helvetica,sans-serif;">Ir al dashboard →</a></p>
+          <p style="margin:0;font-size:13px;color:#94A3B8;line-height:1.55;">Ingresá con tu email <strong style="color:#FFFFFF">${opts.email}</strong> y la contraseña que ya configuraste.</p>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0 !important;padding:0 !important;background:#1E2A3A !important;font-family:'Inter',Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1E2A3A !important;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:560px;background:#243042 !important;border:1px solid #2f3e52;border-radius:14px;padding:36px;">
+        <tr><td>
+          <h1 style="margin:0 0 12px;font-size:24px;color:#FFFFFF;letter-spacing:-0.02em;font-family:'Inter',Arial,Helvetica,sans-serif;">🎟️ ¡Tu lugar está reservado!</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#94A3B8;line-height:1.55;">Hola ${safeName}, confirmamos tu lugar en el taller presencial <strong style="color:#FFFFFF">${safeTitle}</strong>. ¡Te esperamos!</p>
+
+          <table role="presentation" width="100%" style="background:#1E2A3A !important;border:1px solid #2f3e52;border-radius:10px;padding:20px;margin:0 0 24px;">
+            <tr><td>
+              <p style="margin:0 0 10px;font-size:14px;color:#FFFFFF;line-height:1.5;">📅 <strong>Fecha:</strong> ${fechaTxt}</p>
+              <p style="margin:0;font-size:14px;color:#FFFFFF;line-height:1.5;">📍 <strong>Lugar:</strong> ${lugarTxt}</p>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 24px;font-size:14px;color:#C8E600;line-height:1.55;"><strong>Presentá este email en la puerta</strong> el día del taller — es tu entrada.</p>
+
+          <hr style="border:none;border-top:1px solid #2f3e52;margin:0 0 24px;">
+${accessBlock}
+
+          <hr style="border:none;border-top:1px solid #2f3e52;margin:28px 0;">
+          <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.5;">Si tenés alguna pregunta, respondé este email o escribinos a ekapradacoach@gmail.com.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    'HB Lab <noreply@hblabarg.com>',
+        to:      opts.email,
+        subject: `🎟️ ¡Tu lugar está reservado! — ${opts.courseTitle}`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: `Resend HTTP ${res.status}: ${txt}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 // ── Tipos del payload normalizado ─────────────────────────
 interface NormalizedPayment {
   email:          string;
@@ -866,12 +979,18 @@ serve(async (req: Request) => {
   // el acceso al curso ya quedó registrado en user_courses.
   let confirmationDelivery: { ok: boolean; error?: string } | null = null;
   if (inviteSkippedReason && !tempPassword) {
-    // Resolver title del curso para el subject + body del email
+    // Resolver title + flags de taller del curso para el subject + body del email
     let courseTitleConf = '(tu curso)';
+    let isWorkshopConf = false;
+    let workshopDateConf: string | null = null;
+    let workshopLocationConf: string | null = null;
     try {
       const { data: c } = await sbAdmin
-        .from('courses').select('title').eq('id', course_id).maybeSingle();
+        .from('courses').select('title, is_workshop, live_date, location').eq('id', course_id).maybeSingle();
       if (c?.title) courseTitleConf = c.title;
+      isWorkshopConf       = !!c?.is_workshop;
+      workshopDateConf     = c?.live_date ?? null;
+      workshopLocationConf = c?.location ?? null;
     } catch (e) { /* fallback al placeholder */ }
 
     // Resolver full_name del comprador desde profiles (los datos `nombre`/`apellido`
@@ -887,13 +1006,24 @@ serve(async (req: Request) => {
       } catch (e) { /* sin fullName, el template usa "alumna/o" */ }
     }
 
-    confirmationDelivery = await sendConfirmationEmail({
-      email,
-      fullName: fullNameConf || undefined,
-      courseTitle: courseTitleConf,
-    });
+    if (isWorkshopConf) {
+      // Taller presencial: usuario existente → email de reserva sin magic link.
+      confirmationDelivery = await sendWorkshopEmail({
+        email,
+        fullName: fullNameConf || undefined,
+        courseTitle: courseTitleConf,
+        workshopDate: workshopDateConf,
+        location: workshopLocationConf,
+      });
+    } else {
+      confirmationDelivery = await sendConfirmationEmail({
+        email,
+        fullName: fullNameConf || undefined,
+        courseTitle: courseTitleConf,
+      });
+    }
     if (!confirmationDelivery.ok) {
-      console.warn('process-payment: confirmation email falló (sigo):', confirmationDelivery.error);
+      console.warn('process-payment: confirmation/workshop email falló (sigo):', confirmationDelivery.error);
     }
   }
 
@@ -937,25 +1067,44 @@ serve(async (req: Request) => {
       magicLinkSkipped = 'generateLink exception: ' + (e?.message || e);
     }
 
-    // 6.b) Resolver title del curso (para el subject + body del email)
+    // 6.b) Resolver title + flags de taller del curso (para el subject + body del email)
     let courseTitle = '(tu curso)';
+    let isWorkshop = false;
+    let workshopDate: string | null = null;
+    let workshopLocation: string | null = null;
     try {
       const { data: c } = await sbAdmin
-        .from('courses').select('title').eq('id', course_id).maybeSingle();
+        .from('courses').select('title, is_workshop, live_date, location').eq('id', course_id).maybeSingle();
       if (c?.title) courseTitle = c.title;
+      isWorkshop       = !!c?.is_workshop;
+      workshopDate     = c?.live_date ?? null;
+      workshopLocation = c?.location ?? null;
     } catch (e) { /* fallback al placeholder */ }
 
     // 6.c) Enviar el email vía Resend — solo si tenemos magic link
     if (magicLink) {
       const fullName = [nombre, apellido].filter(Boolean).join(' ').trim();
-      emailDelivery = await sendWelcomeEmail({
-        email,
-        fullName: fullName || undefined,
-        courseTitle,
-        magicLink,
-      });
+      if (isWorkshop) {
+        // Taller presencial: usuario nuevo → email de reserva con magic link
+        // para que cree su contraseña y acceda al portal.
+        emailDelivery = await sendWorkshopEmail({
+          email,
+          fullName: fullName || undefined,
+          courseTitle,
+          workshopDate,
+          location: workshopLocation,
+          magicLink,
+        });
+      } else {
+        emailDelivery = await sendWelcomeEmail({
+          email,
+          fullName: fullName || undefined,
+          courseTitle,
+          magicLink,
+        });
+      }
       if (!emailDelivery.ok) {
-        console.warn('process-payment: welcome email falló (sigo):', emailDelivery.error);
+        console.warn('process-payment: welcome/workshop email falló (sigo):', emailDelivery.error);
       }
     } else {
       console.warn('process-payment: skip welcome email — sin magic link para', email);

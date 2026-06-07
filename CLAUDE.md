@@ -30,6 +30,7 @@ hblab/
 ├── perfil.html                    ← Página de perfil (todos los roles) — avatar, datos personales, cursos completados (Sesión 57)
 ├── curso.html                     ← Página de curso dinámica (?slug=) para cursos nuevos
 ├── venta-curso.html               ← Página de venta dinámica (?slug=) para cursos nuevos
+├── taller.html                    ← Página de venta de TALLERES PRESENCIALES (?slug=, is_workshop=true) — Etapa X.80
 ├── checkout.html                  ← Página de checkout pública (?slug=&currency=) — form + cupones + integración MP (Etapa X.13)
 ├── checkout-success.html          ← Pago aprobado — landing post-MP (back_url success, Etapa X.13)
 ├── checkout-pending.html          ← Pago en proceso — landing post-MP (back_url pending, Etapa X.13)
@@ -62,7 +63,7 @@ hblab/
 |-------|-------------------|
 | `auth.users` | Interna Supabase Auth |
 | `public.profiles` | `id, full_name, email, avatar_url, bio, role, created_at, birth_date, phone, experience_level, training_goal` — RLS: `auth.uid() = id` (solo propio). Campos extra para perfil del usuario (Sesión 57) |
-| `public.courses` | `id, slug, title, description, cover_url, banner_text, price_ars, price_usd, scheduled_prices JSONB DEFAULT '[]' (Etapa X.38 — array `[{date: 'YYYY-MM-DD', price_ars, price_usd}]` con incrementos automáticos por fecha), is_active, is_coming_soon, is_live, live_url, live_date, recording_url (legacy single), recordings JSONB DEFAULT '[]' (array `[{title, url}]`), live_completed, total_videos, videos JSONB, learning_points JSONB, syllabus JSONB, certificate_url, course_type ENUM('videos','modules','live')` |
+| `public.courses` | `id, slug, title, description, cover_url, banner_text, price_ars, price_usd, scheduled_prices JSONB DEFAULT '[]' (Etapa X.38 — array `[{date: 'YYYY-MM-DD', price_ars, price_usd}]` con incrementos automáticos por fecha), is_active, is_coming_soon, is_live, live_url, live_date, recording_url (legacy single), recordings JSONB DEFAULT '[]' (array `[{title, url}]`), live_completed, total_videos, videos JSONB, learning_points JSONB, syllabus JSONB, certificate_url, course_type ENUM('videos','modules','live'), is_workshop BOOLEAN DEFAULT false (Etapa X.80 — taller presencial), location TEXT (dirección del taller), max_seats INT (cupos del taller)` |
 | `public.course_modules` | `id, course_id, title, order_num, unlock_at, created_at` — agrupa lecciones cuando `course_type='modules'` (Sesión 48). `unlock_at TIMESTAMPTZ` (Etapa X.38) controla el drip: si está set y `> now`, el módulo está "bloqueado" (lógica del filtro queda pendiente del lado alumno). NULL = disponible siempre. |
 | `public.course_lessons` | `id, module_id, title, video_url, order_num, created_at` — videos individuales dentro de cada módulo. ⚠️ La columna se llama **`video_url`** (NO `url`) — usar siempre `video_url` en SELECTs y en los payloads de INSERT/UPDATE (Sesión 50 fix) |
 | `public.course_lives` | `id, module_id, live_url, live_date, recording_url, live_ended (Etapa X.45 — BOOLEAN DEFAULT FALSE, controla cuándo se habilita la asistencia para alumnos), created_at` — 0..1 por módulo. Para el link Meet/Zoom previo al live + grabación posterior. FK con `ON DELETE CASCADE` desde `course_modules`. ⚠️ **Sin RLS configurada** — queda public-readable y public-writable por default (pendiente agregar policies). El alumno marca asistencia con `video_progress.video_index = -1 * order_num` (Etapa X.44 — convención que reusa la columna sin migración). Render alumno en `curso.html` con gate `!live_ended` (Etapa X.45) — el botón "Asistí al live" solo aparece cuando el coach explícitamente finalizó el live. |
@@ -3028,6 +3029,24 @@ Variables existentes (`--card-bg`, `--card-border`, `--lime`, `--gray-text`). Bl
 
 - `renderCaracteristicas(course)` se llama en `init()` justo antes de `renderLearn`, sin `await` (es async pero no bloquea el resto del render).
 - `.feature-card` agregado al selector del `IntersectionObserver` (animate-on-scroll).
+
+---
+
+## Etapa X.80 — Talleres presenciales (in-person workshops)
+
+Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra de cursos (checkout, pagos, alta de usuario, magic link) pero con UX diferenciada en landing, dashboard, admin y email.
+
+**Columnas nuevas en `courses`** (SQL ya ejecutado): `is_workshop BOOLEAN DEFAULT false`, `location TEXT` (dirección), `max_seats INT` (cupos). La **fecha/hora del taller reusa `courses.live_date`** (no hay columna nueva de fecha).
+
+**Filtro canónico de taller**: `is_workshop = true AND is_active = true`. `taller.html` y `checkout.html` leen `?slug=` (NO `?course=`).
+
+- **`taller.html`** (NUEVO, modelado sobre `venta-curso.html`): lee `?slug=`, query `courses WHERE slug = X AND is_workshop = true`. Hero con badge violeta "🏋️ Presencial", fecha (`formatTallerDate` sobre `live_date`), lugar (`location`), CTA "Reservar lugar" → `checkout.html?slug=X&currency=ARS`. Soporta `?buy=1` para auto-abrir compra. Aplica `getEffectivePrice`.
+- **`index.html`** — sección `#talleres` antes del footer. `loadTalleres()` query talleres activos, renderiza cards → `taller.html?slug=X`, auto-oculta la sección si no hay ninguno. Los talleres se **excluyen de `loadCursos()`** con `.or('is_workshop.is.null,is_workshop.eq.false')` para no duplicarse.
+- **`admin.html`** Tab Cursos: badge violeta "🏋️ Presencial" en la tabla, toggle "Es taller presencial" (`cf-is-workshop`) que revela `cf-location` + `cf-max-seats`, y botón "👥 Inscritos" por taller → modal con lista de inscritos + export CSV. SELECT de `loadCursos` extendido con `is_workshop, location, max_seats`.
+- **`dashboard.html`**: card diferenciada cuando `is_workshop=true` — badge violeta, fecha + lugar, **sin barra de progreso**, botón "Ver entrada" → modal-ticket (en vez de "Ir al curso →").
+- **`process-payment/index.ts`**: si el curso comprado tiene `is_workshop=true`, envía email diferenciado — subject `🎟️ ¡Tu lugar está reservado! — {courseTitle}`, confirmación de reserva + fecha + dirección + instrucción del ticket + credenciales de acceso (magic link). Mismo dark theme inline. **⚠️ Requiere re-deploy manual** de `process-payment` en Supabase Dashboard.
+
+**Cómo crear un taller**: admin → Tab Cursos → Nuevo curso → activar "Es taller presencial" → completar `location` + `max_seats` + `live_date` (fecha del encuentro) + precio → Guardar. Aparece en la sección Talleres de la landing y en `taller.html?slug=X`. Ver inscritos con "👥 Inscritos" (CSV).
 
 ---
 

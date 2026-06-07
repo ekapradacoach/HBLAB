@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window, document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '1909301979776543');
+  fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=1909301979776543&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cargando… | HB Lab</title>
+
+  <!-- ─── Talleres presenciales: NO indexar (acceso solo desde landing / campañas) ─── -->
+  <meta name="description" content="Taller presencial de entrenamiento — HB Lab." />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧬</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,400;1,600&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:         #1E2A3A;
+      --navy-light:   #253347;
+      --navy-mid:     #2d3f55;
+      --lime:         #C8E600;
+      --violet:       #7B4FBE;
+      --violet-light: #9B6FDE;
+      --white:        #FFFFFF;
+      --gray-text:    #94A3B8;
+      --card-bg:      #243042;
+      --card-border:  #2f3e52;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── Utility ──────────────────────────────────── */
+    .italic { font-family: 'Playfair Display', serif; font-style: italic; }
+    .lime   { color: var(--lime); }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ─── Loading overlay ──────────────────────────── */
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.35s;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    .ls-spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(123,79,190,0.15);
+      border-top-color: var(--violet-light);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Pre-venta banner (cuenta regresiva) ──────── */
+    #preventa-bar {
+      display: none;
+      background: linear-gradient(90deg, var(--violet) 0%, var(--violet-light) 100%);
+      color: var(--white);
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 10px 24px;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+    }
+    #preventa-bar .pv-count { color: var(--lime); font-variant-numeric: tabular-nums; }
+
+    /* ─── Navbar ───────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(30, 42, 58, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(123, 79, 190, 0.18);
+      padding: 14px 0;
+      transition: box-shadow 0.3s, top 0.2s;
+    }
+    #navbar.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; }
+
+    .logo-wrap { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-svg { width: 44px; height: 44px; flex-shrink: 0; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+    .logo-text .hb { font-weight: 800; font-size: 1.25rem; color: var(--white); letter-spacing: 0.02em; }
+    .logo-text .lab { font-family: 'Playfair Display', serif; font-style: italic; font-size: 0.78rem; color: var(--lime); letter-spacing: 0.12em; text-transform: lowercase; }
+
+    .btn-nav {
+      background: transparent;
+      border: 1.5px solid var(--lime);
+      color: var(--lime);
+      padding: 9px 22px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      letter-spacing: 0.03em;
+      text-decoration: none;
+      display: inline-flex;
+    }
+    .btn-nav:hover { background: var(--lime); color: var(--navy); }
+
+    /* ─── Shared section ───────────────────────────── */
+    section { padding: 100px 0; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--violet-light);
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    /* ─── Hero ─────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding-top: 80px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    #hero::before {
+      content: '';
+      position: absolute; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(123,79,190,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(123,79,190,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+    }
+    @keyframes gridMove {
+      from { background-position: 0 0; }
+      to   { background-position: 60px 60px; }
+    }
+
+    #hero-overlay {
+      display: none;
+      position: absolute; inset: 0; z-index: 0;
+      background: rgba(20, 30, 44, 0.78);
+    }
+
+    .blob { position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none; }
+    .blob-1 { width: 500px; height: 500px; background: rgba(123,79,190,0.28); top: -120px; right: -150px; }
+    .blob-2 { width: 380px; height: 380px; background: rgba(200,230,0,0.08); bottom: -80px; left: -100px; }
+
+    .hero-inner { position: relative; z-index: 1; max-width: 820px; }
+
+    .breadcrumb {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-bottom: 28px; text-decoration: none;
+      color: var(--gray-text); font-size: 0.875rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    .breadcrumb:hover { color: var(--violet-light); }
+    .breadcrumb svg { transition: transform 0.2s; }
+    .breadcrumb:hover svg { transform: translateX(-3px); }
+
+    /* Badge violeta — TALLER PRESENCIAL */
+    .course-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--violet); color: var(--white);
+      border-radius: 100px; padding: 7px 18px;
+      font-size: 0.72rem; font-weight: 800;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .hero-title {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      font-weight: 900; line-height: 1.08;
+      letter-spacing: -0.03em; margin-bottom: 24px;
+    }
+
+    .hero-subtitle {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      color: var(--violet-light);
+      max-width: 640px; margin-bottom: 36px; line-height: 1.65;
+    }
+
+    /* Datos del taller (fecha / lugar / cupos) */
+    .workshop-facts {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      margin-bottom: 36px;
+    }
+    .fact-chip {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 0.92rem; font-weight: 600; color: var(--white);
+    }
+    .fact-chip .fact-ico { font-size: 1.15rem; }
+    .fact-chip .fact-label { color: var(--gray-text); font-weight: 500; font-size: 0.78rem; display: block; letter-spacing: 0.04em; text-transform: uppercase; }
+    .fact-chip .fact-val { display: block; }
+
+    .hero-price-block {
+      display: flex; align-items: baseline; gap: 14px;
+      margin-bottom: 28px; flex-wrap: wrap;
+    }
+    .price-big {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 900; color: var(--lime);
+      letter-spacing: -0.03em; line-height: 1;
+    }
+    .price-usd-hero { font-size: 1.1rem; font-weight: 600; color: var(--gray-text); }
+
+    .btn-buy-hero {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--violet); color: var(--white); border: none;
+      padding: 18px 40px; border-radius: 10px;
+      font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.1rem;
+      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+      letter-spacing: 0.01em;
+    }
+    .btn-buy-hero:hover { transform: translateY(-2px); box-shadow: 0 10px 36px rgba(123,79,190,0.5); }
+    .buy-note { margin-top: 12px; font-size: 0.8rem; color: var(--gray-text); letter-spacing: 0.04em; }
+
+    /* Modal moneda */
+    .currency-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
+      padding: 20px; backdrop-filter: blur(4px);
+    }
+    .currency-modal-overlay.open { display: flex; }
+    .currency-modal {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px; padding: 36px 32px;
+      max-width: 460px; width: 100%;
+      position: relative;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .currency-modal-close {
+      position: absolute; top: 14px; right: 14px;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: none; color: var(--white);
+      cursor: pointer; font-size: 1.1rem; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.18s;
+    }
+    .currency-modal-close:hover { background: rgba(255,255,255,0.14); }
+    .currency-modal h3 { font-size: 1.3rem; font-weight: 800; margin-bottom: 8px; color: var(--white); }
+    .currency-modal p.cm-sub { font-size: 0.85rem; color: var(--gray-text); margin-bottom: 24px; }
+    .currency-btn {
+      width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      padding: 18px 22px; margin-bottom: 12px;
+      border: 2px solid transparent; border-radius: 14px;
+      font-family: 'Inter', sans-serif; font-weight: 700;
+      cursor: pointer; transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .currency-btn:hover { transform: translateY(-2px); }
+    .currency-btn.ars { background: var(--lime); color: var(--navy); }
+    .currency-btn.ars:hover { box-shadow: 0 10px 32px rgba(200,230,0,0.36); }
+    .currency-btn.usd { background: var(--violet); color: #fff; }
+    .currency-btn.usd:hover { box-shadow: 0 10px 32px rgba(123,79,190,0.42); }
+    .currency-btn-label { font-size: 0.95rem; }
+    .currency-btn-amount { font-size: 1.05rem; font-weight: 900; letter-spacing: -0.01em; }
+    .currency-btn:last-of-type { margin-bottom: 4px; }
+    .cm-foot-note { font-size: 0.74rem; color: var(--gray-text); text-align: center; margin-top: 14px; }
+
+    /* ─── ¿Para quién es? ──────────────────────────── */
+    #learn { background: var(--navy-light); }
+    .learn-header { margin-bottom: 56px; }
+    .learn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    .learn-item {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 28px;
+      display: flex; gap: 20px; align-items: flex-start;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .learn-item:hover { border-color: rgba(123,79,190,0.4); transform: translateY(-3px); }
+    .learn-icon {
+      width: 48px; height: 48px; flex-shrink: 0;
+      background: rgba(123,79,190,0.1);
+      border: 1px solid rgba(123,79,190,0.25);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+    }
+    .learn-text { font-size: 0.975rem; line-height: 1.6; font-weight: 500; color: var(--white); }
+    .learn-empty, .temario-empty { grid-column: 1 / -1; color: var(--gray-text); font-size: 0.9rem; padding: 32px 0; text-align: center; }
+
+    /* ─── Temario (acordeón) ───────────────────────── */
+    #temario { background: var(--navy); }
+    .temario-header { text-align: center; margin-bottom: 56px; }
+    .temario-accordion { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    .acc-item {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px; overflow: hidden;
+    }
+    .acc-head {
+      width: 100%; text-align: left;
+      display: flex; align-items: center; gap: 14px;
+      padding: 20px 24px; cursor: pointer;
+      background: transparent; border: none; color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      transition: background 0.2s;
+    }
+    .acc-head:hover { background: rgba(123,79,190,0.08); }
+    .acc-num {
+      width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em;
+      background: rgba(155,111,222,0.25); color: var(--violet-light); border: 1px solid rgba(155,111,222,0.4);
+    }
+    .acc-title { flex: 1; }
+    .acc-arrow { transition: transform 0.25s; color: var(--violet-light); flex-shrink: 0; }
+    .acc-item.open .acc-arrow { transform: rotate(180deg); }
+    .acc-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .acc-item.open .acc-body { max-height: 1200px; }
+    .acc-list { list-style: none; padding: 0 24px 22px 72px; display: flex; flex-direction: column; }
+    .acc-list li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.9rem; color: var(--gray-text); line-height: 1.5;
+    }
+    .acc-list li:last-child { border-bottom: none; }
+    .acc-list li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--violet-light); flex-shrink: 0; margin-top: 7px; }
+
+    /* ─── Qué incluye ──────────────────────────────── */
+    #incluye { background: var(--navy-light); }
+    .incluye-header { margin-bottom: 48px; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 26px 22px;
+      display: flex; flex-direction: column; gap: 10px;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .feature-card:hover { border-color: rgba(123,79,190,0.4); transform: translateY(-3px); }
+    .feature-icon {
+      width: 44px; height: 44px;
+      background: rgba(123,79,190,0.1);
+      border: 1px solid rgba(123,79,190,0.25);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; margin-bottom: 4px;
+    }
+    .feature-title { font-size: 0.95rem; font-weight: 700; color: var(--white); letter-spacing: -0.01em; }
+    .feature-desc { font-size: 0.86rem; font-weight: 500; color: var(--gray-text); line-height: 1.5; }
+
+    /* ─── Sobre Erika ──────────────────────────────── */
+    #instructor { background: var(--navy); }
+    .instructor-wrap {
+      max-width: 720px; margin: 0 auto; text-align: center;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px; padding: 48px 36px;
+    }
+    .instructor-photo {
+      width: 140px; height: 140px; border-radius: 50%;
+      object-fit: cover; object-position: top;
+      border: 3px solid var(--violet-light);
+      margin: 0 auto 22px; display: block;
+      box-shadow: 0 0 0 6px rgba(123,79,190,0.12);
+    }
+    .instructor-name { font-size: 1.4rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.01em; }
+    .instructor-bio { font-size: 0.98rem; color: var(--gray-text); line-height: 1.7; max-width: 560px; margin: 0 auto; }
+
+    /* ─── Bloque de pago ───────────────────────────── */
+    #pago { background: var(--navy-light); padding: 80px 0; }
+    .pago-box {
+      background: linear-gradient(135deg, rgba(123,79,190,0.22) 0%, rgba(200,230,0,0.06) 100%);
+      border: 1px solid rgba(123,79,190,0.35);
+      border-radius: 20px;
+      padding: clamp(48px, 6vw, 72px);
+      text-align: center;
+    }
+    .pago-title { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 900; letter-spacing: -0.03em; margin-bottom: 12px; }
+    .pago-sub { font-size: 1.05rem; color: var(--gray-text); margin-bottom: 28px; line-height: 1.6; }
+    .pago-facts { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+    .cta-price-block { display: flex; align-items: baseline; gap: 12px; justify-content: center; margin-bottom: 32px; flex-wrap: wrap; }
+
+    /* ─── Footer ───────────────────────────────────── */
+    footer { background: #151f2b; border-top: 1px solid rgba(255,255,255,0.06); padding: 60px 0 32px; }
+    .footer-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; margin-bottom: 48px; flex-wrap: wrap; }
+    .footer-brand { max-width: 300px; }
+    .footer-tagline { margin-top: 14px; font-size: 0.875rem; color: var(--gray-text); line-height: 1.6; }
+    .footer-social { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+    .footer-social h4 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-text); }
+    .social-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--white); font-size: 0.9rem; font-weight: 500; transition: color 0.2s; opacity: 0.8; }
+    .social-link:hover { color: var(--lime); opacity: 1; }
+    .social-icon { width: 38px; height: 38px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; display: flex; align-items: center; justify-content: center; transition: border-color 0.2s, background 0.2s; }
+    .social-link:hover .social-icon { border-color: var(--lime); background: rgba(200,230,0,0.08); }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 28px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .footer-copyright { font-size: 0.8rem; color: var(--gray-text); }
+    .footer-made { font-size: 0.78rem; color: var(--gray-text); }
+    .footer-made span { color: var(--lime); }
+    .footer-support { font-size: 0.82rem; margin: 0; }
+    .footer-support a { color: #94A3B8; text-decoration: none; transition: color 0.2s; }
+    .footer-support a:hover { color: #C8E600; }
+
+    /* ─── Responsive ───────────────────────────────── */
+    @media (max-width: 900px) {
+      .learn-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .features-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      section { padding: 72px 0; }
+      .footer-top { flex-direction: column; }
+    }
+    @media (max-width: 768px) {
+      .hero-title { font-size: clamp(1.6rem, 5vw, 3rem); line-height: 1.15; word-break: break-word; }
+      .hero-subtitle { font-size: 1rem; line-height: 1.6; word-break: break-word; }
+      .btn-buy-hero { display: flex; width: 100%; text-align: center; justify-content: center; padding: 16px 24px; font-size: 1rem; }
+      .acc-list { padding-left: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── LOADING ──────────────────────────────────── -->
+  <div id="loading-screen"><div class="ls-spinner"></div></div>
+
+  <!-- ─── PRE-VENTA BAR (cuenta regresiva, condicional) ── -->
+  <div id="preventa-bar"></div>
+
+  <!-- ─── NAVBAR ────────────────────────────────────── -->
+  <nav id="navbar">
+    <div class="container nav-inner">
+      <a href="index.html" class="logo-wrap" aria-label="HB Lab — Volver al inicio">
+        <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+          <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38" stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38" stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <line x1="16" y1="12" x2="28" y2="12" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="28" y2="20" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="28" x2="28" y2="28" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="16" y1="36" x2="28" y2="36" stroke="rgba(200,230,0,0.6)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <span class="hb">HB</span>
+          <span class="lab">lab</span>
+        </div>
+      </a>
+      <a href="login.html" class="btn-nav">Ingresar</a>
+    </div>
+  </nav>
+
+  <!-- ─── HERO ──────────────────────────────────────── -->
+  <section id="hero">
+    <div id="hero-overlay"></div>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="container">
+      <div class="hero-inner">
+
+        <a href="index.html#talleres" class="breadcrumb">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Volver a talleres
+        </a>
+
+        <div class="course-badge">🏋️ Taller presencial</div>
+
+        <h1 class="hero-title" id="hero-title"></h1>
+        <p class="hero-subtitle" id="hero-desc"></p>
+
+        <div class="workshop-facts" id="hero-facts"><!-- fecha / lugar / cupos --></div>
+
+        <div class="hero-price-block">
+          <span class="price-big" id="hero-price-ars"></span>
+          <span class="price-usd-hero" id="hero-price-usd"></span>
+        </div>
+
+        <button class="btn-buy-hero" onclick="openCurrencyModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+          Reservar mi lugar
+        </button>
+        <p class="buy-note">Cupos limitados · Reserva con pago seguro</p>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── ¿PARA QUIÉN ES? ──────────────────────────── -->
+  <section id="learn">
+    <div class="container">
+      <div class="learn-header">
+        <span class="section-label">A quién va dirigido</span>
+        <h2 class="section-title">¿Para quién es este taller?</h2>
+      </div>
+      <div class="learn-grid" id="learn-grid"><!-- populated by JS --></div>
+    </div>
+  </section>
+
+  <!-- ─── TEMARIO (acordeón) ───────────────────────── -->
+  <section id="temario">
+    <div class="container">
+      <div class="temario-header">
+        <span class="section-label">Contenido</span>
+        <h2 class="section-title">Qué vamos a ver</h2>
+      </div>
+      <div class="temario-accordion" id="temario-accordion"><!-- populated by JS --></div>
+    </div>
+  </section>
+
+  <!-- ─── QUÉ INCLUYE ──────────────────────────────── -->
+  <section id="incluye">
+    <div class="container">
+      <div class="incluye-header">
+        <span class="section-label">Lo que incluye</span>
+        <h2 class="section-title">Todo lo que te llevás</h2>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📥</div>
+          <div class="feature-title">Material descargable</div>
+          <p class="feature-desc">Recursos y diapositivas del taller disponibles en el portal.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📜</div>
+          <div class="feature-title">Certificado de asistencia</div>
+          <p class="feature-desc">Acreditás tu participación con certificado oficial de HB Lab.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💻</div>
+          <div class="feature-title">Acceso al portal HB Lab</div>
+          <p class="feature-desc">Tu cuenta para acceder a materiales y futuras novedades.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── SOBRE ERIKA ──────────────────────────────── -->
+  <section id="instructor">
+    <div class="container">
+      <div class="instructor-wrap">
+        <img src="IMG_2393__1_-removebg-preview.png" alt="Erika Prada" class="instructor-photo" />
+        <h3 class="instructor-name">Erika Prada</h3>
+        <p class="instructor-bio">Entrenadora híbrida y creadora de HB Lab. Especializada en fuerza, potencia y metodología aplicada.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── BLOQUE DE PAGO ───────────────────────────── -->
+  <section id="pago">
+    <div class="container">
+      <div class="pago-box">
+        <h2 class="pago-title">Reservá tu lugar</h2>
+        <p class="pago-sub" id="pago-sub">Los cupos son limitados y se asignan por orden de pago.</p>
+
+        <div class="pago-facts" id="pago-facts"><!-- fecha / lugar / cupos --></div>
+
+        <div class="cta-price-block">
+          <span class="price-big" id="cta-price-ars"></span>
+          <span class="price-usd-hero" id="cta-price-usd"></span>
+        </div>
+
+        <button class="btn-buy-hero" onclick="openCurrencyModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+          Reservar mi lugar
+        </button>
+        <p class="buy-note" style="margin-top:14px;font-size:0.85rem;">Reserva con pago seguro · Confirmación inmediata por email</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ────────────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="index.html" class="logo-wrap" aria-label="HB Lab">
+            <svg class="logo-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="22" cy="22" r="21" fill="#253347" stroke="rgba(200,230,0,0.15)" stroke-width="0.5"/>
+              <path d="M16 8 Q20 12 16 16 Q12 20 16 24 Q20 28 16 32 Q12 36 16 38" stroke="#C8E600" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <path d="M28 8 Q24 12 28 16 Q32 20 28 24 Q24 28 28 32 Q32 36 28 38" stroke="#7B4FBE" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div class="logo-text">
+              <span class="hb">HB</span>
+              <span class="lab">lab</span>
+            </div>
+          </a>
+          <p class="footer-tagline">
+            Academia de entrenamiento con respaldo científico. Formamos entrenadores que marcan la diferencia.
+          </p>
+        </div>
+
+        <div class="footer-social">
+          <h4>Seguinos</h4>
+          <a class="social-link" href="https://instagram.com/ekaprada.coach" target="_blank" rel="noopener">
+            <div class="social-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C8E600" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+            </div>
+            @ekaprada.coach
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-copyright">© 2025 HB Lab. Todos los derechos reservados.</p>
+        <p class="footer-support"><a href="mailto:ekapradacoach@gmail.com">✉ ¿Consultas? Escribinos</a></p>
+        <p class="footer-made">Hecho con <span>♥</span> para entrenadores que buscan más</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ─── Modal de selección de moneda ─── -->
+  <div id="modal-currency" class="currency-modal-overlay" onclick="if(event.target===this) closeCurrencyModal()">
+    <div class="currency-modal">
+      <button class="currency-modal-close" onclick="closeCurrencyModal()" aria-label="Cerrar">×</button>
+      <h3>¿Cómo querés pagar?</h3>
+      <p class="cm-sub">Elegí la moneda con la que vas a reservar tu lugar.</p>
+
+      <button id="cm-btn-ars" class="currency-btn ars" onclick="goToCheckout('ARS')">
+        <span class="currency-btn-label">🇦🇷 Pagar en ARS</span>
+        <span class="currency-btn-amount" id="cm-amount-ars">$0</span>
+      </button>
+
+      <button id="cm-btn-usd" class="currency-btn usd" onclick="goToCheckout('USD')">
+        <span class="currency-btn-label">🌍 Pagar en USD</span>
+        <span class="currency-btn-amount" id="cm-amount-usd">USD 0</span>
+      </button>
+
+      <p class="cm-foot-note">Recibís la confirmación de tu reserva por email una vez aprobado el pago.</p>
+    </div>
+  </div>
+
+  <!-- ─── JS ────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    function escHtml(s) {
+      return String(s || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function hideLoading() {
+      const el = document.getElementById('loading-screen');
+      el.classList.add('fade-out');
+      setTimeout(() => el.remove(), 350);
+    }
+
+    // Navbar scroll shadow
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    // Fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    // Precio vigente según scheduled_prices (mismo patrón que venta-curso.html)
+    function getEffectivePrice(course) {
+      const base = {
+        price_ars: Number(course?.price_ars || 0),
+        price_usd: Number(course?.price_usd || 0),
+      };
+      let arr = course?.scheduled_prices;
+      if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = []; } }
+      if (!Array.isArray(arr) || !arr.length) return base;
+      const now   = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const vigentes = arr.filter(r => r && r.date && r.date <= today).sort((a,b) => b.date.localeCompare(a.date));
+      if (!vigentes.length) return base;
+      const w = vigentes[0];
+      return {
+        price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+        price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+      };
+    }
+
+    // Formatea live_date → "Sábado 4 de julio · 15:00 hs"
+    function formatWorkshopDate(raw) {
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return '';
+      const fecha = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+      const cap = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+      const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${cap} · ${hora} hs`;
+    }
+
+    let _ventaCourse = null;
+    let _preventaTimer = null;
+
+    (async function init() {
+      const slug = new URLSearchParams(window.location.search).get('slug');
+      if (!slug) { window.location.replace('index.html'); return; }
+
+      const { data: course, error } = await sb
+        .from('courses')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, learning_points, syllabus, live_date, location, max_seats, is_workshop, is_active')
+        .eq('slug', slug)
+        .eq('is_workshop', true)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error || !course) {
+        hideLoading();
+        window.location.replace('index.html');
+        return;
+      }
+
+      // Title + og
+      document.title = `${course.title} | HB Lab`;
+
+      document.getElementById('hero-title').textContent = course.title;
+      document.getElementById('hero-desc').textContent  = course.description || '';
+
+      const fmtARS = n => `$${Number(n || 0).toLocaleString('es-AR')} ARS`;
+      const fmtUSD = n => `/ USD ${Number(n || 0).toLocaleString('es-AR')}`;
+
+      const effective = getEffectivePrice(course);
+      document.getElementById('hero-price-ars').textContent = fmtARS(effective.price_ars);
+      document.getElementById('hero-price-usd').textContent = effective.price_usd > 0 ? fmtUSD(effective.price_usd) : '';
+      document.getElementById('cta-price-ars').textContent  = fmtARS(effective.price_ars);
+      document.getElementById('cta-price-usd').textContent  = effective.price_usd > 0 ? fmtUSD(effective.price_usd) : '';
+
+      _ventaCourse = {
+        id: course.id, slug: course.slug,
+        price_ars: effective.price_ars, price_usd: effective.price_usd,
+      };
+
+      // Datos del taller (chips de fecha / lugar / cupos)
+      renderFacts(course);
+
+      // Cover image
+      if (course.cover_url) {
+        const hero = document.getElementById('hero');
+        hero.style.backgroundImage = `url('${course.cover_url}')`;
+        document.getElementById('hero-overlay').style.display = 'block';
+        document.querySelectorAll('.blob').forEach(b => b.style.opacity = '0');
+      }
+
+      // Pre-venta countdown
+      startPreventaCountdown(course);
+
+      // Secciones
+      renderLearn(course.learning_points || []);
+      renderTemario(course.syllabus || []);
+
+      hideLoading();
+
+      // ?buy=1 → abre el modal directo
+      if (new URLSearchParams(window.location.search).get('buy') === '1') openCurrencyModal();
+
+      document.querySelectorAll('.learn-item, .acc-item, .feature-card').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(el);
+      });
+    })();
+
+    function renderFacts(course) {
+      const fechaStr = formatWorkshopDate(course.live_date);
+      const chips = [];
+      if (fechaStr) chips.push({ ico: '📅', label: 'Fecha', val: fechaStr });
+      if (course.location) chips.push({ ico: '📍', label: 'Lugar', val: course.location });
+      if (course.max_seats) chips.push({ ico: '👥', label: 'Cupos', val: `${course.max_seats} lugares` });
+
+      const html = chips.map(c => `
+        <div class="fact-chip">
+          <span class="fact-ico">${c.ico}</span>
+          <span><span class="fact-label">${escHtml(c.label)}</span><span class="fact-val">${escHtml(c.val)}</span></span>
+        </div>`).join('');
+
+      const heroFacts = document.getElementById('hero-facts');
+      const pagoFacts = document.getElementById('pago-facts');
+      if (heroFacts) heroFacts.innerHTML = html;
+      if (pagoFacts) pagoFacts.innerHTML = html;
+    }
+
+    // Cuenta regresiva hasta scheduled_prices[0].date. Al vencer → precio regular (price_ars).
+    function startPreventaCountdown(course) {
+      let arr = course.scheduled_prices;
+      if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = []; } }
+      if (!Array.isArray(arr) || !arr.length || !arr[0]?.date) return;
+
+      const bar = document.getElementById('preventa-bar');
+      // Vence al final del día de la fecha indicada (local)
+      const target = new Date(arr[0].date + 'T23:59:59').getTime();
+
+      const fmtRegular = n => `$${Number(n || 0).toLocaleString('es-AR')} ARS`;
+
+      function tick() {
+        const diff = target - Date.now();
+        if (diff <= 0) {
+          // Pre-venta vencida → mostrar precio regular en hero + cta y ocultar countdown
+          clearInterval(_preventaTimer);
+          bar.style.display = 'none';
+          navbar.style.top = '0';
+          document.getElementById('hero').style.paddingTop = '80px';
+          document.getElementById('hero-price-ars').textContent = fmtRegular(course.price_ars);
+          document.getElementById('cta-price-ars').textContent  = fmtRegular(course.price_ars);
+          if (_ventaCourse) _ventaCourse.price_ars = Number(course.price_ars || 0);
+          return;
+        }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        bar.innerHTML = `🔥 Precio de pre-venta — termina en <span class="pv-count">${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</span>`;
+      }
+
+      bar.style.display = 'block';
+      tick();
+      _preventaTimer = setInterval(tick, 1000);
+
+      requestAnimationFrame(() => {
+        const bh = bar.offsetHeight;
+        navbar.style.top = bh + 'px';
+        document.getElementById('hero').style.paddingTop = (80 + bh) + 'px';
+      });
+    }
+
+    function renderLearn(points) {
+      const grid = document.getElementById('learn-grid');
+      if (!points.length) {
+        grid.innerHTML = '<p class="learn-empty">Información disponible próximamente.</p>';
+        return;
+      }
+      grid.innerHTML = points.map(p => `
+        <div class="learn-item">
+          <div class="learn-icon">${escHtml(p.icon || '✅')}</div>
+          <p class="learn-text">${escHtml(p.text)}</p>
+        </div>`).join('');
+    }
+
+    function renderTemario(modules) {
+      const acc = document.getElementById('temario-accordion');
+      if (!modules.length) {
+        acc.innerHTML = '<p class="temario-empty">El temario detallado estará disponible próximamente.</p>';
+        return;
+      }
+      acc.innerHTML = modules.map((m, i) => {
+        const items = (m.items || []).map(item => `<li>${escHtml(item)}</li>`).join('');
+        return `
+          <div class="acc-item${i === 0 ? ' open' : ''}">
+            <button class="acc-head" onclick="toggleAcc(this)">
+              <span class="acc-num">P${i + 1}</span>
+              <span class="acc-title">${escHtml(m.title)}</span>
+              <svg class="acc-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="acc-body">
+              <ul class="acc-list">${items || '<li style="font-style:italic">Sin ítems</li>'}</ul>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function toggleAcc(btn) {
+      btn.closest('.acc-item').classList.toggle('open');
+    }
+
+    // ── Modal moneda ──
+    function openCurrencyModal() {
+      if (!_ventaCourse) return;
+      const overlay = document.getElementById('modal-currency');
+      if (!overlay) return;
+      const priceArs = Number(_ventaCourse.price_ars || 0);
+      const priceUsd = Number(_ventaCourse.price_usd || 0);
+      document.getElementById('cm-amount-ars').textContent = '$' + priceArs.toLocaleString('es-AR');
+      document.getElementById('cm-amount-usd').textContent = 'USD ' + priceUsd.toLocaleString('es-AR');
+      document.getElementById('cm-btn-ars').style.display = priceArs > 0 ? '' : 'none';
+      document.getElementById('cm-btn-usd').style.display = priceUsd > 0 ? '' : 'none';
+      overlay.classList.add('open');
+    }
+
+    function closeCurrencyModal() {
+      const overlay = document.getElementById('modal-currency');
+      if (overlay) overlay.classList.remove('open');
+    }
+
+    function goToCheckout(currency) {
+      if (!_ventaCourse?.slug) return;
+      window.location.href = `checkout.html?slug=${encodeURIComponent(_ventaCourse.slug)}&currency=${currency}`;
+    }
+  </script>
+
+</body>
+</html>
