@@ -3048,6 +3048,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Cómo crear un taller**: admin → Tab Cursos → Nuevo curso → activar "Es taller presencial" → completar `location` + `max_seats` + `live_date` (fecha del encuentro) + precio → Guardar. Aparece en la sección Talleres de la landing y en `taller.html?slug=X`. Ver inscritos con "👥 Inscritos" (CSV).
 
+**Etapa X.81 — link Meet/Zoom opcional en talleres**: en `saveCurso()` la validación `if (isLive && !liveUrl) ...` que exigía el link de videollamada ahora es `if (isLive && !liveUrl && !isWorkshop) ...` — un taller presencial no requiere link de Meet/Zoom (el encuentro es físico) y no muestra el error rojo. Las lecturas de `isWorkshop`/`location`/`maxSeats` se hacen antes de esa validación.
+
 ---
 
 ## Usuarios registrados

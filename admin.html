@@ -3236,7 +3236,14 @@
       const liveDate    = fromLocalDatetimeInput(liveDateRaw);   // Etapa X.77 — hora local → UTC
       const recordingUrl = document.getElementById('cf-recording-url').value.trim() || null;
 
-      if (isLive && !liveUrl) return showAlert('alert-cursos', 'Si es clase en vivo, el link de Meet/Zoom es obligatorio.');
+      // Taller presencial — el link de Meet/Zoom NO aplica a talleres presenciales (Etapa X.81)
+      const isWorkshop   = document.getElementById('cf-is-workshop').checked;
+      const location     = document.getElementById('cf-location').value.trim() || null;
+      const maxSeatsRaw  = document.getElementById('cf-max-seats').value;
+      const maxSeats     = maxSeatsRaw !== '' ? parseInt(maxSeatsRaw, 10) : null;
+
+      // El link de Meet/Zoom solo es obligatorio para clases en vivo online, NO para talleres presenciales (Etapa X.81)
+      if (isLive && !liveUrl && !isWorkshop) return showAlert('alert-cursos', 'Si es clase en vivo, el link de Meet/Zoom es obligatorio.');
 
       const btn = document.getElementById('btn-save-curso');
       btn.disabled = true;
@@ -3246,11 +3253,7 @@
       const isActiveEl   = document.getElementById('cf-is-active');
       const isActive     = isActiveEl ? isActiveEl.checked : true;  // default true (Sesión 52)
 
-      // Taller presencial
-      const isWorkshop   = document.getElementById('cf-is-workshop').checked;
-      const location     = document.getElementById('cf-location').value.trim() || null;
-      const maxSeatsRaw  = document.getElementById('cf-max-seats').value;
-      const maxSeats     = maxSeatsRaw !== '' ? parseInt(maxSeatsRaw, 10) : null;
+      // Taller presencial — isWorkshop/location/maxSeats ya leídos arriba (antes de la validación del link, Etapa X.81)
       const hasQuizEl    = document.getElementById('cf-has-quiz');
       const hasQuiz      = hasQuizEl ? hasQuizEl.checked : false;   // Etapa U
 

@@ -3542,3 +3542,18 @@ Re-deploy manual de `process-payment` en Supabase Dashboard → Edge Functions (
 **Archivos modificados:** `taller.html` (nuevo), `admin.html`, `dashboard.html`, `index.html`, `supabase/functions/process-payment/index.ts`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.81 — Link de Meet/Zoom opcional para talleres presenciales
+
+Fix de la validación del wizard de cursos en `admin.html` (Step 2 — Contenido). El toggle "Clase en vivo (Meet / Zoom)" (`cf-is-live`) exigía un `live_url` obligatorio. Pero un taller presencial (`is_workshop = true`) no tiene link de videollamada — el encuentro es físico. Si el admin marcaba "Clase en vivo" en un taller (o el flujo lo activaba), `saveCurso()` cortaba con el error rojo *"Si es clase en vivo, el link de Meet/Zoom es obligatorio."* impidiendo guardar.
+
+### Cambio en `saveCurso()` (admin.html)
+
+- **Validación condicionada a `!isWorkshop`**: `if (isLive && !liveUrl && !isWorkshop) return showAlert(...)`. Para talleres presenciales el link de Meet/Zoom es **opcional** — no se muestra el error.
+- **Reordenamiento**: las lecturas `isWorkshop` / `location` / `maxSeats` se movieron ARRIBA de la validación del link (antes estaban después, lo que las hacía inaccesibles al momento del check). Se eliminó la declaración duplicada que vivía más abajo para evitar el `SyntaxError` de doble `const`.
+
+Sin cambios en el resto del flujo: si el taller igual tuviera un `live_url` cargado, se guarda normal; si no, se guarda con `live_url = null`. La validación sigue intacta para cursos online normales (no-workshop) con clase en vivo.
+
+**Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
