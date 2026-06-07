@@ -3050,6 +3050,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.81 — link Meet/Zoom opcional en talleres**: en `saveCurso()` la validación `if (isLive && !liveUrl) ...` que exigía el link de videollamada ahora es `if (isLive && !liveUrl && !isWorkshop) ...` — un taller presencial no requiere link de Meet/Zoom (el encuentro es físico) y no muestra el error rojo. Las lecturas de `isWorkshop`/`location`/`maxSeats` se hacen antes de esa validación.
 
+**Etapa X.82 — sección learning_points en taller.html**: la sección `#learn` (renderiza `learning_points`) usa badge "Lo que vas a aprender" + título "¿Qué vas a aprender?" (antes "A quién va dirigido" / "¿Para quién es este taller?"). Solo texto estático del header; el contenido dinámico no cambia.
+
 ---
 
 ## Usuarios registrados

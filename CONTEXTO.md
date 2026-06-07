@@ -3557,3 +3557,17 @@ Sin cambios en el resto del flujo: si el taller igual tuviera un `live_url` carg
 **Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.82 — Renombrar sección de learning_points en taller.html
+
+Cambio cosmético en `taller.html`. La sección `#learn` (que renderiza `learning_points` vía `renderLearn`) tenía el título "¿Para quién es este taller?" con el badge "A quién va dirigido" — semántica de "público objetivo", no de contenido formativo. Se renombró a contenido de aprendizaje:
+
+- **Badge (`.section-label`)**: "A quién va dirigido" → **"Lo que vas a aprender"**.
+- **Título (`.section-title`)**: "¿Para quién es este taller?" → **"¿Qué vas a aprender?"**.
+- Comentario HTML de la sección actualizado a `¿QUÉ VAS A APRENDER?`.
+
+El contenido dinámico (`learning_points` del curso) y la lógica de `renderLearn` no cambian — solo los textos estáticos del header de la sección.
+
+**Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
