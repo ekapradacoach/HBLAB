@@ -3052,6 +3052,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.82 — sección learning_points en taller.html**: la sección `#learn` (renderiza `learning_points`) usa badge "Lo que vas a aprender" + título "¿Qué vas a aprender?" (antes "A quién va dirigido" / "¿Para quién es este taller?"). Solo texto estático del header; el contenido dinámico no cambia.
 
+**Etapa X.83 — instructor dinámico en taller.html**: la sección `#instructor` ya no está hardcodeada con Erika. `renderInstructores(course.id)` llama la RPC `get_course_coaches` (misma que venta-curso.html) y renderiza un `.instructor-card` por coach asignado (foto o iniciales + nombre + bio). Soporta N coaches; si no hay ninguno → oculta la sección (`display:none`).
+
 ---
 
 ## Usuarios registrados

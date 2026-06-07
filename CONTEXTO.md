@@ -3571,3 +3571,29 @@ El contenido dinámico (`learning_points` del curso) y la lógica de `renderLear
 **Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.83 — Instructor dinámico en taller.html (course_coaches)
+
+La sección `#instructor` de `taller.html` estaba **hardcodeada** con los datos de Erika Prada (foto `IMG_2393__1_-removebg-preview.png`, nombre y bio fijos en HTML). Ahora lee el/los coach(es) asignado(s) al taller desde la BD, igual que `venta-curso.html` (Sesión 45).
+
+### Mecanismo
+
+Usa la RPC **`get_course_coaches(p_course_id UUID)`** SECURITY DEFINER (la misma que venta-curso.html) que joinea `coach_courses + profiles` y retorna `{ coach_id, full_name, avatar_url, bio }`. Se pasa `course.id` (UUID), NUNCA el slug.
+
+> Nota: la tabla real es `coach_courses` (la consigna la mencionó como "course_coaches"). La RPC abstrae el join, así que el cliente no toca la tabla directamente.
+
+### Cambios en `taller.html`
+
+- **HTML**: la sección `#instructor` pasa a `style="display:none"` por default, con header (`<span class="section-label">Quién lo dicta</span>` + `<h2 class="section-title">Tu instructor</h2>`) y un contenedor `#instructores-grid` poblado por JS. Se eliminó el bloque hardcodeado de Erika.
+- **`renderInstructores(courseId)`** nueva (espejo de venta-curso.html): llama la RPC, y
+  - error o `data` vacío → `section.style.display = 'none'` (oculta silenciosamente, `console.warn` para debug).
+  - con datos → `section.style.display = ''` + renderiza un `.instructor-card` por coach: `<img class="instructor-photo">` si hay `avatar_url`, o `.instructor-initials` (primeras 2 iniciales del `full_name`) como fallback, + nombre + bio. **Soporta N coaches** (grid `repeat(auto-fit, minmax(280px, 1fr))`).
+  - Envuelto en try/catch → excepción inesperada también oculta la sección.
+- Se llama con `await renderInstructores(course.id)` en `init()`, después de `renderLearn`/`renderTemario`.
+- **CSS**: se reemplazó `.instructor-wrap` (card único centrado) por `.instructor-header` + `.instructores-grid` + `.instructor-card` + `.instructor-initials` (fallback violeta). `.instructor-photo`/`.instructor-name`/`.instructor-bio` se conservan.
+
+La imagen `IMG_2393__1_-removebg-preview.png` ya no se referencia desde `taller.html` (sigue en el repo, usada en otras páginas).
+
+**Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

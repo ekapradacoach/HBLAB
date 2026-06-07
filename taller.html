@@ -398,19 +398,36 @@
     .feature-title { font-size: 0.95rem; font-weight: 700; color: var(--white); letter-spacing: -0.01em; }
     .feature-desc { font-size: 0.86rem; font-weight: 500; color: var(--gray-text); line-height: 1.5; }
 
-    /* ─── Sobre Erika ──────────────────────────────── */
+    /* ─── Instructores (dinámico desde course_coaches) ─── */
     #instructor { background: var(--navy); }
-    .instructor-wrap {
-      max-width: 720px; margin: 0 auto; text-align: center;
+    .instructor-header { text-align: center; margin-bottom: 48px; }
+    .instructores-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .instructor-card {
+      text-align: center;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 20px; padding: 48px 36px;
+      border-radius: 20px; padding: 44px 32px;
     }
     .instructor-photo {
       width: 140px; height: 140px; border-radius: 50%;
       object-fit: cover; object-position: top;
       border: 3px solid var(--violet-light);
       margin: 0 auto 22px; display: block;
+      box-shadow: 0 0 0 6px rgba(123,79,190,0.12);
+    }
+    .instructor-initials {
+      width: 140px; height: 140px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.6rem; font-weight: 800; color: var(--violet-light);
+      background: rgba(123,79,190,0.12);
+      border: 3px solid var(--violet-light);
+      margin: 0 auto 22px;
       box-shadow: 0 0 0 6px rgba(123,79,190,0.12);
     }
     .instructor-name { font-size: 1.4rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.01em; }
@@ -587,14 +604,14 @@
     </div>
   </section>
 
-  <!-- ─── SOBRE ERIKA ──────────────────────────────── -->
-  <section id="instructor">
+  <!-- ─── INSTRUCTORES (dinámico desde course_coaches) ─── -->
+  <section id="instructor" style="display:none">
     <div class="container">
-      <div class="instructor-wrap">
-        <img src="IMG_2393__1_-removebg-preview.png" alt="Erika Prada" class="instructor-photo" />
-        <h3 class="instructor-name">Erika Prada</h3>
-        <p class="instructor-bio">Entrenadora híbrida y creadora de HB Lab. Especializada en fuerza, potencia y metodología aplicada.</p>
+      <div class="instructor-header">
+        <span class="section-label">Quién lo dicta</span>
+        <h2 class="section-title">Tu instructor</h2>
       </div>
+      <div class="instructores-grid" id="instructores-grid"><!-- populated by JS --></div>
     </div>
   </section>
 
@@ -809,6 +826,7 @@
       // Secciones
       renderLearn(course.learning_points || []);
       renderTemario(course.syllabus || []);
+      await renderInstructores(course.id);
 
       hideLoading();
 
@@ -922,6 +940,47 @@
 
     function toggleAcc(btn) {
       btn.closest('.acc-item').classList.toggle('open');
+    }
+
+    // ── Render: instructores (dinámico desde course_coaches) ──
+    // RPC get_course_coaches(p_course_id UUID) SECURITY DEFINER → { coach_id, full_name, avatar_url, bio }
+    // Mismo patrón que venta-curso.html (Sesión 45). Si no hay coaches → oculta la sección.
+    async function renderInstructores(courseId) {
+      const section = document.getElementById('instructor');
+      const grid    = document.getElementById('instructores-grid');
+      if (!section || !grid) return;
+      try {
+        // Se pasa el UUID del curso (course.id) como p_course_id — NUNCA el slug
+        const { data, error } = await sb.rpc('get_course_coaches', { p_course_id: courseId });
+        if (error) {
+          console.warn('renderInstructores: RPC get_course_coaches error →', error);
+          section.style.display = 'none';
+          return;
+        }
+        if (!data?.length) {
+          // Taller sin coaches asignados → ocultar la sección sin ruido en UI
+          section.style.display = 'none';
+          return;
+        }
+        section.style.display = '';
+        grid.innerHTML = data.map(coach => {
+          const initials = (coach.full_name || 'C')
+            .split(' ').slice(0, 2)
+            .map(w => w[0] || '').join('').toUpperCase();
+          const photo = coach.avatar_url
+            ? `<img src="${escHtml(coach.avatar_url)}" alt="${escHtml(coach.full_name || '')}" class="instructor-photo" />`
+            : `<div class="instructor-initials">${escHtml(initials)}</div>`;
+          return `
+            <div class="instructor-card">
+              ${photo}
+              <h3 class="instructor-name">${escHtml(coach.full_name || '')}</h3>
+              <p class="instructor-bio">${escHtml(coach.bio || '')}</p>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        console.warn('renderInstructores: excepción →', e);
+        section.style.display = 'none';
+      }
     }
 
     // ── Modal moneda ──
