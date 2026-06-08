@@ -3041,7 +3041,7 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 **Filtro canónico de taller**: `is_workshop = true AND is_active = true`. `taller.html` y `checkout.html` leen `?slug=` (NO `?course=`).
 
 - **`taller.html`** (NUEVO, modelado sobre `venta-curso.html`): lee `?slug=`, query `courses WHERE slug = X AND is_workshop = true`. Hero con badge violeta "🏋️ Presencial", fecha (`formatTallerDate` sobre `live_date`), lugar (`location`), CTA "Reservar lugar" → `checkout.html?slug=X&currency=ARS`. Soporta `?buy=1` para auto-abrir compra. Aplica `getEffectivePrice`.
-- **`index.html`** — sección `#talleres` antes del footer. `loadTalleres()` query talleres activos, renderiza cards → `taller.html?slug=X`, auto-oculta la sección si no hay ninguno. Los talleres se **excluyen de `loadCursos()`** con `.or('is_workshop.is.null,is_workshop.eq.false')` para no duplicarse.
+- **`index.html`** — sección `#talleres` ubicada entre `#proximos` y `#incompany` (orden de secciones: `#cursos` → `#proximos` → `#talleres` → `#incompany` → `<footer>`, Etapa X.85). `loadTalleres()` query talleres activos, renderiza cards → `taller.html?slug=X`, auto-oculta la sección si no hay ninguno. Los talleres se **excluyen de `loadCursos()`** con `.or('is_workshop.is.null,is_workshop.eq.false')` para no duplicarse.
 - **`admin.html`** Tab Cursos: badge violeta "🏋️ Presencial" en la tabla, toggle "Es taller presencial" (`cf-is-workshop`) que revela `cf-location` + `cf-max-seats`, y botón "👥 Inscritos" por taller → modal con lista de inscritos + export CSV. SELECT de `loadCursos` extendido con `is_workshop, location, max_seats`.
 - **`dashboard.html`**: card diferenciada cuando `is_workshop=true` — badge violeta, fecha + lugar, **sin barra de progreso**, botón "Ver entrada" → modal-ticket (en vez de "Ir al curso →").
 - **`process-payment/index.ts`**: si el curso comprado tiene `is_workshop=true`, envía email diferenciado — subject `🎟️ ¡Tu lugar está reservado! — {courseTitle}`, confirmación de reserva + fecha + dirección + instrucción del ticket + credenciales de acceso (magic link). Mismo dark theme inline. **⚠️ Requiere re-deploy manual** de `process-payment` en Supabase Dashboard.
@@ -3055,6 +3055,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 **Etapa X.83 — instructor dinámico en taller.html**: la sección `#instructor` ya no está hardcodeada con Erika. `renderInstructores(course.id)` llama la RPC `get_course_coaches` (misma que venta-curso.html) y renderiza un `.instructor-card` por coach asignado (foto o iniciales + nombre + bio). Soporta N coaches; si no hay ninguno → oculta la sección (`display:none`).
 
 **Etapa X.84 — descripción de modalidad en taller.html**: `taller.html` ahora trae `modalidad_descripcion` en su SELECT y la renderiza con `renderModalidad(course)` en la sección `#modalidad` (badge "Modalidad" + título "Cómo es el taller"), ubicada entre el hero (características fecha/lugar/cupos) y la sección "¿Qué vas a aprender?", antes del temario. Si el campo está vacío → la sección queda oculta. `white-space: pre-line` preserva los saltos de línea del admin.
+
+**Etapa X.85 — reorden de #talleres en index.html**: la sección `#talleres` se movió de después de `#incompany` a antes. Orden final: `#cursos` → `#proximos` → `#talleres` → `#incompany` → `<footer>`. Solo movimiento de HTML; lógica (`loadTalleres()`) y estilos sin cambios.
 
 ---
 

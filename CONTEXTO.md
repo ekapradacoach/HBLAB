@@ -3614,3 +3614,15 @@ El campo `courses.modalidad_descripcion` (texto libre cargado desde el admin, Et
 **Archivos modificados:** `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.85 — Reordenar sección #talleres en index.html
+
+Cambio puramente de orden en el DOM de `index.html`. La sección `#talleres` (talleres presenciales) estaba **después** de `#incompany` ("¿Querés que llevemos un curso a tu box o institución?"), lo que dejaba los talleres casi al final, pegados al footer. Se movió para que quede **antes** de `#incompany`.
+
+**Orden final de secciones**: `#cursos` → `#proximos` → `#talleres` → `#incompany` → `<footer>`.
+
+Solo se movió el bloque HTML de `#talleres` (comentario + `<section>`). **No cambió** ni la lógica (`loadTalleres()` sigue igual, el SELECT y el auto-ocultado intactos) ni los estilos (clases y estilos inline sin tocar).
+
+**Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
