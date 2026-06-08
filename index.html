@@ -1491,10 +1491,11 @@
           if (cd.course_id) {
             try {
               const { data: course } = await sb.from('courses')
-                .select('id, slug, title, description, price_ars, price_usd, scheduled_prices, cover_url, is_live, is_coming_soon')
+                .select('id, slug, title, description, price_ars, price_usd, scheduled_prices, cover_url, is_live, is_coming_soon, is_workshop')
                 .eq('id', cd.course_id).maybeSingle();
               if (course && course.slug) {
-                const url = `venta-curso.html?slug=${course.slug}`;
+                // Talleres presenciales (is_workshop) usan taller.html; el resto venta-curso.html
+                const url = `${course.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${course.slug}`;
                 cdWrap.classList.add('clickable');
                 cdWrap.onclick = () => { window.location.href = url; };
                 renderCountdownCourseCard(course, url);

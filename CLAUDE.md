@@ -3060,6 +3060,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.86 — CTA de lanzamientos respeta is_workshop**: la tabla `launches` no guarda URL (solo `course_id` + `cta_text`); el link del CTA se arma en `loadLaunches()` (index.html). Ahora el embed trae `courses(..., is_workshop)` y la URL se construye como `${is_workshop ? 'taller' : 'venta-curso'}.html?slug=X`. `saveLanzamiento`/`loadLanzamientos` (admin) no requirieron cambios (no construyen URL).
 
+**Etapa X.87 — countdown card respeta is_workshop**: el curso vinculado a la cuenta regresiva (`loadSiteConfig` → `renderCountdownCourseCard`) ahora arma la URL con `${is_workshop ? 'taller' : 'venta-curso'}.html?slug=X` (SELECT extendido con `is_workshop`). La misma `url` se usa en el onclick del wrap, el onclick de la card y el botón "Ver curso".
+
 ---
 
 ## Usuarios registrados

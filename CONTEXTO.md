@@ -3641,7 +3641,22 @@ Importante: la tabla `launches` **NO almacena ninguna URL** — solo guarda `cou
   1. El embed pasa de `courses(slug, price_ars, price_usd, scheduled_prices)` a `courses(slug, price_ars, price_usd, scheduled_prices, is_workshop)`.
   2. La URL se arma con: `` `${l.courses?.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${courseSlug}` `` (antes era siempre `venta-curso.html?slug=${courseSlug}`). Si no hay curso vinculado → `'#'` (sin cambios).
 
-Fuera de alcance: la card del countdown (`renderCountdownCourseCard`) también linkea a `venta-curso.html`; no se tocó porque la consigna se limita a lanzamientos. Si se vincula un taller a un countdown, conviene aplicar el mismo branch a futuro.
+Fuera de alcance en X.86 (resuelto luego en X.87): la card del countdown (`renderCountdownCourseCard`) también linkeaba siempre a `venta-curso.html`.
+
+**Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
+
+## Etapa X.87 — Countdown card respeta is_workshop (taller.html)
+
+Follow-up de X.86 para dejar el comportamiento 100% consistente. La card del curso vinculado a la cuenta regresiva (`#countdown-course-wrap`) generaba el link siempre como `venta-curso.html?slug=X`. Ahora respeta `is_workshop`.
+
+### Cambio en `loadSiteConfig()` (index.html, bloque del countdown)
+
+- El SELECT del curso vinculado pasa a incluir `is_workshop`: `.select('id, slug, title, description, price_ars, price_usd, scheduled_prices, cover_url, is_live, is_coming_soon, is_workshop')`.
+- La URL se arma con: `` const url = `${course.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${course.slug}` `` (antes siempre `venta-curso.html?slug=X`).
+
+Esa misma `url` se usa para (a) hacer el wrap del countdown clickeable (`cdWrap.onclick`) y (b) `renderCountdownCourseCard(course, url)` — que la reutiliza tanto en el `onclick` de la card como en el botón "Ver curso". Con un solo cambio, todo el countdown apunta correctamente al taller.
 
 **Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
