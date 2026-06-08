@@ -73,7 +73,7 @@ hblab/
 | `public.course_materials` | `course_id, title, description, drive_url, uploaded_by` — ⚠️ columna es `drive_url` (NO `drive_link`), `uploaded_by` (NO `coach_id`) |
 | `public.video_progress` | `user_id, course_id, video_index, completed` |
 | `public.ad_spend` | `course_id, platform, amount_ars, amount_usd, spend_date` |
-| `public.launches` | `title, description, image_url, course_id, active, cta_text` — máx. 3 activos |
+| `public.launches` | `title, description, image_url, image_url_mobile (Etapa X.89 — imagen opcional para mobile <768px), course_id, active, cta_text` — máx. 3 activos |
 | `public.notifications` | `id, user_id, title, body, link, read, created_at` — RLS: usuario lee/actualiza solo lo propio; INSERT abierto a authenticated (Sesión 58) |
 | `public.site_config` | `key TEXT PK, value TEXT` — keys actuales: `global_announcement`, `countdown` (value es JSON serializado). RLS: admin escribe; público lee (Sesión 54) |
 | `public.coupons` | `id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active` — códigos promocionales que el alumno aplica en checkout.html. RLS: admin gestiona todo; público lee solo `is_active=true`. `discount_fixed` está expresado en ARS (no aplica para pagos USD). `course_id IS NULL` → cupón válido para todos los cursos. `max_uses=0` → ilimitado. (Etapa X.12) |
@@ -3063,6 +3063,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 **Etapa X.87 — countdown card respeta is_workshop**: el curso vinculado a la cuenta regresiva (`loadSiteConfig` → `renderCountdownCourseCard`) ahora arma la URL con `${is_workshop ? 'taller' : 'venta-curso'}.html?slug=X` (SELECT extendido con `is_workshop`). La misma `url` se usa en el onclick del wrap, el onclick de la card y el botón "Ver curso".
 
 **Etapa X.88 — slider de lanzamientos en mobile/webview**: en `@media (max-width:768px)` el slide pasa a `min-height:480px`, el overlay se aclara (capa plana `0.50`→`0.12`, degradado inferior conservado para legibilidad), `.slide-bg` usa `background-position:center top`. Además `loadLaunches` renderiza un `<img class="slide-img-fallback">` (oculto en desktop, `display:block` en mobile) detrás del overlay como fallback porque el `background-image` a veces no renderiza en el webview de Instagram/TikTok.
+
+**Etapa X.89 — imagen mobile por lanzamiento (`launches.image_url_mobile`)**: columna nueva `image_url_mobile TEXT` (nullable). El form de lanzamientos en admin.html tiene un segundo campo de imagen opcional (upload o URL, global `_lzImageUrlMobile`, funciones `*Mobile`). En `loadLaunches` (index.html) se elige `slideImg = (window.innerWidth < 768 && l.image_url_mobile) ? l.image_url_mobile : l.image_url` y se aplica al `background-image` y al `<img class="slide-img-fallback">`. Si la mobile está vacía → fallback a `image_url`.
 
 ---
 

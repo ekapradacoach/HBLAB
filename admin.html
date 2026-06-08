@@ -2005,6 +2005,27 @@
                                placeholder="https://..." oninput="handleLzUrlInput(this.value)" />
                       </div>
                     </div>
+                    <div class="form-group col2">
+                      <label class="form-label">Imagen de fondo (mobile) <span style="font-size:0.8rem;font-weight:400;color:var(--gray-text)">(opcional — si está vacía se usa la de escritorio)</span></label>
+                      <div class="lz-img-upload-wrap">
+                        <label class="lz-img-file-label" for="lz-image-mobile-file">
+                          <span id="lz-img-mob-file-text">📁 Seleccionar imagen local...</span>
+                          <input type="file" id="lz-image-mobile-file" accept="image/*" style="display:none"
+                                 onchange="handleLzImageMobile(this.files[0])" />
+                        </label>
+                        <div id="lz-img-mob-status" style="display:none" class="lz-img-status"></div>
+                        <div id="lz-img-mob-preview" style="display:none" class="lz-img-preview-wrap">
+                          <img id="lz-img-mob-preview-thumb" src="" alt="preview" />
+                          <div>
+                            <div style="font-size:0.78rem;color:var(--gray-text);margin-bottom:6px">Vista previa</div>
+                            <button type="button" class="btn-cancel-lz-img" onclick="cancelLzImageMobile()">✕ Quitar imagen</button>
+                          </div>
+                        </div>
+                        <p class="lz-url-fallback" style="margin-top:6px">— o pegá una URL directa —</p>
+                        <input class="form-input" id="lz-image-url-mobile" type="url"
+                               placeholder="https://..." oninput="handleLzUrlInputMobile(this.value)" />
+                      </div>
+                    </div>
                     <div class="form-group">
                       <label class="form-label">Curso vinculado</label>
                       <select class="form-select" id="lz-course">
@@ -5274,8 +5295,9 @@
     // ══════════════════════════════════════════════
     // TAB LANZAMIENTOS
     // ══════════════════════════════════════════════
-    let _lzImageUrl    = null;   // URL resuelta (Storage upload o URL directa)
-    let _lzEditingId   = null;   // ID del lanzamiento en edición (null = nuevo)
+    let _lzImageUrl       = null;   // URL resuelta (Storage upload o URL directa)
+    let _lzImageUrlMobile = null;   // URL resuelta de la imagen optimizada para mobile (opcional)
+    let _lzEditingId      = null;   // ID del lanzamiento en edición (null = nuevo)
     let _lanzamientosData = {};  // { id → launch_object } para pre-cargar en edición
 
     async function loadLanzamientos() {
@@ -5298,7 +5320,7 @@
 
       const { data, error } = await sb
         .from('launches')
-        .select('id, title, description, image_url, course_id, cta_text, active, created_at, courses(title)')
+        .select('id, title, description, image_url, image_url_mobile, course_id, cta_text, active, created_at, courses(title)')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -5370,6 +5392,15 @@
         document.getElementById('lz-img-preview').style.display = '';
       }
 
+      // Imagen mobile (opcional)
+      cancelLzImageMobile();
+      if (l.image_url_mobile) {
+        _lzImageUrlMobile = l.image_url_mobile;
+        document.getElementById('lz-image-url-mobile').value      = l.image_url_mobile;
+        document.getElementById('lz-img-mob-preview-thumb').src   = l.image_url_mobile;
+        document.getElementById('lz-img-mob-preview').style.display = '';
+      }
+
       // Mostrar botón Cancelar, cambiar texto Guardar
       document.getElementById('btn-save-lanzamiento').textContent = 'Actualizar lanzamiento';
       document.getElementById('btn-cancel-lanzamiento').style.display = '';
@@ -5390,6 +5421,7 @@
       document.getElementById('lz-active').checked = false;
       document.getElementById('lz-course').value = '';
       cancelLzImage();
+      cancelLzImageMobile();
       document.getElementById('btn-save-lanzamiento').textContent = 'Guardar lanzamiento';
       document.getElementById('btn-cancel-lanzamiento').style.display = 'none';
     }
@@ -5399,7 +5431,8 @@
       const title    = document.getElementById('lz-title').value.trim();
       const desc     = document.getElementById('lz-desc').value.trim();
       // La URL resuelta puede venir de upload o del campo URL directo
-      const imageUrl = _lzImageUrl || null;
+      const imageUrl       = _lzImageUrl || null;
+      const imageUrlMobile = _lzImageUrlMobile || null;   // opcional
       const courseId = document.getElementById('lz-course').value || null;
       const ctaText  = document.getElementById('lz-cta').value.trim() || 'Ver curso';
       const active   = document.getElementById('lz-active').checked;
@@ -5430,7 +5463,8 @@
         description: desc || null,
         cta_text:    ctaText,
         active,
-        image_url:   imageUrl,
+        image_url:        imageUrl,
+        image_url_mobile: imageUrlMobile,
         course_id:   courseId
       };
 
@@ -5550,6 +5584,69 @@
         _lzImageUrl = null;
         document.getElementById('lz-img-preview').style.display = 'none';
         document.getElementById('lz-img-preview-thumb').src = '';
+      }
+    }
+
+    // ── Imagen MOBILE del lanzamiento (espejo de las de arriba) ──
+    async function handleLzImageMobile(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('lz-img-mob-preview-thumb').src   = e.target.result;
+        document.getElementById('lz-img-mob-preview').style.display = '';
+        document.getElementById('lz-image-url-mobile').value = '';
+        _lzImageUrlMobile = null; // se actualiza al terminar el upload
+      };
+      reader.readAsDataURL(file);
+
+      document.getElementById('lz-img-mob-file-text').textContent = file.name;
+      const statusEl = document.getElementById('lz-img-mob-status');
+      statusEl.style.display = '';
+      statusEl.style.color   = 'var(--gray-text)';
+      statusEl.textContent   = '⏳ Subiendo imagen...';
+
+      const ext  = file.name.split('.').pop().toLowerCase();
+      const path = `launches/${Date.now()}-${Math.random().toString(36).slice(2,8)}-mob.${ext}`;
+      const { error: upErr } = await sb.storage
+        .from('course-materials')
+        .upload(path, file, { upsert: true });
+
+      if (upErr) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = `❌ Error al subir: ${upErr.message}`;
+        return;
+      }
+
+      const { data: urlData } = sb.storage.from('course-materials').getPublicUrl(path);
+      _lzImageUrlMobile = urlData.publicUrl;
+      statusEl.style.color = 'var(--lime)';
+      statusEl.textContent = '✓ Imagen subida correctamente';
+    }
+
+    function cancelLzImageMobile() {
+      _lzImageUrlMobile = null;
+      document.getElementById('lz-img-mob-preview').style.display  = 'none';
+      document.getElementById('lz-img-mob-status').style.display   = 'none';
+      document.getElementById('lz-img-mob-preview-thumb').src       = '';
+      document.getElementById('lz-img-mob-file-text').textContent   = '📁 Seleccionar imagen local...';
+      document.getElementById('lz-image-mobile-file').value         = '';
+      document.getElementById('lz-image-url-mobile').value          = '';
+    }
+
+    function handleLzUrlInputMobile(val) {
+      const trimmed = val.trim();
+      if (trimmed) {
+        _lzImageUrlMobile = trimmed;
+        document.getElementById('lz-img-mob-preview-thumb').src   = trimmed;
+        document.getElementById('lz-img-mob-preview').style.display = '';
+        document.getElementById('lz-img-mob-status').style.display = 'none';
+        document.getElementById('lz-img-mob-file-text').textContent = '📁 Seleccionar imagen local...';
+        document.getElementById('lz-image-mobile-file').value = '';
+      } else {
+        _lzImageUrlMobile = null;
+        document.getElementById('lz-img-mob-preview').style.display = 'none';
+        document.getElementById('lz-img-mob-preview-thumb').src = '';
       }
     }
 

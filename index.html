@@ -1620,13 +1620,18 @@
         const courseUrl  = courseSlug
           ? `${l.courses?.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${courseSlug}`
           : '#';
-        const bgStyle   = l.image_url
-          ? `background-image:url('${l.image_url}')`
+        // Imagen optimizada para mobile (Etapa X.89): si el viewport es < 768px
+        // y hay image_url_mobile, usarla; si no, fallback a image_url (escritorio).
+        const slideImg = (window.innerWidth < 768 && l.image_url_mobile)
+          ? l.image_url_mobile
+          : l.image_url;
+        const bgStyle   = slideImg
+          ? `background-image:url('${slideImg}')`
           : 'background:linear-gradient(135deg,#243042 0%,#1a2635 100%)';
         // Fallback <img> para mobile/webview (IG/TikTok): a veces no renderiza background-image.
         // Oculto en desktop por CSS; visible solo en @media (max-width:768px).
-        const imgFallback = l.image_url
-          ? `<img class="slide-img-fallback" src="${escHtml(l.image_url)}" alt="" aria-hidden="true" loading="lazy" />`
+        const imgFallback = slideImg
+          ? `<img class="slide-img-fallback" src="${escHtml(slideImg)}" alt="" aria-hidden="true" loading="lazy" />`
           : '';
         return `
           <div class="slide">

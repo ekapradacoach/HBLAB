@@ -3689,3 +3689,37 @@ Se inserta entre `.slide-bg` y `.slide-overlay` → queda detrás del overlay y 
 **Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.89 — Imagen de lanzamiento optimizada para mobile (`image_url_mobile`)
+
+Se agrega una segunda imagen por lanzamiento, específica para mobile, para poder subir un arte con encuadre vertical (las imágenes pensadas para desktop suelen recortarse mal en pantallas angostas).
+
+### SQL ejecutado (manual, confirmado por el usuario)
+
+```sql
+ALTER TABLE public.launches
+  ADD COLUMN IF NOT EXISTS image_url_mobile TEXT;
+```
+
+Columna `TEXT` nullable. Lanzamientos existentes quedan con `image_url_mobile = NULL` → se usa `image_url` como fallback (sin romper nada retroactivo). Las policies RLS de `launches` ya cubren la columna nueva.
+
+### admin.html — formulario de lanzamientos
+
+- **Nuevo campo "Imagen de fondo (mobile)"** (opcional) debajo del de escritorio, espejo exacto del patrón existente: upload local a Storage (`course-materials/launches/{ts}-{rand}-mob.{ext}`) + campo de URL directa + preview + botón quitar. IDs: `lz-image-mobile-file`, `lz-img-mob-file-text`, `lz-img-mob-status`, `lz-img-mob-preview`, `lz-img-mob-preview-thumb`, `lz-image-url-mobile`.
+- **Global nueva** `_lzImageUrlMobile` (paralela a `_lzImageUrl`).
+- **Funciones nuevas** `handleLzImageMobile(file)`, `cancelLzImageMobile()`, `handleLzUrlInputMobile(val)` — espejo de las de escritorio.
+- **Wiring**: `saveLanzamiento` agrega `image_url_mobile: imageUrlMobile` al payload; `editLanzamiento` pre-carga la imagen mobile; `cancelarLanzamiento` llama `cancelLzImageMobile()`; `loadLanzamientos` extiende el SELECT con `image_url_mobile`.
+
+### index.html — `loadLaunches`
+
+El SELECT ya usa `*` (la columna nueva viene incluida). Se elige la imagen del slide con:
+```js
+const slideImg = (window.innerWidth < 768 && l.image_url_mobile)
+  ? l.image_url_mobile
+  : l.image_url;
+```
+`slideImg` se usa tanto para el `background-image` de `.slide-bg` como para el `<img class="slide-img-fallback">` (Etapa X.88). La detección es al render (carga de página); si el usuario rota/redimensiona no re-elige (comportamiento aceptado según la consigna, que pide chequear `window.innerWidth`).
+
+**Archivos modificados:** `admin.html`, `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
