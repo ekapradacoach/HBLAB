@@ -3626,3 +3626,23 @@ Solo se movió el bloque HTML de `#talleres` (comentario + `<section>`). **No ca
 **Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.86 — CTA de lanzamientos respeta is_workshop (taller.html)
+
+El slider de lanzamientos de la landing generaba el link del CTA siempre como `venta-curso.html?slug=X`, incluso cuando el curso vinculado era un taller presencial (`is_workshop = true`) — esos deben ir a `taller.html?slug=X`.
+
+### Dónde se genera la URL
+
+Importante: la tabla `launches` **NO almacena ninguna URL** — solo guarda `course_id` + `cta_text` (label del botón). La URL del CTA se construye **en tiempo de render** dentro de `loadLaunches()` en `index.html`, resolviendo el slug del curso vinculado vía el embed `courses(...)`. Por eso:
+
+- **`saveLanzamiento()` (admin.html)**: sin cambios — su payload solo tiene `title, description, cta_text, active, image_url, course_id`. No hay URL que corregir.
+- **`loadLanzamientos()` (admin.html)**: sin cambios — solo renderiza la tabla admin (título, curso vinculado por `courses(title)`, estado, acciones). No construye URL del CTA.
+- **`loadLaunches()` (index.html)** — único lugar con el fix:
+  1. El embed pasa de `courses(slug, price_ars, price_usd, scheduled_prices)` a `courses(slug, price_ars, price_usd, scheduled_prices, is_workshop)`.
+  2. La URL se arma con: `` `${l.courses?.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${courseSlug}` `` (antes era siempre `venta-curso.html?slug=${courseSlug}`). Si no hay curso vinculado → `'#'` (sin cambios).
+
+Fuera de alcance: la card del countdown (`renderCountdownCourseCard`) también linkea a `venta-curso.html`; no se tocó porque la consigna se limita a lanzamientos. Si se vincula un taller a un countdown, conviene aplicar el mismo branch a futuro.
+
+**Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

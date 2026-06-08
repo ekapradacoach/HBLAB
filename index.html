@@ -1565,7 +1565,7 @@
     async function loadLaunches() {
       const { data, error } = await sb
         .from('launches')
-        .select('*, courses(slug, price_ars, price_usd, scheduled_prices)')
+        .select('*, courses(slug, price_ars, price_usd, scheduled_prices, is_workshop)')
         .eq('active', true)
         .order('created_at', { ascending: false })
         .limit(3);
@@ -1586,8 +1586,9 @@
           ? `$${priceArs.toLocaleString('es-AR')} ARS${priceUsd ? ' / USD ' + priceUsd.toLocaleString('es-AR') : ''}`
           : '';
         const courseSlug = l.courses?.slug;
+        // Talleres presenciales (is_workshop) usan taller.html; el resto venta-curso.html
         const courseUrl  = courseSlug
-          ? `venta-curso.html?slug=${courseSlug}`
+          ? `${l.courses?.is_workshop ? 'taller' : 'venta-curso'}.html?slug=${courseSlug}`
           : '#';
         const bgStyle   = l.image_url
           ? `background-image:url('${l.image_url}')`

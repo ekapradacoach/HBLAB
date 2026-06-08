@@ -3058,6 +3058,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.85 — reorden de #talleres en index.html**: la sección `#talleres` se movió de después de `#incompany` a antes. Orden final: `#cursos` → `#proximos` → `#talleres` → `#incompany` → `<footer>`. Solo movimiento de HTML; lógica (`loadTalleres()`) y estilos sin cambios.
 
+**Etapa X.86 — CTA de lanzamientos respeta is_workshop**: la tabla `launches` no guarda URL (solo `course_id` + `cta_text`); el link del CTA se arma en `loadLaunches()` (index.html). Ahora el embed trae `courses(..., is_workshop)` y la URL se construye como `${is_workshop ? 'taller' : 'venta-curso'}.html?slug=X`. `saveLanzamiento`/`loadLanzamientos` (admin) no requirieron cambios (no construyen URL).
+
 ---
 
 ## Usuarios registrados
