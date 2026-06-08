@@ -3062,6 +3062,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.87 — countdown card respeta is_workshop**: el curso vinculado a la cuenta regresiva (`loadSiteConfig` → `renderCountdownCourseCard`) ahora arma la URL con `${is_workshop ? 'taller' : 'venta-curso'}.html?slug=X` (SELECT extendido con `is_workshop`). La misma `url` se usa en el onclick del wrap, el onclick de la card y el botón "Ver curso".
 
+**Etapa X.88 — slider de lanzamientos en mobile/webview**: en `@media (max-width:768px)` el slide pasa a `min-height:480px`, el overlay se aclara (capa plana `0.50`→`0.12`, degradado inferior conservado para legibilidad), `.slide-bg` usa `background-position:center top`. Además `loadLaunches` renderiza un `<img class="slide-img-fallback">` (oculto en desktop, `display:block` en mobile) detrás del overlay como fallback porque el `background-image` a veces no renderiza en el webview de Instagram/TikTok.
+
 ---
 
 ## Usuarios registrados

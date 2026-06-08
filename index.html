@@ -769,6 +769,14 @@
       transition: transform 0.6s ease;
     }
     .slide:hover .slide-bg { transform: scale(1.03); }
+    /* Fallback <img> — oculto en desktop (se usa el background-image de .slide-bg).
+       Se activa solo en mobile vía @media (max-width:768px). z-index 0 → debajo del overlay y del contenido. */
+    .slide-img-fallback {
+      display: none;
+      position: absolute; inset: 0; z-index: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; object-position: center top;
+    }
     .slide-overlay {
       position: absolute; inset: 0; z-index: 0;
       /* Capa base semitransparente + degradado para más profundidad en la parte inferior */
@@ -845,6 +853,27 @@
       .slide { min-height: 340px; }
       .slide-content { padding: 32px 28px; }
       .slider-arrow { display: none; }
+    }
+
+    /* ─── Slider de lanzamientos en mobile/webview (IG/TikTok) ─── */
+    @media (max-width: 768px) {
+      /* Slide más alto para que la imagen tenga espacio real */
+      .slide { min-height: 480px; }
+      .slide-bg {
+        min-height: 480px;
+        background-size: cover;
+        background-position: center top;
+      }
+      /* Overlay más sutil → la imagen de fondo se ve mucho más.
+         Se mantiene un degradado fuerte solo abajo para legibilidad del texto. */
+      .slide-overlay {
+        background:
+          linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0) 80%),
+          rgba(0,0,0,0.12);
+      }
+      /* Mostrar el <img> de fallback detrás del contenido (background-image
+         a veces no renderiza en el webview de Instagram/TikTok). */
+      .slide-img-fallback { display: block; }
     }
 
     @media (max-width: 440px) {
@@ -1594,9 +1623,15 @@
         const bgStyle   = l.image_url
           ? `background-image:url('${l.image_url}')`
           : 'background:linear-gradient(135deg,#243042 0%,#1a2635 100%)';
+        // Fallback <img> para mobile/webview (IG/TikTok): a veces no renderiza background-image.
+        // Oculto en desktop por CSS; visible solo en @media (max-width:768px).
+        const imgFallback = l.image_url
+          ? `<img class="slide-img-fallback" src="${escHtml(l.image_url)}" alt="" aria-hidden="true" loading="lazy" />`
+          : '';
         return `
           <div class="slide">
             <div class="slide-bg" style="${bgStyle}"></div>
+            ${imgFallback}
             <div class="slide-overlay"></div>
             <div class="slide-content">
               <p class="slide-tag">🚀 Lanzamiento</p>

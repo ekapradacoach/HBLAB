@@ -3661,3 +3661,31 @@ Esa misma `url` se usa para (a) hacer el wrap del countdown clickeable (`cdWrap.
 **Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.88 — Slider de lanzamientos: imagen de fondo en mobile/webview
+
+El slider de lanzamientos (`#launches-section`) no mostraba bien la imagen de fondo del slide en mobile: el overlay oscuro la tapaba demasiado, el alto era chico, y el `background-image` de `.slide-bg` a veces no renderiza en el webview embebido de Instagram/TikTok. Se mejoró la visualización en `@media (max-width: 768px)`.
+
+### Cambios en `index.html`
+
+**1. Markup (`loadLaunches`)** — además del `.slide-bg` (background-image), se renderiza un `<img class="slide-img-fallback">` cuando el lanzamiento tiene `image_url`:
+```js
+const imgFallback = l.image_url
+  ? `<img class="slide-img-fallback" src="${escHtml(l.image_url)}" alt="" aria-hidden="true" loading="lazy" />`
+  : '';
+```
+Se inserta entre `.slide-bg` y `.slide-overlay` → queda detrás del overlay y del contenido (`z-index: 0`). El `src` se escapa con `escHtml` (escapa `"`).
+
+**2. CSS base** — `.slide-img-fallback` arranca `display: none` (en desktop manda el `background-image` de `.slide-bg`). `position: absolute; inset: 0; object-fit: cover; object-position: center top; z-index: 0`.
+
+**3. `@media (max-width: 768px)`** (bloque nuevo, ubicado después del de 680px para que sus reglas ganen por orden de cascada en viewports chicos):
+- `.slide` y `.slide-bg` → `min-height: 480px` (antes el slide quedaba en 340px a ≤680). El `min-height` en `.slide` es el que efectivamente agranda el alto (el `.slide-bg` con `inset:0` hereda ese alto).
+- `.slide-bg` → `background-size: cover; background-position: center top`.
+- `.slide-overlay` → opacidad reducida: la capa plana baja de `rgba(0,0,0,0.50)` a `rgba(0,0,0,0.12)`, conservando un degradado fuerte solo en la base (`0.62 → 0`) para que el texto (anclado abajo con `align-items:flex-end`) siga legible.
+- `.slide-img-fallback` → `display: block` (se muestra el `<img>` de fallback).
+
+**Stacking**: en el DOM el orden es `.slide-bg` → `.slide-img-fallback` → `.slide-overlay` → `.slide-content`. Con `z-index` 0/0/0/1, el overlay pinta sobre la img (la atenúa) y el contenido queda arriba de todo. En desktop la img está oculta y se ve el `background-image`; en mobile la img garantiza que la foto aparezca aunque el webview no pinte el `background-image`.
+
+**Archivos modificados:** `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
