@@ -3066,6 +3066,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.89 — imagen mobile por lanzamiento (`launches.image_url_mobile`)**: columna nueva `image_url_mobile TEXT` (nullable). El form de lanzamientos en admin.html tiene un segundo campo de imagen opcional (upload o URL, global `_lzImageUrlMobile`, funciones `*Mobile`). En `loadLaunches` (index.html) se elige `slideImg = (window.innerWidth < 768 && l.image_url_mobile) ? l.image_url_mobile : l.image_url` y se aplica al `background-image` y al `<img class="slide-img-fallback">`. Si la mobile está vacía → fallback a `image_url`.
 
+**Etapa X.90 — fix recuperación de contraseña (redirect a set-password.html)**: en `login.html` el panel "Recuperar contraseña" usaba `resetPasswordForEmail(redirectTo: origin + '/dashboard.html')` → el link del email rebotaba al login. Ahora `redirectTo: 'https://hblabarg.com/set-password.html'`. En `set-password.html` se agregó `sb.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY' && session) revealForm(); })` para mostrar el form de nueva contraseña (nunca redirigir al dashboard) cuando el SDK auto-detecta el link de recovery (`detectSessionInUrl` está activo por default). Flag `_formRevealed` evita que `showError` pise el form ante el race con el bootstrap manual. La URL `hblabarg.com/set-password.html` ya está en la allow-list de Redirect URLs (compartida con el flujo de invite/magic link).
+
 ---
 
 ## Usuarios registrados

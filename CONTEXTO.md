@@ -3723,3 +3723,45 @@ const slideImg = (window.innerWidth < 768 && l.image_url_mobile)
 **Archivos modificados:** `admin.html`, `index.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.90 — Fix recuperación de contraseña: redirect a set-password.html + PASSWORD_RECOVERY
+
+Bug: al usar "Recuperar contraseña" en `login.html`, el link del email aterrizaba en el dashboard (o de ahí rebotaba al login) en vez de la pantalla para crear la nueva contraseña. Causa: `resetPasswordForEmail` usaba `redirectTo: window.location.origin + '/dashboard.html'`.
+
+### Cambio en `login.html` (panel "Recuperar contraseña")
+
+```js
+// Antes
+await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/dashboard.html' });
+// Ahora
+await sb.auth.resetPasswordForEmail(email, { redirectTo: 'https://hblabarg.com/set-password.html' });
+```
+
+El link del email ahora lleva a `set-password.html`, la misma página que ya se usa para activar cuentas de alumnos invitados (Etapa X.17). **Pre-requisito**: `https://hblabarg.com/set-password.html` debe estar en la allow-list de Supabase → Auth → URL Configuration → Redirect URLs (ya estaba por el flujo de invite/magic link de X.20).
+
+### Cambio en `set-password.html` — manejo de `PASSWORD_RECOVERY`
+
+El cliente Supabase (`supabase.js`) usa la config por default → `detectSessionInUrl: true`. Al abrir el link de recovery, el SDK auto-detecta la sesión y dispara `onAuthStateChange` con el evento `PASSWORD_RECOVERY`. Se agregó un listener que, ante ese evento, muestra el form de nueva contraseña (`#panel-form`) — **nunca redirige al dashboard**:
+
+```js
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY' && session) revealForm();
+});
+```
+
+Además, para evitar un parpadeo del panel de error cuando el SDK auto-detecta la sesión y el bootstrap manual corre en paralelo (race), se agregó el flag `_formRevealed`:
+- `revealForm()` lo setea en `true`.
+- `showError(detail)` hace `if (_formRevealed) return;` al inicio → no pisa el form una vez revelado.
+
+El bootstrap manual (casos A/B/C: hash con `access_token`, `?code=` PKCE, `?token_hash=&type=`) sigue intacto y cubre el link de recovery igual que el de invite (recovery usa los mismos flujos). El listener `PASSWORD_RECOVERY` es la red de seguridad ante el race con `detectSessionInUrl`.
+
+### Flujo final
+
+1. Alumna → login.html → "Recuperar contraseña" → "Enviar link" → `resetPasswordForEmail(redirectTo: set-password.html)`.
+2. Recibe email → toca el botón → llega a `set-password.html` con sesión de recovery activa.
+3. `set-password.html` detecta la sesión (bootstrap manual o `PASSWORD_RECOVERY`) → muestra `#panel-form`.
+4. Elige contraseña → `sb.auth.updateUser({ password })` → redirect a `dashboard.html`.
+
+**Archivos modificados:** `login.html`, `set-password.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

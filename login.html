@@ -589,7 +589,7 @@
       setLoading('btn-forgot', true);
 
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/dashboard.html',
+        redirectTo: 'https://hblabarg.com/set-password.html',
       });
 
       setLoading('btn-forgot', false);
