@@ -3765,3 +3765,28 @@ El bootstrap manual (casos A/B/C: hash con `access_token`, `?code=` PKCE, `?toke
 **Archivos modificados:** `login.html`, `set-password.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.91 — Fix PayPal: procesar también `status=APPROVED` (no solo COMPLETED)
+
+Bug en el branch PayPal (sección 2b) de `process-payment/index.ts`. La condición que decide si procesar el pago era demasiado estricta: solo procesaba si `order.status === 'COMPLETED'` o si había captures con status `COMPLETED`. Pero PayPal a veces manda el webhook con `status=APPROVED` e `intent=CAPTURE` cuando el pago ya fue autorizado pero la captura todavía está en proceso. En ese caso el handler skipeaba silenciosamente (`{ ok: true, skipped: true, reason: 'status=APPROVED' }`) → **no se creaba el usuario, no se hacía el UPSERT en `user_courses` ni se enviaba el email** — el alumno pagaba y no recibía acceso.
+
+### Cambio
+
+```js
+// Antes
+const isCompleted = orderStatus === 'COMPLETED';
+// Ahora
+const isCompleted = orderStatus === 'COMPLETED' || orderStatus === 'APPROVED';
+```
+
+El resto de la condición (`hasCapture` con `intent === 'CAPTURE'` + capture `COMPLETED`) queda igual. Ahora un order `APPROVED` también dispara el flujo completo (creación de usuario + UPSERT + email de bienvenida/confirmación), idéntico al de `COMPLETED`.
+
+**Nota**: el flujo aguas abajo es idempotente (UPSERT en `user_courses` con `onConflict: 'user_id,course_id'`), así que si después llega el webhook `PAYMENT.CAPTURE.COMPLETED` del mismo pago, no se duplica el acceso ni se re-crea el usuario (el lookup en `profiles.email` lo encuentra y saltea el alta + email de bienvenida).
+
+### ⚠️ Deploy pendiente
+
+Re-deploy manual de `process-payment` en Supabase Dashboard → Edge Functions → process-payment → Code → pegar el archivo actualizado → Deploy updates. Sin el deploy, los pagos PayPal que llegan como `APPROVED` siguen sin procesarse.
+
+**Archivos modificados:** `supabase/functions/process-payment/index.ts`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

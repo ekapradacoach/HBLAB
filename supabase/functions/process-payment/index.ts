@@ -789,10 +789,13 @@ serve(async (req: Request) => {
         return errOut('No se pudo consultar la orden en PayPal: ' + (e.message || e), 502);
       }
 
-      // Validar status: procesar si order.status === 'COMPLETED' O si
-      // intent === 'CAPTURE' Y alguna capture[0] está COMPLETED.
+      // Validar status: procesar si order.status === 'COMPLETED' o 'APPROVED'
+      // (Etapa X.91 — PayPal a veces manda el webhook con status=APPROVED e
+      // intent=CAPTURE cuando el pago fue autorizado pero la captura sigue en
+      // proceso; antes ese caso se skipeaba y no se creaba el usuario ni el email),
+      // O si intent === 'CAPTURE' Y alguna capture[0] está COMPLETED.
       const orderStatus = order?.status || '';
-      const isCompleted = orderStatus === 'COMPLETED';
+      const isCompleted = orderStatus === 'COMPLETED' || orderStatus === 'APPROVED';
       const hasCapture  = order?.intent === 'CAPTURE' &&
         (order?.purchase_units || []).some((u: any) =>
           (u?.payments?.captures || []).some((c: any) => (c?.status || '') === 'COMPLETED')
