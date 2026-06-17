@@ -414,6 +414,37 @@
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ── Etapa X.41/X.92 — Precio vigente según courses.scheduled_prices ────
+    // Copia textual del helper de index.html / venta-curso.html. Si scheduled_prices
+    // está vacío/null o ninguna fecha pasó todavía → devuelve los precios base.
+    // Si hay entradas con date <= hoy → toma la más reciente (ordena DESC).
+    // Tolerante con string JSON (caso edge si la columna JSONB llega serializada).
+    function getEffectivePrice(course) {
+      const base = {
+        price_ars: Number(course?.price_ars || 0),
+        price_usd: Number(course?.price_usd || 0),
+      };
+      let arr = course?.scheduled_prices;
+      if (typeof arr === 'string') {
+        try { arr = JSON.parse(arr); } catch { arr = []; }
+      }
+      if (!Array.isArray(arr) || !arr.length) return base;
+
+      const now   = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+      const vigentes = arr
+        .filter(r => r && r.date && r.date <= today)
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      if (!vigentes.length) return base;
+      const w = vigentes[0];
+      return {
+        price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+        price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+      };
+    }
+
     function showError() {
       document.getElementById('checkout-loading').style.display = 'none';
       document.getElementById('checkout-main').style.display    = 'none';
@@ -439,7 +470,7 @@
 
       const { data: course, error } = await sb
         .from('courses')
-        .select('id, slug, title, description, cover_url, price_ars, price_usd, is_active')
+        .select('id, slug, title, description, cover_url, price_ars, price_usd, scheduled_prices, is_active')
         .eq('slug', slug)
         .eq('is_active', true)
         .maybeSingle();
@@ -451,7 +482,11 @@
       }
 
       _course    = course;
-      _basePrice = currency === 'ARS' ? Number(course.price_ars || 0) : Number(course.price_usd || 0);
+      // Etapa X.92 — aplicar precio vigente (scheduled_prices) ANTES de calcular
+      // _basePrice. Sin esto el resumen y el monto enviado a MP/PayPal usaban el
+      // precio base y el alumno podía pagar el precio viejo.
+      const eff  = getEffectivePrice(course);
+      _basePrice = currency === 'ARS' ? Number(eff.price_ars || 0) : Number(eff.price_usd || 0);
       _finalPrice = _basePrice;
 
       // Si la moneda elegida no tiene precio configurado, mostrar error

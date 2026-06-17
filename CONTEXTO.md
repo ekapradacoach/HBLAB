@@ -3790,3 +3790,38 @@ Re-deploy manual de `process-payment` en Supabase Dashboard → Edge Functions �
 **Archivos modificados:** `supabase/functions/process-payment/index.ts`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.92 — checkout.html cobra el precio vigente (scheduled_prices) + sync server-side
+
+Bug: `checkout.html` mostraba y cobraba `course.price_ars` / `course.price_usd` crudos, sin aplicar `scheduled_prices`. Con un precio programado activo, el resumen del checkout mostraba el precio base ($40.000) en vez del vigente ($52.000) — y peor, **el monto enviado a las Edge Functions era el viejo**, así que el alumno podía pagar el precio desactualizado. Cierra el pendiente que venía anotado desde la Etapa X.39 ("checkout.html aún lee precio base").
+
+### El problema de consistencia client ↔ server
+
+No alcanzaba con corregir solo `checkout.html`: las Edge Functions `create-preference` y `create-paypal-order` validan el `amount` recibido contra el precio reconstruido server-side (hardening X.30), con tolerancia ±1 ARS / ±0.01 USD. Esas funciones usaban `course.price_ars` / `course.price_usd` base. Si el front empezaba a mandar el precio vigente ($52.000) y el server seguía esperando el base ($40.000), la validación fallaba con **`Monto inválido`** y el pago se rompía por completo. Por eso el fix se aplicó en los **tres** lugares, con el mismo `getEffectivePrice` en todos.
+
+### Cambios
+
+**`checkout.html`:**
+- SELECT del init extendido con `scheduled_prices`.
+- Se copió el helper `getEffectivePrice(course)` (idéntico al de index.html / venta-curso.html, Etapa X.41).
+- En el init: `const eff = getEffectivePrice(course); _basePrice = currency === 'ARS' ? eff.price_ars : eff.price_usd;`. Todo lo demás (resumen, `validateCoupon`, `_finalPrice`, ramas de pago MP/PayPal/cupón-100%) ya derivaba de `_basePrice`/`_finalPrice`, así que ahora usa el precio vigente automáticamente.
+
+**`supabase/functions/create-preference/index.ts` (ARS):**
+- SELECT del curso extendido con `scheduled_prices`.
+- Helper nuevo `getEffectivePriceArs(course)` (espejo server-side del front).
+- `const basePrice = getEffectivePriceArs(course)` (antes `Number(course.price_ars || 0)`). El descuento de cupón se aplica sobre ese base vigente, igual que el front.
+
+**`supabase/functions/create-paypal-order/index.ts` (USD):**
+- SELECT del curso extendido con `scheduled_prices`.
+- Helper nuevo `getEffectivePriceUsd(course)`.
+- `const basePriceUsd = getEffectivePriceUsd(course)` (antes `Number(course.price_usd || 0)`).
+
+**`process-payment` sin cambios**: el webhook confía en el monto realmente capturado por MP/PayPal contra la preference/order ya creada, no recalcula contra el precio base. La rama de cupón-100% manda `amount: 0` y valida el cupón aparte, así que tampoco depende del precio vigente.
+
+### ⚠️ Deploy pendiente
+
+Re-deploy manual de **`create-preference`** y **`create-paypal-order`** en Supabase Dashboard → Edge Functions → cada función → Code → pegar archivo actualizado → Deploy updates. **Crítico**: sin estos dos deploys, apenas el front (ya en producción tras el push) empiece a mandar el precio vigente, las funciones lo rechazarán con `Monto inválido` y **se rompen todos los pagos de cursos con un scheduled_price activo**. Los dos deploys deben hacerse cuanto antes para mantener el front y el server en sync.
+
+**Archivos modificados:** `checkout.html`, `supabase/functions/create-preference/index.ts`, `supabase/functions/create-paypal-order/index.ts`, `CONTEXTO.md`.
+
+---

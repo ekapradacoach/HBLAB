@@ -32,6 +32,26 @@ const json = (body: unknown, status = 200) =>
   });
 const errOut = (msg: string, status = 400) => json({ error: msg }, status);
 
+// Etapa X.92 — precio ARS vigente según courses.scheduled_prices (espejo del
+// helper getEffectivePrice del front). Si no hay scheduled_prices vigente →
+// devuelve price_ars base. Tolerante con string JSON.
+function getEffectivePriceArs(course: any): number {
+  const base = Number(course?.price_ars || 0);
+  let arr = course?.scheduled_prices;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { arr = []; }
+  }
+  if (!Array.isArray(arr) || !arr.length) return base;
+  const now   = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const vigentes = arr
+    .filter((r: any) => r && r.date && r.date <= today)
+    .sort((a: any, b: any) => String(b.date).localeCompare(String(a.date)));
+  if (!vigentes.length) return base;
+  const w = vigentes[0];
+  return Number(w.price_ars != null ? w.price_ars : base) || base;
+}
+
 // ── Tipos del body ────────────────────────────────────────
 interface CreatePrefBody {
   slug?:            string;
@@ -113,7 +133,7 @@ serve(async (req: Request) => {
   });
   const { data: course, error: courseErr } = await sbAdmin
     .from('courses')
-    .select('id, slug, title, price_ars, is_active')
+    .select('id, slug, title, price_ars, scheduled_prices, is_active')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle();
@@ -129,7 +149,11 @@ serve(async (req: Request) => {
   // editar el body antes del fetch y comprar a $1. Reconstruimos el precio
   // desde la fuente de verdad (BD) y exigimos que coincida (tolerancia ±1 ARS
   // para redondeos del front).
-  const basePrice = Number(course.price_ars || 0);
+  // Etapa X.92 — el precio base debe ser el VIGENTE (scheduled_prices), no el
+  // price_ars crudo, para que coincida con lo que checkout.html le muestra y
+  // cobra al alumno. Sin esto, un scheduled_price activo haría fallar la
+  // validación de monto ('Monto inválido') o permitiría pagar el precio viejo.
+  const basePrice = getEffectivePriceArs(course);
   if (!(basePrice > 0)) {
     console.error('create-preference: course sin price_ars válido', course);
     return errOut('Curso sin precio configurado.', 500);
