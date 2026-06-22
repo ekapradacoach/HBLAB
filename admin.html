@@ -2135,6 +2135,44 @@
     </div>
   </div>
 
+  <!-- Modal: Enviar email a los alumnos del curso (Etapa X.93) -->
+  <div class="modal-overlay" id="modal-email-curso">
+    <div class="modal">
+      <h3 class="modal-title">📧 Enviar email a los alumnos</h3>
+      <p class="modal-sub">Curso: <strong id="ec-curso-nombre"></strong></p>
+
+      <!-- Paso 1 — Destinatarios -->
+      <div class="form-group" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <label class="form-label" style="margin:0">Destinatarios (<span id="ec-selected-count">0</span>/<span id="ec-total-count">0</span>)</label>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:0.74rem" onclick="ecSelectAll(true)">✅ Seleccionar todos</button>
+            <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:0.74rem" onclick="ecSelectAll(false)">☐ Quitar selección</button>
+          </div>
+        </div>
+        <div id="ec-recipients-list" class="checkbox-list" style="max-height:30vh;overflow-y:auto;">
+          <span style="color:var(--gray-text);font-size:0.85rem;">Cargando alumnos…</span>
+        </div>
+      </div>
+
+      <!-- Paso 2 — Contenido -->
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Asunto</label>
+        <input class="form-input" id="ec-subject" type="text" placeholder="Asunto del email" />
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Mensaje</label>
+        <textarea class="form-textarea" id="ec-message" rows="7" placeholder="Escribí el mensaje… (se respetan los saltos de línea)" style="white-space:pre-line"></textarea>
+      </div>
+
+      <div id="ec-msg" class="alert"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('modal-email-curso')">Cerrar</button>
+        <button class="btn-primary" id="ec-send-btn" onclick="sendCourseEmail()" disabled>📧 Enviar a 0 seleccionados</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Agregar coach -->
   <div class="modal-overlay" id="modal-agregar-coach">
     <div class="modal">
@@ -3479,6 +3517,159 @@
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
+    /* ══════════════════════════════════════════════
+       Enviar email a alumnos del curso (Etapa X.93)
+       ══════════════════════════════════════════════ */
+    let _ecCourseId   = null;
+    let _ecRecipients = [];   // [{ user_id, full_name, email, checked }]
+
+    async function openEmailCursoModal(courseId, title) {
+      _ecCourseId   = courseId;
+      _ecRecipients = [];
+      document.getElementById('ec-curso-nombre').textContent = title || '';
+      document.getElementById('ec-subject').value = '';
+      document.getElementById('ec-message').value = '';
+      const msgEl = document.getElementById('ec-msg');
+      msgEl.className = 'alert'; msgEl.textContent = '';
+      document.getElementById('ec-total-count').textContent    = '0';
+      document.getElementById('ec-selected-count').textContent = '0';
+      const listEl = document.getElementById('ec-recipients-list');
+      listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;">Cargando alumnos…</span>`;
+      ecUpdateSendBtn();
+      openModal('modal-email-curso');
+
+      // Intento primario: embed user_courses → profiles (como pide la consigna).
+      let rows = null;
+      const { data, error } = await sb
+        .from('user_courses')
+        .select('user_id, profiles(full_name, email)')
+        .eq('course_id', courseId)
+        .eq('payment_status', 'paid')
+        .eq('status', 'active');
+
+      if (!error && Array.isArray(data) && data.some(r => r.profiles)) {
+        rows = data.map(r => ({
+          user_id:   r.user_id,
+          full_name: r.profiles?.full_name || '—',
+          email:     (r.profiles?.email || '').trim(),
+        }));
+      } else {
+        // Fallback: el embed profiles no resuelve por el FK a auth.users (CLAUDE X.26).
+        // Usamos la RPC get_ventas() (misma que el modal de inscritos) filtrando por título.
+        const { data: ventas, error: vErr } = await sb.rpc('get_ventas');
+        if (vErr) {
+          listEl.innerHTML = `<span style="color:var(--red,#ef4444);font-size:0.85rem;">Error al cargar alumnos: ${escHtmlAdmin(vErr.message)}</span>`;
+          return;
+        }
+        rows = (ventas || [])
+          .filter(r => (r.course_title || '') === (title || '')
+                    && (r.payment_status || '').toLowerCase() === 'paid'
+                    && (r.status || '').toLowerCase() === 'active')
+          .map(r => ({ user_id: null, full_name: r.full_name || '—', email: (r.email || '').trim() }));
+      }
+
+      // Dedupe por email + orden alfabético + checked por defecto
+      const seen = new Set();
+      _ecRecipients = (rows || [])
+        .filter(r => { const k = r.email.toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .map(r => ({ ...r, checked: true }));
+
+      document.getElementById('ec-total-count').textContent = String(_ecRecipients.length);
+      ecRenderRecipients();
+    }
+
+    function ecRenderRecipients() {
+      const listEl = document.getElementById('ec-recipients-list');
+      if (!_ecRecipients.length) {
+        listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;font-style:italic;">No hay alumnos con acceso activo a este curso.</span>`;
+        ecUpdateCounts(); ecUpdateSendBtn();
+        return;
+      }
+      listEl.innerHTML = _ecRecipients.map((r, i) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--card-border);cursor:pointer;">
+          <input type="checkbox" ${r.checked ? 'checked' : ''} onchange="ecToggle(${i}, this.checked)" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;" />
+          <span style="flex:1;min-width:0;overflow:hidden;">
+            <span style="display:block;font-weight:600;font-size:0.85rem;">${escHtmlAdmin(r.full_name)}</span>
+            <span style="display:block;color:var(--gray-text);font-size:0.76rem;overflow:hidden;text-overflow:ellipsis;">${escHtmlAdmin(r.email)}</span>
+          </span>
+        </label>`).join('');
+      ecUpdateCounts(); ecUpdateSendBtn();
+    }
+
+    function ecToggle(i, checked) {
+      if (_ecRecipients[i]) _ecRecipients[i].checked = checked;
+      ecUpdateCounts(); ecUpdateSendBtn();
+    }
+
+    function ecSelectAll(val) {
+      _ecRecipients.forEach(r => r.checked = val);
+      ecRenderRecipients();
+    }
+
+    function ecSelectedCount() { return _ecRecipients.filter(r => r.checked).length; }
+
+    function ecUpdateCounts() {
+      document.getElementById('ec-selected-count').textContent = String(ecSelectedCount());
+    }
+
+    function ecUpdateSendBtn() {
+      const n = ecSelectedCount();
+      const btn = document.getElementById('ec-send-btn');
+      if (!btn) return;
+      btn.disabled = n === 0;
+      btn.textContent = `📧 Enviar a ${n} seleccionado${n === 1 ? '' : 's'}`;
+    }
+
+    async function sendCourseEmail() {
+      const subject = (document.getElementById('ec-subject').value || '').trim();
+      const message = (document.getElementById('ec-message').value || '').trim();
+      const msgEl   = document.getElementById('ec-msg');
+      const btn     = document.getElementById('ec-send-btn');
+      const showMsg = (text, type) => {
+        msgEl.className = `alert alert-${type === 'error' ? 'error' : 'success'} show`;
+        msgEl.textContent = text;
+      };
+
+      const recipients = _ecRecipients
+        .filter(r => r.checked)
+        .map(r => ({ email: r.email, name: r.full_name === '—' ? '' : r.full_name }));
+
+      if (!recipients.length) { showMsg('Seleccioná al menos un alumno.', 'error'); return; }
+      if (!subject)           { showMsg('El asunto es obligatorio.', 'error'); return; }
+      if (!message)           { showMsg('El mensaje es obligatorio.', 'error'); return; }
+
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { showMsg('Sesión expirada. Recargá la página.', 'error'); return; }
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Enviando…';
+      msgEl.className = 'alert'; msgEl.textContent = '';
+
+      try {
+        const res = await fetch('https://bqkajhxfdybmuilvzchm.supabase.co/functions/v1/send-course-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxa2FqaHhmZHlibXVpbHZ6Y2htIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTI3MTcsImV4cCI6MjA5MjEyODcxN30.d0HL1AyK_6LOYDKk6hNtChFtik6gVc-3p77ODrz32Gk',
+          },
+          body: JSON.stringify({ recipients, subject, message }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          const failTxt = data.failed ? ` · Fallaron: ${data.failed}` : '';
+          showMsg(`✅ Emails enviados: ${data.sent}${failTxt}.`, 'success');
+        } else {
+          showMsg('Error: ' + (data.error || JSON.stringify(data)), 'error');
+        }
+      } catch (e) {
+        showMsg('Error de red: ' + (e.message || e), 'error');
+      } finally {
+        ecUpdateSendBtn();   // restaura el texto/disabled según selección
+      }
+    }
+
     // Render de filas a partir de allCourses (con _salesCount, _coachIds) — Sesión 52
     function renderCursosRows(courses) {
       const tbody = document.getElementById('tbody-cursos');
@@ -3513,6 +3704,7 @@
                 <div class="action-menu" id="row-menu-${c.id}">
                   <button class="action-menu-item" onclick="vcOpen('${c.id}'); closeAllRowMenus();">👁 Ver curso</button>
                   <button class="action-menu-item" data-c='${safeC}' onclick='editCurso(JSON.parse(this.dataset.c)); closeAllRowMenus();'>✏️ Editar</button>
+                  <button class="action-menu-item" onclick="openEmailCursoModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">📧 Enviar email</button>
                   ${c.is_workshop ? `<button class="action-menu-item" onclick="openInscritosModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">👥 Inscritos</button>` : ''}
                   <button class="action-menu-item" onclick="toggleCursoActive('${c.id}', ${c.is_active}); closeAllRowMenus();">
                     ${c.is_active ? '❌ Desactivar' : '✅ Activar'}

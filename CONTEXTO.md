@@ -3825,3 +3825,33 @@ Re-deploy manual de **`create-preference`** y **`create-paypal-order`** en Supab
 **Archivos modificados:** `checkout.html`, `supabase/functions/create-preference/index.ts`, `supabase/functions/create-paypal-order/index.ts`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.93 — Enviar email a los alumnos de un curso (admin)
+
+Nueva feature en `admin.html` Tab Cursos: el admin puede mandar un email a los alumnos inscriptos de cualquier curso. Útil para avisos (cambio de fecha, material nuevo, recordatorios).
+
+### admin.html
+
+- **Nuevo item "📧 Enviar email"** en el action menu (⋮) de cada fila de curso (todos los cursos, no solo talleres). `onclick="openEmailCursoModal('${c.id}', this.dataset.t)"` con `data-t` = título.
+- **Modal `#modal-email-curso`** en dos pasos:
+  - **Paso 1 — Destinatarios**: título del curso arriba, botones "✅ Seleccionar todos" / "☐ Quitar selección", contador `seleccionados/total`, y lista de checkboxes (nombre + email) de los alumnos con `payment_status='paid' AND status='active'`. Todos arrancan tildados.
+  - **Paso 2 — Contenido**: input Asunto + textarea Mensaje (texto plano). Botón "📧 Enviar a X seleccionados" deshabilitado si no hay ninguno tildado (se actualiza en vivo).
+- **Carga de alumnos** (`openEmailCursoModal`): intento primario con el embed `sb.from('user_courses').select('user_id, profiles(full_name, email)')` (como pide la consigna); **fallback a la RPC `get_ventas()`** filtrando por `course_title` si el embed no resuelve (el FK de `user_courses.user_id` apunta a `auth.users`, no a `profiles` → PostgREST no arma la relación, ver CLAUDE X.26). Dedupe por email + orden alfabético.
+- **Funciones nuevas**: `openEmailCursoModal`, `ecRenderRecipients`, `ecToggle`, `ecSelectAll`, `ecSelectedCount`, `ecUpdateCounts`, `ecUpdateSendBtn`, `sendCourseEmail`. Globals `_ecCourseId`, `_ecRecipients`.
+- **`sendCourseEmail()`**: arma `recipients = [{email, name}]` de los tildados, valida asunto + mensaje, hace `fetch POST` a la Edge Function `send-course-email` con `Authorization: Bearer ${session.access_token}` + `apikey` (mismo patrón que `confirmarAgregarCoach`). Muestra loading en el botón y resultado inline (`#ec-msg`): `✅ Emails enviados: N · Fallaron: M`.
+
+### Edge Function `supabase/functions/send-course-email/index.ts` (NUEVA)
+
+- `verify_jwt = true` (en `config.toml`) + verificación explícita en código de que el caller sea `profiles.role === 'admin'` (mismo patrón que `invite-coach-new`).
+- Body: `{ recipients: [{ email, name }], subject, message }`. Valida asunto, mensaje, al menos 1 destinatario, máximo 1000.
+- Envía **un email individual por destinatario** (loop secuencial) vía Resend, `from: 'HB Lab <noreply@hblabarg.com>'`, subject = el del admin. El cuerpo usa el **dark theme estándar** (fondo `#1E2A3A`, card `#243042`, texto `#FFFFFF`/`#94A3B8`, acento lime `#C8E600`, table layout inline, `meta color-scheme dark`), con el saludo "Hola {name}," arriba del mensaje. El mensaje (texto plano) se escapa con HTML-escape y los `\n` se convierten en `<br>`.
+- Retorna `{ ok: true, sent, failed, errors: [{email, error}] }`. Un envío fallido no aborta el resto (se acumula en `errors`).
+- Secrets: usa los ya configurados `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`.
+
+### ⚠️ Deploy pendiente
+
+Deploy manual de la función nueva: Supabase Dashboard → Edge Functions → **New function** → nombre `send-course-email` → "Via Editor" → pegar `supabase/functions/send-course-email/index.ts` → Deploy → Settings → activar **"Enforce JWT verification"**. Sin secrets nuevos (reusa los de `process-payment`/`invite-coach-new`). Hasta el deploy, el botón "Enviar email" falla con 404.
+
+**Archivos modificados:** `admin.html`, `supabase/functions/send-course-email/index.ts` (nuevo), `supabase/config.toml`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

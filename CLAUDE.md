@@ -1046,6 +1046,7 @@ Todos los archivos cierran con `});` (el handler `serve(...)`). Si alguno está 
 [functions.invite-coach-new]  verify_jwt = true   # crear coach desde cero + magic link (Etapa X.32)
 [functions.create-preference] verify_jwt = false  # llamada desde checkout.html (público)
 [functions.process-payment]   verify_jwt = false  # webhook público — firma valida adentro
+[functions.send-course-email] verify_jwt = true   # admin envía email a alumnos del curso (Etapa X.93)
 ```
 
 Cuando se haga el deploy via "Via Editor", la flag `verify_jwt` puede configurarse desde el panel de **Settings** de cada función (toggle "Enforce JWT verification"). Asegurarse de que **invite-coach tenga JWT enforcement ON** y **create-preference / process-payment tengan JWT enforcement OFF**.
@@ -3071,6 +3072,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 **Etapa X.91 — fix PayPal: procesar `status=APPROVED`**: el branch PayPal de `process-payment` skipeaba el webhook cuando llegaba con `status=APPROVED` (pago autorizado, captura en proceso) → el alumno pagaba y no recibía acceso ni email. Fix: `const isCompleted = orderStatus === 'COMPLETED' || orderStatus === 'APPROVED'`. El flujo aguas abajo es idempotente (UPSERT `onConflict` + lookup en `profiles.email`), así que un webhook `CAPTURE.COMPLETED` posterior del mismo pago no duplica nada. **Requiere re-deploy manual** de `process-payment` en el Dashboard.
 
 **Etapa X.92 — checkout cobra el precio vigente (scheduled_prices)**: `checkout.html` mostraba/cobraba el `price_ars`/`price_usd` base sin aplicar `scheduled_prices` (resolvía el pendiente de X.39). Se agregó `getEffectivePrice` (copia del de index.html/venta-curso.html) y `_basePrice` ahora sale del precio vigente. Para que no rompa la validación de monto server-side (X.30), también se aplicó el precio vigente en `create-preference` (`getEffectivePriceArs`) y `create-paypal-order` (`getEffectivePriceUsd`) — los tres usan la misma lógica. **Requiere re-deploy manual** de `create-preference` y `create-paypal-order`; sin ellos los pagos de cursos con scheduled_price activo fallan con `Monto inválido`.
+
+**Etapa X.93 — enviar email a los alumnos de un curso (admin)**: en admin.html Tab Cursos, el action menu (⋮) de cada curso tiene "📧 Enviar email" → modal `#modal-email-curso` con (1) lista de checkboxes de alumnos `paid+active` (seleccionar todos / quitar selección) y (2) asunto + mensaje. Los alumnos se cargan con embed `user_courses→profiles` y fallback a la RPC `get_ventas()` por título (el embed no resuelve por el FK a auth.users, X.26). `sendCourseEmail()` hace `fetch` a la Edge Function nueva **`send-course-email`** (`verify_jwt=true` + check admin), que manda un email individual por destinatario vía Resend (`from: 'HB Lab <noreply@hblabarg.com>'`, dark theme estándar, saludo "Hola {name},"). Retorna `{ ok, sent, failed, errors }`. **Requiere deploy manual** de `send-course-email` (sin secrets nuevos).
 
 ---
 
