@@ -3845,6 +3845,7 @@ Nueva feature en `admin.html` Tab Cursos: el admin puede mandar un email a los a
 - `verify_jwt = true` (en `config.toml`) + verificación explícita en código de que el caller sea `profiles.role === 'admin'` (mismo patrón que `invite-coach-new`).
 - Body: `{ recipients: [{ email, name }], subject, message }`. Valida asunto, mensaje, al menos 1 destinatario, máximo 1000.
 - Envía **un email individual por destinatario** (loop secuencial) vía Resend, `from: 'HB Lab <noreply@hblabarg.com>'`, subject = el del admin. El cuerpo usa el **dark theme estándar** (fondo `#1E2A3A`, card `#243042`, texto `#FFFFFF`/`#94A3B8`, acento lime `#C8E600`, table layout inline, `meta color-scheme dark`), con el saludo "Hola {name}," arriba del mensaje. El mensaje (texto plano) se escapa con HTML-escape y los `\n` se convierten en `<br>`.
+- **Rate limit (Resend ≈ 2 req/seg en free)**: pausa de `SEND_DELAY_MS = 600ms` entre envíos (~1.6 req/seg) + **reintento automático una vez ante un 429** (backoff 1200ms). Para ~23 destinatarios el envío tarda ~15s; el botón del admin queda en "⏳ Enviando…" mientras tanto. Los emails inválidos se descartan antes (cuentan como `failed` sin gastar tiempo de red).
 - Retorna `{ ok: true, sent, failed, errors: [{email, error}] }`. Un envío fallido no aborta el resto (se acumula en `errors`).
 - Secrets: usa los ya configurados `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`.
 

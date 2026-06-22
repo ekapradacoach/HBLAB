@@ -80,31 +80,47 @@ function buildEmailHtml(opts: { name: string; subject: string; message: string }
 </body></html>`;
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// Pausa entre envíos para no superar el rate limit de Resend (~2 req/seg en el
+// plan free). 600ms → ~1.6 req/seg, con margen. Para 23 destinatarios ≈ 14s.
+const SEND_DELAY_MS = 600;
+
 async function sendOne(opts: {
   apiKey: string; to: string; name: string; subject: string; message: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${opts.apiKey}`,
-        'Content-Type':  'application/json',
-      },
-      body: JSON.stringify({
-        from:    'HB Lab <noreply@hblabarg.com>',
-        to:      opts.to,
-        subject: opts.subject,
-        html:    buildEmailHtml({ name: opts.name, subject: opts.subject, message: opts.message }),
-      }),
-    });
-    if (!res.ok) {
+  const payload = JSON.stringify({
+    from:    'HB Lab <noreply@hblabarg.com>',
+    to:      opts.to,
+    subject: opts.subject,
+    html:    buildEmailHtml({ name: opts.name, subject: opts.subject, message: opts.message }),
+  });
+
+  // Hasta 2 intentos: si Resend responde 429 (rate limit), esperamos y reintentamos una vez.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${opts.apiKey}`,
+          'Content-Type':  'application/json',
+        },
+        body: payload,
+      });
+      if (res.ok) return { ok: true };
+
       const txt = await res.text();
+      if (res.status === 429 && attempt === 1) {
+        await sleep(1200);   // backoff antes del reintento
+        continue;
+      }
       return { ok: false, error: `Resend HTTP ${res.status}: ${txt}` };
+    } catch (e: any) {
+      if (attempt === 1) { await sleep(1200); continue; }
+      return { ok: false, error: e?.message || String(e) };
     }
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || String(e) };
   }
+  return { ok: false, error: 'agotados los reintentos' };
 }
 
 serve(async (req: Request) => {
@@ -169,14 +185,20 @@ serve(async (req: Request) => {
   const errors: Array<{ email: string; error: string }> = [];
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  for (const r of recipients) {
-    const to   = (r?.email || '').trim();
-    const name = (r?.name  || '').trim();
-    if (!to || !emailRe.test(to)) {
-      failed++;
-      errors.push({ email: to || '(vacío)', error: 'email inválido' });
-      continue;
-    }
+  // Solo destinatarios con email válido (los inválidos se cuentan como failed sin gastar tiempo).
+  const valid = recipients
+    .map(r => ({ to: (r?.email || '').trim(), name: (r?.name || '').trim() }))
+    .filter(r => {
+      if (!r.to || !emailRe.test(r.to)) {
+        failed++;
+        errors.push({ email: r.to || '(vacío)', error: 'email inválido' });
+        return false;
+      }
+      return true;
+    });
+
+  for (let i = 0; i < valid.length; i++) {
+    const { to, name } = valid[i];
     const result = await sendOne({ apiKey: RESEND_API_KEY, to, name, subject, message });
     if (result.ok) {
       sent++;
@@ -185,6 +207,8 @@ serve(async (req: Request) => {
       errors.push({ email: to, error: result.error || 'desconocido' });
       console.warn('send-course-email: falló envío a', to, '→', result.error);
     }
+    // Throttle entre envíos (no después del último) para respetar el rate limit de Resend.
+    if (i < valid.length - 1) await sleep(SEND_DELAY_MS);
   }
 
   return json({ ok: true, sent, failed, errors });
