@@ -1348,23 +1348,21 @@
       return lessonDone || liveDone;
     }
 
-    // Regla estricta del certificado (Etapa X.70 — fix sobre X.67):
-    //   1. Desbloqueado por fecha: !unlock_at || unlock_at <= now.
-    //   2. Tiene contenido: lessons.length > 0 || !!live.
-    // De los que pasan, TODOS deben estar completados.
+    // Regla estricta del certificado (Etapa X.94 — fix sobre X.70):
+    //   Único filtro: hasContent (lessons.length > 0 || !!live) → excluye módulos
+    //   vacíos / de certificación. TODO módulo con contenido queda en `required`.
     //
-    // El filtro `liveReady` (live_ended === true) FUE REMOVIDO: si un módulo
-    // tiene live pendiente de finalizar, queda en `required` pero el alumno NO
-    // puede marcarlo (el botón no existe), por lo que `every(isModuleCompleted)`
-    // devuelve false hasta que el coach lo finalice y el alumno lo marque. Eso
-    // previene el cert prematuro (que ocurría cuando el live pendiente reducía
-    // el denominador).
+    // Los módulos bloqueados por fecha (`unlock_at` futura) YA NO se excluyen del
+    // cálculo: antes (X.70) se filtraban con `unlockedByDate`, lo que reducía el
+    // denominador y disparaba el cert aunque hubiera módulos futuros pendientes.
+    // Ahora permanecen en `required` igual que los módulos con live `!live_ended`:
+    // el alumno no puede completarlos todavía (drip/lock), así que
+    // `isModuleCompleted` devuelve false para ellos → `every` falla → el cert NO
+    // dispara hasta que se desbloqueen y se completen.
     function areAllModulesCompleted() {
-      const now = new Date();
       const required = (MODULES || []).filter(m => {
-        const unlockedByDate = !m.unlock_at || new Date(m.unlock_at) <= now;
-        const hasContent     = (m.lessons?.length > 0) || !!m.live;
-        return unlockedByDate && hasContent;
+        const hasContent = (m.lessons?.length > 0) || !!m.live;
+        return hasContent;
       });
       const completed = required.filter(isModuleCompleted);
       console.log('[CERT CHECK]', {
@@ -1388,7 +1386,7 @@
       return !!m && (!m.lessons || m.lessons.length === 0) && !m.live;
     }
     function isCertModuleUnlocked() {
-      // Etapa X.69 — espejo de areAllModulesCompleted (mismos 3 filtros + mismo criterio).
+      // Espejo de areAllModulesCompleted (Etapa X.94 — mismo filtro hasContent + mismo criterio).
       return areAllModulesCompleted();
     }
     let _certView = false;  // true cuando el alumno está viendo el cert en el main panel

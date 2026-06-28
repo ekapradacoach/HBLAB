@@ -3075,6 +3075,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.93 — enviar email a los alumnos de un curso (admin)**: en admin.html Tab Cursos, el action menu (⋮) de cada curso tiene "📧 Enviar email" → modal `#modal-email-curso` con (1) lista de checkboxes de alumnos `paid+active` (seleccionar todos / quitar selección) y (2) asunto + mensaje. Los alumnos se cargan con embed `user_courses→profiles` y fallback a la RPC `get_ventas()` por título (el embed no resuelve por el FK a auth.users, X.26). `sendCourseEmail()` hace `fetch` a la Edge Function nueva **`send-course-email`** (`verify_jwt=true` + check admin), que manda un email individual por destinatario vía Resend (`from: 'HB Lab <noreply@hblabarg.com>'`, dark theme estándar, saludo "Hola {name},"), con throttle de 600ms entre envíos + reintento ante 429 para respetar el rate limit de Resend (~2 req/seg). Retorna `{ ok, sent, failed, errors }`. **Requiere deploy manual** de `send-course-email` (sin secrets nuevos).
 
+**Etapa X.94 — cert: módulos bloqueados por fecha vuelven a bloquear el cert**: `areAllModulesCompleted()` (curso.html) filtraba los módulos con `unlock_at` futura ANTES del `every` (X.70), reduciendo el denominador → el cert disparaba con módulos drip pendientes. Fix: el único filtro ahora es `hasContent` (`lessons.length>0 || !!live`); los módulos bloqueados quedan en `required` y, como no se pueden completar todavía, `isModuleCompleted` da `false` → `every` falla → cert no dispara hasta desbloquearlos. `isCertModuleUnlocked` es alias y hereda el criterio. Guards duros `if (!isCertReady()) return` en `showCertSection`/`checkQuizGateAndShowCert` (X.71) verificados intactos.
+
 ---
 
 ## Usuarios registrados

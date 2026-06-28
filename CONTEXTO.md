@@ -3856,3 +3856,45 @@ Deploy manual de la función nueva: Supabase Dashboard → Edge Functions → **
 **Archivos modificados:** `admin.html`, `supabase/functions/send-course-email/index.ts` (nuevo), `supabase/config.toml`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.94 — Cert: los módulos bloqueados por fecha vuelven a bloquear el cert
+
+Bug en `areAllModulesCompleted()` (introducido en X.66/X.70). El filtro excluía los módulos con `unlock_at` futura (`unlockedByDate`) ANTES del `every`, sacándolos del cálculo. Consecuencia: si un curso tenía un módulo desbloqueado y otro con fecha futura (drip), al completar solo el desbloqueado el `required` se reducía a ese único módulo → `every` daba `true` → **el certificado disparaba aunque hubiera módulos futuros pendientes**.
+
+### El insight (mismo razonamiento que el live `!live_ended` de X.70)
+
+Un módulo bloqueado por fecha **no se puede completar todavía** (el alumno no tiene acceso a su contenido). Por lo tanto nunca está en `completedSet`. Si lo dejamos DENTRO de `required`, `isModuleCompleted` devuelve `false` para él → `every(isModuleCompleted)` falla → el cert no dispara hasta que el módulo se desbloquee (pase su `unlock_at`) y el alumno lo complete. Filtrarlo era exactamente lo que rompía el gate.
+
+### Fix
+
+`areAllModulesCompleted()` ahora filtra **solo** por `hasContent` (excluir módulos vacíos / de certificación); ya NO filtra por `unlockedByDate`:
+
+```js
+function areAllModulesCompleted() {
+  const required = (MODULES || []).filter(m => {
+    const hasContent = (m.lessons?.length > 0) || !!m.live;
+    return hasContent;
+  });
+  if (!required.length) return false;
+  return required.every(isModuleCompleted);
+}
+```
+
+`isCertModuleUnlocked()` sigue siendo alias de `areAllModulesCompleted()` → hereda el mismo criterio (el 🎓 del sidebar se desbloquea exactamente cuando el cert es elegible).
+
+### Reglas finales del cert (resumen actualizado)
+
+| Caso del módulo | ¿En `required`? | ¿Cómo se completa? |
+|---|---|---|
+| Sin contenido (módulo de certificación) | NO | N/A |
+| Con contenido + desbloqueado | SÍ | Alumno marca lección/live |
+| Con contenido + **bloqueado por fecha** (`unlock_at` futura) | **SÍ** | No completable aún → bloquea el cert hasta desbloquearse |
+| Con contenido + live `!live_ended` | SÍ | Coach finaliza → alumno marca |
+
+### Guards duros verificados (Etapa X.71, sin cambios)
+
+`isCertReady()` (modules → `areAllModulesCompleted()`; no-modules → `realCount >= TOTAL_VIDEOS`), y los guards `if (!isCertReady()) return` al inicio de `showCertSection()` y `checkQuizGateAndShowCert()` siguen en su lugar — cualquier ruta que intente disparar el cert sin estar listo queda cortada. Confirmado tras este fix.
+
+**Archivos modificados:** `curso.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
