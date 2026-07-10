@@ -3077,6 +3077,8 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 **Etapa X.94 — cert: módulos bloqueados por fecha vuelven a bloquear el cert**: `areAllModulesCompleted()` (curso.html) filtraba los módulos con `unlock_at` futura ANTES del `every` (X.70), reduciendo el denominador → el cert disparaba con módulos drip pendientes. Fix: el único filtro ahora es `hasContent` (`lessons.length>0 || !!live`); los módulos bloqueados quedan en `required` y, como no se pueden completar todavía, `isModuleCompleted` da `false` → `every` falla → cert no dispara hasta desbloquearlos. `isCertModuleUnlocked` es alias y hereda el criterio. Guards duros `if (!isCertReady()) return` en `showCertSection`/`checkQuizGateAndShowCert` (X.71) verificados intactos.
 
+**Etapa X.95 — aviso de cuotas en todas las landings de curso**: bajo cada bloque de precio (hero + CTA) de `venta-curso.html` y `taller.html` se muestra `<p class="installments-note">💳 También podés pagarlo en cuotas con tarjeta de crédito</p>`. MP ya permite cuotas con interés (a cargo del comprador); es solo texto informativo — NO se tocó checkout/pagos/Edge Functions. Como los cursos nuevos se sirven siempre desde `venta-curso.html?slug=X` (talleres desde `taller.html?slug=X`), editar esos 2 archivos cubre TODOS los cursos actuales y futuros. **REGLA para landings hardcodeadas nuevas** (caso raro, no se usa hoy): si alguna vez se crea una landing de curso standalone en vez de usar `venta-curso.html`, DEBE incluir ese mismo texto de cuotas cerca del precio. No decir "sin interés" (las cuotas tienen interés que paga el comprador) — usar "cuotas con tarjeta".
+
 ---
 
 ## Usuarios registrados

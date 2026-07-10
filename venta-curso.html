@@ -361,6 +361,15 @@
     }
 
     .buy-note { margin-top: 12px; font-size: 0.8rem; color: var(--gray-text); letter-spacing: 0.04em; }
+    /* Aviso de cuotas (Etapa X.95) — MP permite pagar en cuotas con tarjeta (interés a cargo del comprador) */
+    .installments-note {
+      display: inline-block; margin-top: 12px;
+      font-size: 0.9rem; font-weight: 600; line-height: 1.4;
+      color: var(--lime);
+      background: rgba(200,230,0,0.08);
+      border: 1px solid rgba(200,230,0,0.25);
+      border-radius: 8px; padding: 8px 14px;
+    }
 
     /* ─── Etapa X.74 — Características del curso (genérico) ───── */
     #caracteristicas { background: var(--navy); }
@@ -729,6 +738,8 @@
           <span class="price-usd-hero" id="hero-price-usd"></span>
         </div>
 
+        <p class="installments-note">💳 También podés pagarlo en cuotas con tarjeta de crédito</p>
+
         <button class="btn-buy-hero" onclick="openCurrencyModal()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
@@ -808,6 +819,8 @@
           <span class="price-big" id="cta-price-ars"></span>
           <span class="price-usd-hero" id="cta-price-usd"></span>
         </div>
+
+        <p class="installments-note">💳 También podés pagarlo en cuotas con tarjeta de crédito</p>
 
         <button class="btn-buy-hero" onclick="openCurrencyModal()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

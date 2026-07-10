@@ -3898,3 +3898,38 @@ function areAllModulesCompleted() {
 **Archivos modificados:** `curso.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.95 — Aviso de cuotas en todas las landings de curso
+
+Para que el precio no asuste, todas las páginas de venta comunican que se puede pagar en **cuotas con tarjeta de crédito** (el checkout de Mercado Pago ya lo permite — interés a cargo del comprador). Solo faltaba comunicarlo antes del pago. **Es texto informativo: NO se tocó la lógica de pago, checkout, Edge Functions ni seguridad.**
+
+### Páginas de venta reales (inventario)
+
+Contrario a lo que sugería el pedido, las páginas de **venta** del sitio son solo dos, ambas **dinámicas**:
+
+- **`venta-curso.html`** (`?slug=`) — sirve a TODOS los cursos online (actuales y futuros).
+- **`taller.html`** (`?slug=`) — sirve a TODOS los talleres presenciales.
+
+Los `curso.html` / `curso-*.html` son páginas de **contenido post-compra** (acceso gateado), no de venta — no llevan el aviso. Los `webinar-hipertrofia.html` / `carrera-hibrida.html` / `entrenamiento-hibrido.html` (y los `curso-*.html`) son **stubs de redirect** de ~14 líneas a las dinámicas → tampoco.
+
+### Cambio
+
+En `venta-curso.html` y `taller.html`, debajo de cada bloque de precio (hero + CTA final, 2 por página), se agregó:
+
+```html
+<p class="installments-note">💳 También podés pagarlo en cuotas con tarjeta de crédito</p>
+```
+
+Con una clase `.installments-note` (chip pequeño): lime en `venta-curso.html`, violeta en `taller.html` (para respetar el acento de cada página). No dice "sin interés" (las cuotas tienen interés que paga el comprador), usa "cuotas con tarjeta".
+
+### Futuro-proofing (por qué no hace falta snippet ni script)
+
+Los cursos nuevos **no generan archivos HTML nuevos**: se sirven todos desde `venta-curso.html?slug=X` (talleres desde `taller.html?slug=X`). Por lo tanto, editar esos 2 archivos **una sola vez cubre todos los cursos actuales Y futuros** automáticamente — no se necesita un componente incluible ni un script común. Se dejó una **regla en CLAUDE.md** solo para el caso raro (hoy inexistente) de que alguien cree una landing de curso hardcodeada standalone: debe incluir el mismo texto de cuotas cerca del precio.
+
+### Deploy
+
+Es HTML/CSS estático servido por GitHub Pages (dominio `hblabarg.com`). **No requiere re-deploy de Supabase ni de Edge Functions.** Tras el push, GitHub Pages reconstruye solo; hacer hard refresh (Ctrl+Shift+R) para saltear la caché del navegador.
+
+**Archivos modificados:** `venta-curso.html`, `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
