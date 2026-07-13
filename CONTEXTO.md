@@ -3933,3 +3933,27 @@ Es HTML/CSS estático servido por GitHub Pages (dominio `hblabarg.com`). **No re
 **Archivos modificados:** `venta-curso.html`, `taller.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.96 — Fix: registro huérfano en dashboard (curso null en renderCourses)
+
+Bug: `renderCourses()` en `dashboard.html` hacía `.map()` sobre las filas de `user_courses` (join a `courses`) y accedía a `course.is_workshop` / `course.slug` / etc. Si una fila era huérfana — un registro en `user_courses` que apunta a un curso **eliminado o inactivo**, con lo cual el join `row.courses` viene `null` — el acceso a `course.is_workshop` tiraba `TypeError` y **rompía el render de toda la grilla** (el alumno no veía ninguno de sus cursos).
+
+### Fix
+
+Se agregó un `.filter()` **antes** del `.map()` que descarta las filas sin curso:
+
+```js
+const cards = rows
+  .filter(row => row.courses !== null && row.courses !== undefined)
+  .map(row => {
+    const course = row.courses;
+    ...
+```
+
+Así los registros huérfanos se ignoran silenciosamente y el resto de los cursos se renderiza normal. Cambio mínimo, sin tocar la query ni la lógica de progreso/badges.
+
+**Nota**: no limpia el registro huérfano en la BD (queda en `user_courses`); solo evita que rompa el front. Si se quisiera limpiar, sería un `DELETE FROM user_courses WHERE course_id NOT IN (SELECT id FROM courses)` vía SQL, pero no es necesario para el fix.
+
+**Archivos modificados:** `dashboard.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

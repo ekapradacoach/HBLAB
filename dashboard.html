@@ -766,7 +766,13 @@
         }
       }
 
-      const cards = rows.map(row => {
+      const cards = rows
+        // Guard: descartar registros huérfanos de user_courses cuyo curso fue
+        // eliminado o quedó inactivo (el join a courses devuelve null/undefined).
+        // Sin esto, el acceso a course.is_workshop más abajo tira TypeError y
+        // rompe el render de TODA la grilla de cursos.
+        .filter(row => row.courses !== null && row.courses !== undefined)
+        .map(row => {
         const course = row.courses;
 
         // ── Taller presencial: card diferenciada (sin progreso ni certificado) ──
