@@ -1805,6 +1805,29 @@
               <p class="panel-sub">Ventas e ingresos generados por cada coach según sus cursos asignados.</p>
             </div>
           </div>
+
+          <!-- Filtro mes/año (Etapa X.97) — filtra _ventas por enrolled_at antes de calcular -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
+            <select class="form-select" id="cv-filter-mes" style="max-width:180px;">
+              <option value="01">Enero</option>
+              <option value="02">Febrero</option>
+              <option value="03">Marzo</option>
+              <option value="04">Abril</option>
+              <option value="05">Mayo</option>
+              <option value="06">Junio</option>
+              <option value="07">Julio</option>
+              <option value="08">Agosto</option>
+              <option value="09">Septiembre</option>
+              <option value="10">Octubre</option>
+              <option value="11">Noviembre</option>
+              <option value="12">Diciembre</option>
+            </select>
+            <select class="form-select" id="cv-filter-anio" style="max-width:130px;">
+              <!-- poblado por JS (año actual + 2 anteriores) -->
+            </select>
+            <button class="btn-secondary" id="cv-btn-load" onclick="loadCoachesVentas()">Ver</button>
+          </div>
+
           <div class="data-table-wrap">
             <table class="data-table">
               <thead>
@@ -4691,11 +4714,12 @@
       await Promise.all([
         loadGestionStats(),
         loadGestionCharts(),
-        loadCoachesVentas(),
         loadAdInversiones(),
         loadResultadoNeto(),
-        loadVentas(),                 // Etapa X.15 — tabla de ventas detallada
+        loadVentas(),                 // Etapa X.15 — tabla de ventas detallada (puebla _ventas)
       ]);
+      // Etapa X.97 — depende de _ventas (filtro por mes), así que corre DESPUÉS de loadVentas.
+      await loadCoachesVentas();
     }
 
     // ══════════════════════════════════════════════
@@ -5202,47 +5226,72 @@
       }
     }
 
+    // Etapa X.97 — Filtro de mes/año para "Ventas por coach".
+    // Puebla el selector de año (actual + 2 anteriores) y setea el mes/año actual
+    // por defecto. Se ejecuta una sola vez (guard _cvInited) para no pisar la
+    // selección del admin en recargas posteriores.
+    let _cvInited = false;
+    function _cvInitFilters() {
+      if (_cvInited) return;
+      const anioSel = document.getElementById('cv-filter-anio');
+      const mesSel  = document.getElementById('cv-filter-mes');
+      if (!anioSel || !mesSel) return;
+      const now  = new Date();
+      const yNow = now.getFullYear();
+      anioSel.innerHTML = [yNow, yNow - 1, yNow - 2]
+        .map(y => `<option value="${y}">${y}</option>`).join('');
+      anioSel.value = String(yNow);
+      mesSel.value  = String(now.getMonth() + 1).padStart(2, '0');
+      _cvInited = true;
+    }
+
     async function loadCoachesVentas() {
       const tbody = document.getElementById('tbody-coach-ventas');
       tbody.innerHTML = `<tr><td colspan="3" class="empty-td">Cargando...</td></tr>`;
 
-      // get_coaches (SECURITY DEFINER) para obtener nombres sin problemas de RLS
+      // Inicializa los selectores (mes/año actual por default) la primera vez.
+      _cvInitFilters();
+      const mes  = document.getElementById('cv-filter-mes')?.value  || '';
+      const anio = document.getElementById('cv-filter-anio')?.value || '';
+      const ym   = (anio && mes) ? `${anio}-${mes}` : '';   // 'YYYY-MM'
+
+      // Config (NO son datos de ventas): coaches + coach_courses con comisión y título.
+      // get_coaches (SECURITY DEFINER) evita problemas de RLS con los nombres.
       const { data: coaches } = await sb.rpc('get_coaches');
-      // coach_courses con precio y comisión (admin puede leer todo en coach_courses)
       const { data: cc } = await sb
         .from('coach_courses')
         .select('coach_id, course_id, commission_pct, courses(title, price_ars)');
-      // ventas pagadas
-      const { data: uc } = await sb
-        .from('user_courses')
-        .select('course_id, amount_paid')
-        .eq('payment_status', 'paid');
 
       if (!cc?.length) {
         tbody.innerHTML = `<tr><td colspan="3" class="empty-td">No hay coaches con cursos asignados.</td></tr>`;
         return;
       }
 
-      // Ventas e ingresos por course_id
-      const salesMap = {};
-      (uc || []).forEach(r => {
-        if (!salesMap[r.course_id]) salesMap[r.course_id] = { count: 0, total: 0 };
-        salesMap[r.course_id].count++;
-        salesMap[r.course_id].total += Number(r.amount_paid || 0);
-      });
+      // Ventas del mes seleccionado desde _ventas (YA en memoria — sin query nueva).
+      // Se agrupan por course_title porque la RPC get_ventas no expone course_id (X.26).
+      const salesByTitle = {};
+      _ventas
+        .filter(v => v.enrolled_at && (!ym || v.enrolled_at.slice(0, 7) === ym))
+        .forEach(v => {
+          const key = v.course_title || '';
+          if (!salesByTitle[key]) salesByTitle[key] = { count: 0, total: 0 };
+          salesByTitle[key].count++;
+          salesByTitle[key].total += Number(v.amount_paid || 0);
+        });
 
       // Mapa id→nombre de coaches (desde get_coaches)
       const coachNameMap = {};
       (coaches || []).forEach(c => { coachNameMap[c.id] = c.full_name; });
 
-      // Agrupar por coach
+      // Agrupar por coach. Ganancia = ingreso del curso (mes filtrado) × comisión%.
       const byCoach = {};
       cc.forEach(row => {
-        const cid = row.coach_id;
+        const cid   = row.coach_id;
+        const title = row.courses?.title || '—';
         if (!byCoach[cid]) byCoach[cid] = { name: coachNameMap[cid] || `Coach ${cid.slice(0,8)}…`, rows: [] };
-        const s        = salesMap[row.course_id] || { count: 0, total: 0 };
+        const s        = salesByTitle[title] || { count: 0, total: 0 };
         const ganancia = s.total * (Number(row.commission_pct) || 0) / 100;
-        byCoach[cid].rows.push({ course: row.courses?.title || '—', ventas: s.count, ganancia });
+        byCoach[cid].rows.push({ course: title, ventas: s.count, ganancia });
       });
 
       // Acordeón colapsable por coach (Sesión 53) — reusa CSS .coach-courses-row / .coach-courses-subtable

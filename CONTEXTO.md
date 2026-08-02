@@ -3957,3 +3957,76 @@ Así los registros huérfanos se ignoran silenciosamente y el resto de los curso
 **Archivos modificados:** `dashboard.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Referencia — Guía de estilo: Portada de Reel HB Lab
+
+> Guía de diseño para las portadas de reels de la página (formato vertical 9:16). Guardada para reutilizar en futuras portadas. No es código del proyecto — es referencia de diseño.
+
+**Lienzo:** 1080 × 1920 px (9:16). Padding general: 82px arriba/abajo, 78px laterales.
+
+### Colores (hex)
+
+- Fondo base: `#0e1626` (navy) — también `#0c121e` en el degradé inferior
+- Verde lima (acento principal): `#c5f43a`
+- Violeta (acento secundario): `#9d6bff`
+- Texto blanco: `#f5f7f5`
+- Glow verde: `rgba(150,196,40,0.20)` · Glow violeta: `rgba(139,92,246,0.26)`
+- Grilla: líneas `rgba(255,255,255,0.05)`, celda 96×96px
+- Overlay oscuro regulable: `rgba(12,18,30, 0.35→0.65)`
+- Bordes: círculo logo `rgba(255,255,255,0.28)`; línea del pie `rgba(255,255,255,0.14)`; borde píldora `rgba(197,244,58,0.6)`
+
+### Tipografías (Google Fonts)
+
+- **Archivo** — titular y wordmark. Titular: peso 900, `118px`, line-height `0.95`, MAYÚSCULAS, letter-spacing `-0.01em`. "HB": 900 / `34px`.
+- **Playfair Display Italic** — la palabra "lab" (violeta): `26px`.
+- **Space Mono** — etiquetas y URL. Píldora subtítulo: 700 / `20px` / tracking `0.28em`. Tag "HB LAB · REELS": `20px` / `0.32em`. URL pie: 700 / `24px`.
+
+### Posiciones y estructura (de arriba a abajo)
+
+1. **Header** (fila entre extremos): logo ADN (círculo 66px, borde 2px) + wordmark a la izq; tag mono a la der.
+2. **Zona central**: bloque anclado abajo (`justify-content:flex-end`) con padding-bottom 180px para dejar el título en el tercio inferior. Píldora del subtítulo (padding 12×26px, radio 999px, punto lima 11px) → título grande debajo (margen 40px entre ambos).
+3. **Pie** (línea superior 1.5px, padding-top 34px): mini-logo + "HB lab" a la izq; URL en lima a la der.
+
+### Fondo (foto)
+
+- `object-fit:cover`, `object-position:32% 40%`
+- Filtro: `grayscale(0.85) contrast(1.05) brightness(0.62)`
+- Capas encima: degradé vertical navy + dos glows radiales (verde arriba-der, violeta abajo-izq) + grilla + overlay plano.
+
+---
+
+## Etapa X.97 — Filtro de mes/año en "Ventas por coach" (admin Tab Gestión)
+
+La sección "Ventas por coach" (`loadCoachesVentas`) mostraba ganancias **totales acumuladas** (sin filtro de fecha). Ahora tiene un filtro de mes/año como la tabla de ventas detallada, y muestra por defecto el **mes actual**.
+
+### admin.html — UI
+
+Arriba de la tabla "Ventas por coach" se agregaron:
+- `<select id="cv-filter-mes">` con los 12 meses en español (value `01`–`12`).
+- `<select id="cv-filter-anio">` poblado por JS con el año actual + los 2 anteriores.
+- `<button id="cv-btn-load" class="btn-secondary" onclick="loadCoachesVentas()">Ver</button>`.
+
+Helper `_cvInitFilters()` (guard `_cvInited`, corre una sola vez) puebla el selector de año y setea mes/año actual por default sin pisar la selección del admin en recargas.
+
+### admin.html — lógica
+
+`loadCoachesVentas()` **ya no hace la query a `user_courses`**: ahora las ventas salen de **`_ventas`** (el array cacheado en memoria por `loadVentas`, sin query nueva). Flujo:
+1. Lee `cv-filter-mes` + `cv-filter-anio` → arma `ym = 'YYYY-MM'`.
+2. Filtra `_ventas` por `enrolled_at.slice(0,7) === ym`.
+3. Agrupa los ingresos por `course_title` (la RPC `get_ventas` no expone `course_id`, X.26) sumando `amount_paid`.
+4. Se sigue consultando `get_coaches` + `coach_courses` (config: nombres, comisión, título por curso — no son datos de ventas).
+5. **El cálculo de ganancia no cambia**: `ganancia = ingreso_del_curso_en_el_mes × commission_pct / 100`. El join coach↔curso ahora matchea por título.
+
+### Orden de carga
+
+`loadCoachesVentas` dependía de `_ventas`, que se pobla en `loadVentas`. Como antes ambos corrían en paralelo (`Promise.all`), se reordenó `loadGestion`: primero el `Promise.all` (que incluye `loadVentas`) y **después** `await loadCoachesVentas()`. El botón "Ver" lo llama directo (con `_ventas` ya cargado).
+
+### Notas
+
+- Coaches cuyos cursos no tuvieron ventas en el mes elegido muestran `0 ventas · $0` (esperado).
+- Igual que antes, la suma de `amount_paid` mezcla monedas (ARS/USD) — comportamiento preexistente, no se tocó.
+- Es solo `admin.html` (frontend estático) → no requiere re-deploy de Supabase.
+
+**Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
