@@ -6684,6 +6684,17 @@
       document.getElementById('vc-mat-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    // Etapa X.98 — mensaje de error de subida a Storage. Un 413 (archivo demasiado
+    // grande) → aviso de tamaño; el resto → el mensaje genérico del error.
+    function _uploadErrMessage(err) {
+      const code = String(err?.statusCode || err?.status || '');
+      const raw  = String(err?.message || err?.error || err || 'error desconocido');
+      if (code === '413' || /\b413\b|payload too large|maximum allowed size|exceeded the maximum/i.test(raw)) {
+        return 'El archivo es demasiado grande. Máximo permitido: 50MB.';
+      }
+      return 'Error al subir el PDF: ' + raw;
+    }
+
     async function vcSaveMaterial() {
       if (!_vcCourse) return;
 
@@ -6707,9 +6718,14 @@
           btn.textContent = 'Subiendo PDF...';
           const safeName = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
           const path     = `${_vcCourse.id}/${Date.now()}-${safeName}.pdf`;
-          const { error: upErr } = await sb.storage.from('course-materials').upload(path, file, { cacheControl: '3600', upsert: false });
-          if (upErr) {
-            vcShowMatMsg('Error al subir PDF: ' + upErr.message, true);
+          try {
+            const { error: upErr } = await sb.storage.from('course-materials').upload(path, file, { cacheControl: '3600', upsert: false });
+            if (upErr) throw upErr;
+          } catch (upErr) {
+            // Etapa X.98 — un 413 puede volver como { error } o como excepción lanzada
+            // por supabase-js; capturamos ambos para que el botón no quede en
+            // "Subiendo PDF..." para siempre.
+            vcShowMatMsg(_uploadErrMessage(upErr), true);
             btn.disabled = false; btn.textContent = _vcEditingMatId ? 'Actualizar material' : 'Guardar material';
             return;
           }

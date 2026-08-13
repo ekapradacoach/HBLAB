@@ -2076,6 +2076,17 @@ function clearMaterialForm() {
   editingMaterialUrl = '';
 }
 
+// Etapa X.98 — mensaje de error de subida a Storage. Un 413 (archivo demasiado
+// grande) → aviso de tamaño; el resto → el mensaje genérico del error.
+function _uploadErrMessage(err) {
+  const code = String(err?.statusCode || err?.status || '');
+  const raw  = String(err?.message || err?.error || err || 'error desconocido');
+  if (code === '413' || /\b413\b|payload too large|maximum allowed size|exceeded the maximum/i.test(raw)) {
+    return 'El archivo es demasiado grande. Máximo permitido: 50MB.';
+  }
+  return 'Error al subir el PDF: ' + raw;
+}
+
 async function saveMaterial() {
   const courseId = currentCourseId;
   if (!courseId) { showToast('Seleccioná un curso primero.', true); return; }
@@ -2157,12 +2168,15 @@ async function saveMaterial() {
       const safeName = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
       const path     = `${courseId}/${Date.now()}-${safeName}.pdf`;
 
-      const { error: uploadErr } = await sb.storage
-        .from('course-materials')
-        .upload(path, file, { cacheControl: '3600', upsert: false });
-
-      if (uploadErr) {
-        showToast('Error al subir el PDF: ' + uploadErr.message, true);
+      try {
+        const { error: uploadErr } = await sb.storage
+          .from('course-materials')
+          .upload(path, file, { cacheControl: '3600', upsert: false });
+        if (uploadErr) throw uploadErr;
+      } catch (uploadErr) {
+        // Etapa X.98 — captura tanto { error } como excepción lanzada (p.ej. 413)
+        // para que el botón no quede colgado en "Subiendo PDF...".
+        showToast(_uploadErrMessage(uploadErr), true);
         btn.disabled = false; btn.textContent = 'Guardar material';
         return;
       }

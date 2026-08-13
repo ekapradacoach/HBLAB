@@ -4030,3 +4030,27 @@ Helper `_cvInitFilters()` (guard `_cvInited`, corre una sola vez) puebla el sele
 **Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.98 — Manejo de error al subir PDF de materiales (413 / botón colgado)
+
+Bug: al subir un PDF de material desde admin (`vcSaveMaterial`) o coach (`saveMaterial`), si el upload a Storage fallaba —típicamente un **413 (archivo demasiado grande**, el bucket `course-materials` tiene `file_size_limit = 50MiB`)— el botón quedaba en **"Subiendo PDF..." para siempre** y no se mostraba ningún error.
+
+### Causa
+
+Ambas funciones ya tenían un guard `if (upErr) { ... }` sobre el valor de retorno del `.upload()`, pero un 413 de Storage suele volver de supabase-js como **excepción lanzada** (promesa rechazada), no como `{ error }`. Al no haber `try/catch`, el `await` tiraba y el guard nunca corría → el botón nunca se reseteaba y el error nunca se mostraba.
+
+### Fix
+
+- **Helper `_uploadErrMessage(err)`** agregado en `admin.html` y `coach.html` (una copia por archivo — sitio estático sin módulos): detecta 413 mirando `err.statusCode`/`err.status` y el texto del mensaje (`413`, `payload too large`, `maximum allowed size`, `exceeded the maximum`) → devuelve **"El archivo es demasiado grande. Máximo permitido: 50MB."**; en cualquier otro caso devuelve `"Error al subir el PDF: " + mensaje` (mensaje genérico del error).
+- **`vcSaveMaterial` (admin.html)** y **`saveMaterial` (coach.html)**: el `.upload()` de un solo PDF ahora está envuelto en `try/catch`. Se hace `if (upErr) throw upErr;` dentro del `try`, y el `catch` maneja **tanto el error retornado como la excepción lanzada**: resetea el botón a su texto original ("Guardar material" / "Actualizar material") y muestra el mensaje. admin usa el mensaje inline en rojo (`vcShowMatMsg(..., true)`); coach usa su canal estándar de error, el toast rojo (`showToast(..., true)`).
+
+### Fuera de alcance (sin cambios)
+
+- El flujo **multi-PDF** de `saveMaterial` (coach) ya tenía `try/catch/finally` que resetea el botón, así que no sufría el bug del botón colgado — no se tocó (muestra "Error: ..." genérico; el mensaje friendly de 413 aplica solo a la subida de un archivo).
+- `saveLessonMaterial` (coach, materiales por lección) no estaba en el pedido — no se tocó.
+
+Es solo `admin.html` + `coach.html` (frontend estático) → **no requiere re-deploy de Supabase**.
+
+**Archivos modificados:** `admin.html`, `coach.html`, `CONTEXTO.md`.
+
+---
