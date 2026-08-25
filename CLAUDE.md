@@ -1329,6 +1329,8 @@ Helper `getEmbedUrl(url)` que detecta:
 
 Aplicado en los 2 iframes del player de `curso.html`: `renderVideos()` (modo videos sueltos + live recordings) y `renderModulesView()` (modo módulos). `toYoutubeEmbed` se mantiene porque sigue usado en admin al guardar (matcher estricto solo-YouTube).
 
+> **Etapa X.99 — actualización**: `getEmbedUrl` (en `curso.html`, `coach.html` y `admin.html`) ahora devuelve YouTube como **`https://www.youtube-nocookie.com/embed/ID`** (modo privacy-enhanced: menos bloqueos en mobile/webview IG/TikTok, sin cookies de terceros). Los 3 iframes de `curso.html` (`renderVideos`, `renderModulesView`, `renderLiveMainPanel`) suman `referrerpolicy="strict-origin-when-cross-origin"` + `web-share` en `allow` (`allowfullscreen` ya estaba). `toYoutubeEmbed` sigue guardando `youtube.com/embed/ID`; no importa porque `getEmbedUrl` reconvierte al dominio nocookie en tiempo de render.
+
 ---
 
 ## Etapa X.41 — getEffectivePrice en index.html (cards de landing)

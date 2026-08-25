@@ -2568,7 +2568,8 @@ function getEmbedUrl(url) {
   if (!url) return '';
   const s = String(url).trim();
   const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  // Etapa X.99 — youtube-nocookie (privacy-enhanced): menos bloqueos en mobile/webview.
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
   const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (gd) return `https://drive.google.com/file/d/${gd[1]}/preview`;
   return s;

@@ -873,7 +873,8 @@
     }
 
     // Etapa X.40 — Convierte cualquier URL de video al formato embed adecuado.
-    // - YouTube (watch?v= / youtu.be/ID / embed/) → https://www.youtube.com/embed/ID
+    // - YouTube (watch?v= / youtu.be/ID / embed/) → https://www.youtube-nocookie.com/embed/ID
+    //   (Etapa X.99 — modo privacy-enhanced: menos bloqueos en mobile/webview, sin cookies de terceros)
     // - Google Drive (drive.google.com/file/d/ID/...) → https://drive.google.com/file/d/ID/preview
     // - Cualquier otro link → se devuelve tal cual (el <iframe> intenta cargarlo;
     //   si el server remoto envía X-Frame-Options DENY, el embed quedará en blanco).
@@ -883,7 +884,7 @@
 
       // YouTube (watch / youtu.be / embed) — reutiliza el matcher de toYoutubeEmbed
       const yt = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+      if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
 
       // Google Drive — /file/d/ID/{view|preview|edit}?...
       const gd = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -964,7 +965,8 @@
             <div class="video-wrapper">
               <iframe src="${escHtml(getEmbedUrl(video.src))}"
                 frameborder="0" allowfullscreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share">
               </iframe>
             </div>
             <div class="video-card-footer">
@@ -1297,7 +1299,8 @@
           <div class="video-wrapper">
             <iframe src="${escHtml(getEmbedUrl(live.recording_url))}"
                     frameborder="0" allowfullscreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
           </div>
           <div class="modules-active-actions">${btnHtml}</div>`;
       }
@@ -1603,7 +1606,8 @@
         const videoBlockHtml = hasVideo
           ? `<div class="video-wrapper">
                <iframe src="${escHtml(getEmbedUrl(active.video_url || ''))}" frameborder="0" allowfullscreen
-                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                       referrerpolicy="strict-origin-when-cross-origin"
+                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
              </div>`
           : `<div class="no-video-placeholder">📄 Esta lección aún no tiene video cargado.</div>`;
         mainHtml = active ? `

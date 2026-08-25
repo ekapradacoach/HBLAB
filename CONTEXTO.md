@@ -4054,3 +4054,26 @@ Es solo `admin.html` + `coach.html` (frontend estático) → **no requiere re-de
 **Archivos modificados:** `admin.html`, `coach.html`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.99 — Embeds de YouTube: dominio nocookie + atributos mobile
+
+Los videos de YouTube se embebían con `https://www.youtube.com/embed/ID`. En algunos navegadores mobile y webviews (Instagram/TikTok) eso sufre bloqueos por cookies de terceros y el player queda en negro. Se cambió al modo **privacy-enhanced** de YouTube (`youtube-nocookie.com`), que no requiere cookies de terceros y tiene menos bloqueos, y se reforzaron los atributos del `<iframe>` para compatibilidad mobile.
+
+### Cambios
+
+- **`getEmbedUrl(url)`** en `curso.html`, `coach.html` y `admin.html`: el embed de YouTube pasa de `https://www.youtube.com/embed/${id}` a **`https://www.youtube-nocookie.com/embed/${id}`**. (El problema es solo del lado alumno —`curso.html`— pero se aplicó en los tres por consistencia.) Google Drive y el fallback no cambian.
+- **Iframes de `curso.html`** — en los 3 sitios que renderizan video (`renderVideos`, `renderModulesView`, `renderLiveMainPanel`) se agregó:
+  - `referrerpolicy="strict-origin-when-cross-origin"`
+  - `web-share` al `allow` (quedó `accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share`)
+  - `allowfullscreen` ya estaba presente en los tres.
+
+### No tocado
+
+- **`toYoutubeEmbed(url)`** (normalizador write-time usado al guardar en admin/coach) sigue devolviendo `youtube.com/embed/ID`. No hace falta cambiarlo: `getEmbedUrl` corre en tiempo de render y su regex matchea `youtube.com/embed/`, así que convierte cualquier URL guardada al dominio nocookie de todos modos.
+- Los iframes del lado admin/coach (previews) no se modificaron — el problema de compatibilidad es del lado alumno; solo se unificó el dominio en su `getEmbedUrl`.
+
+Es frontend estático → **no requiere re-deploy de Supabase**.
+
+**Archivos modificados:** `curso.html`, `coach.html`, `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
