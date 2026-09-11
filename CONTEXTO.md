@@ -4138,3 +4138,32 @@ Como el email se puede mandar a cualquier curso, en uno normal (no "Próximament
 **Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.102 — Deduplicación del Purchase de Meta (event_id + Conversions API server-side) — 2026-09-11
+
+> Nota: los comentarios dentro del código de estos dos archivos rotulan el cambio como "Etapa X.92". Acá se documenta como X.102 para no colisionar con la X.92 ya existente (fix de precio en checkout); es el mismo cambio.
+
+### Problema
+
+El píxel de Meta contaba entre **4 y 6 eventos de compra por cada venta real** (medido: **53 eventos contra 8 ventas reales** entre el 14/8 y el 10/9 de 2026, ~6x). Causa: el evento `Purchase` se disparaba en **cada carga** de `checkout-success.html` sin identificador único, así que un refresh o una segunda visita sumaban compras fantasma. Eso inflaba el "costo por resultado" en el Administrador de anuncios y llevaba a decisiones de presupuesto sobre datos falsos.
+
+Además, las compras de quien **no volvía** a `checkout-success.html` después de pagar —o pagaba por transferencia/pago diferido y caía en `checkout-pending.html`— **nunca se registraban**.
+
+### Solución (dos frentes, mismo `event_id`)
+
+1. **`checkout-success.html` — dedup del lado navegador**: nueva función `getTxId()` que lee el id de transacción de la query string (`payment_id` / `collection_id` de Mercado Pago, o `token` de PayPal). El `fbq('track', 'Purchase', {...})` ahora recibe un 4º argumento `{ eventID: 'hblab_purchase_' + txId }`. Si la persona refresca, el `eventID` es el mismo y Meta descarta el duplicado.
+
+2. **`supabase/functions/process-payment/index.ts` — Conversions API (server-side)**: dos funciones nuevas antes del `serve(...)` — `sha256Hex()` (hash SHA-256 en hex) y `sendMetaPurchase()` (POST a `graph.facebook.com/<version>/<pixel_id>/events` con el `Purchase`, `user_data` hasheado —email/nombre/apellido en SHA-256, el email en claro nunca sale— y `custom_data` con value+currency). Se llama **inmediatamente después del upsert de `user_courses`** (paso 5.1), envuelta en su **propio try/catch**: si falta config, Meta responde error o se cae la red, loguea y sigue — **nunca bloquea ni revierte un pago ni hace que MP reintente**. Usa el **mismo `event_id`** que el navegador (`'hblab_purchase_' + external_ref`, que en MP es `String(payment.id)` = el `payment_id` de la back_url, y en PayPal el order id = el `token`). Meta recibe el par navegador+servidor y cuenta **una sola** compra; además cubre las compras donde el usuario no vuelve al sitio.
+
+### ⚠️ Requiere configuración server-side (sin esto, el evento server-side no se envía)
+
+Configurar los **secrets en Supabase → Edge Functions → Manage secrets**:
+- `META_PIXEL_ID` → `1909301979776543`
+- `META_CAPI_TOKEN` → token de Conversions API (Administrador de eventos de Meta)
+- `META_API_VERSION` → opcional, default `v25.0`
+
+Y **re-deployar manualmente `process-payment`** (Dashboard → Edge Functions → process-payment → Code → pegar el archivo → Deploy updates). Sin los secrets, `sendMetaPurchase` loguea "sin configurar → skip" y no manda nada (el pago sigue funcionando igual). `checkout-success.html` es frontend estático (GitHub Pages) y ya toma efecto con el push.
+
+**Archivos modificados:** `checkout-success.html`, `supabase/functions/process-payment/index.ts`, `CONTEXTO.md`.
+
+---

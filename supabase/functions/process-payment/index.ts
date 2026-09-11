@@ -555,6 +555,90 @@ async function verifySignature(req: Request, rawBody: string): Promise<{ ok: boo
 // No queda ningún parser standalone; todo vive en la sección 2a/2b del handler.
 
 // ─────────────────────────────────────────────────────────────
+// META CONVERSIONS API — Purchase desde el servidor (Etapa X.92)
+// ─────────────────────────────────────────────────────────────
+// POR QUÉ EXISTE ESTO:
+// El Purchase del navegador (checkout-success.html) tiene dos agujeros:
+//   1. Sólo existe si el comprador VUELVE a esa página después de pagar.
+//      El que paga y cierra la pestaña es invisible para Meta.
+//   2. Los pagos que no se aprueban al instante (transferencia, efectivo,
+//      débito con demora) caen en checkout-pending.html y nunca vuelven.
+// Desde acá el evento se manda SIEMPRE, en el momento exacto en que el pago
+// quedó aprobado y el acceso al curso quedó registrado.
+//
+// DEDUPLICACIÓN: se usa el mismo `event_id` que arma el navegador
+// (`hblab_purchase_<id de transacción>`). Meta recibe los dos, detecta que
+// son el mismo evento y cuenta UNA compra. Si cambiás el prefijo acá,
+// cambialo también en checkout-success.html.
+//
+// CONFIGURACIÓN (secrets de Supabase):
+//   META_PIXEL_ID     → 1909301979776543
+//   META_CAPI_TOKEN   → token de Conversions API (Administrador de eventos)
+//   META_API_VERSION  → opcional. Default v25.0
+//
+// SEGURIDAD DEL FLUJO: si falta config, si Meta responde error o si se cae
+// la red, esta función loguea y sigue. NUNCA bloquea ni revierte un pago.
+// ─────────────────────────────────────────────────────────────
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendMetaPurchase(opts: {
+  email: string;
+  amount: number;
+  currency: string;
+  eventId: string;
+  nombre?: string;
+  apellido?: string;
+}): Promise<void> {
+  const PIXEL_ID = Deno.env.get('META_PIXEL_ID');
+  const TOKEN    = Deno.env.get('META_CAPI_TOKEN');
+  if (!PIXEL_ID || !TOKEN) {
+    console.log('[Meta CAPI] META_PIXEL_ID o META_CAPI_TOKEN sin configurar → skip');
+    return;
+  }
+  const VERSION = Deno.env.get('META_API_VERSION') || 'v25.0';
+
+  // Meta exige los datos personales hasheados en SHA-256, en minúscula y sin
+  // espacios. El email en claro nunca sale de acá.
+  const user_data: Record<string, unknown> = {
+    em: [await sha256Hex(opts.email.trim().toLowerCase())],
+  };
+  if (opts.nombre)   user_data.fn = [await sha256Hex(opts.nombre.trim().toLowerCase())];
+  if (opts.apellido) user_data.ln = [await sha256Hex(opts.apellido.trim().toLowerCase())];
+
+  const body = {
+    data: [{
+      event_name:       'Purchase',
+      event_time:       Math.floor(Date.now() / 1000),
+      event_id:         opts.eventId,
+      action_source:    'website',
+      event_source_url: 'https://hblabarg.com/checkout-success.html',
+      user_data,
+      custom_data: {
+        value:    Number(opts.amount) || 0,
+        currency: (opts.currency || 'ARS').toUpperCase(),
+      },
+    }],
+  };
+
+  const url = `https://graph.facebook.com/${VERSION}/${PIXEL_ID}/events` +
+              `?access_token=${encodeURIComponent(TOKEN)}`;
+  const r   = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  const txt = await r.text();
+  if (!r.ok) {
+    console.warn(`[Meta CAPI] HTTP ${r.status} → ${txt}`);
+  } else {
+    console.log(`[Meta CAPI] Purchase OK (event_id=${opts.eventId}) → ${txt}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // HANDLER
 // ─────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
@@ -972,6 +1056,32 @@ serve(async (req: Request) => {
   if (ucErr) {
     console.error('process-payment: upsert user_courses falló:', ucErr, { external_ref });
     return errOut('No se pudo registrar el acceso al curso: ' + ucErr.message, 500);
+  }
+
+  // ── 5.1) Etapa X.92 — Purchase a Meta por Conversions API ───────────────
+  // Se dispara EXACTAMENTE acá y no antes: este es el punto donde el pago ya
+  // está aprobado Y el acceso al curso quedó registrado en user_courses. Si
+  // se disparara antes, podríamos reportarle a Meta ventas que después fallan.
+  //
+  // El event_id tiene que coincidir con el que arma checkout-success.html
+  // (prefijo 'hblab_purchase_' + id de transacción). En MP, `external_ref` ya
+  // es String(payment.id), que es el mismo valor que MP devuelve como
+  // `payment_id` en la back_url. En PayPal es el order id, que el navegador
+  // recibe como `token`. Por eso deduplican.
+  //
+  // Va envuelto en try/catch propio: un problema con Meta jamás puede tumbar
+  // el webhook de pago ni hacer que MP reintente.
+  try {
+    await sendMetaPurchase({
+      email,
+      amount,
+      currency,
+      eventId: 'hblab_purchase_' + String(external_ref || ''),
+      nombre,
+      apellido,
+    });
+  } catch (e: any) {
+    console.warn('[Meta CAPI] excepción ignorada (el pago sigue OK):', e?.message || e);
   }
 
   // ── 5.5) Etapa X.27 — Email de CONFIRMACIÓN para alumnos existentes ──────
