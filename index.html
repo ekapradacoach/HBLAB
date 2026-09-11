@@ -672,6 +672,50 @@
     }
     .btn-waitlist:hover { border-color: var(--violet-light); color: var(--violet-light); }
 
+    /* ─── Modal lista de espera (Etapa X.100) ──────── */
+    .wl-overlay {
+      display: none; position: fixed; inset: 0; z-index: 2000;
+      background: rgba(12,18,30,0.72); backdrop-filter: blur(3px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .wl-overlay.open { display: flex; }
+    .wl-modal {
+      position: relative; width: 100%; max-width: 420px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 32px 28px 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .wl-close {
+      position: absolute; top: 14px; right: 16px;
+      background: transparent; border: none; color: var(--gray-text);
+      font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 4px;
+    }
+    .wl-close:hover { color: var(--white); }
+    .wl-title { font-size: 1.3rem; font-weight: 800; color: var(--white); margin-bottom: 4px; letter-spacing: -0.01em; }
+    .wl-course { font-size: 0.9rem; color: var(--lime); font-weight: 600; margin-bottom: 22px; }
+    .wl-field { margin-bottom: 16px; }
+    .wl-label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--gray-text); margin-bottom: 6px; }
+    .wl-input {
+      width: 100%; box-sizing: border-box;
+      background: var(--navy); border: 1px solid var(--card-border);
+      border-radius: 8px; padding: 12px 14px;
+      color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .wl-input:focus { outline: none; border-color: var(--lime); box-shadow: 0 0 0 3px rgba(200,230,0,0.12); }
+    .wl-msg { font-size: 0.84rem; margin-bottom: 14px; min-height: 0; line-height: 1.45; }
+    .wl-msg.show { min-height: 20px; }
+    .wl-msg.ok  { color: var(--lime); }
+    .wl-msg.bad { color: #f87171; }
+    .wl-submit {
+      width: 100%; background: var(--lime); color: var(--navy);
+      border: none; padding: 14px 20px; border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+    }
+    .wl-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(200,230,0,0.3); }
+    .wl-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
     /* ─── Footer ───────────────────────────────────── */
     footer {
       background: #151f2b;
@@ -1337,6 +1381,25 @@
     </div>
   </footer>
 
+  <!-- ─── Modal: Lista de espera (Etapa X.100) ───────── -->
+  <div class="wl-overlay" id="modal-waitlist" onclick="if(event.target===this)closeWaitlist()">
+    <div class="wl-modal">
+      <button class="wl-close" onclick="closeWaitlist()" aria-label="Cerrar">✕</button>
+      <h3 class="wl-title">Anotate en la lista de espera</h3>
+      <p class="wl-course" id="wl-course-name"></p>
+      <div class="wl-field">
+        <label class="wl-label" for="wl-nombre">Nombre</label>
+        <input class="wl-input" id="wl-nombre" type="text" placeholder="Tu nombre" autocomplete="name" />
+      </div>
+      <div class="wl-field">
+        <label class="wl-label" for="wl-email">Email</label>
+        <input class="wl-input" id="wl-email" type="email" placeholder="tu@email.com" autocomplete="email" />
+      </div>
+      <div class="wl-msg" id="wl-msg"></div>
+      <button class="wl-submit" id="wl-submit" onclick="submitWaitlist()">Anotarme</button>
+    </div>
+  </div>
+
   <!-- ─── JS ────────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
@@ -1840,7 +1903,7 @@
             <div class="price-block">
               <span style="font-size:1.1rem;font-weight:700;color:#718096">${c.price_ars ? `$${Number(c.price_ars).toLocaleString('es-AR')} ARS` : 'Precio por confirmar'}</span>
             </div>
-            <button class="btn-waitlist" onclick="alert('¡Gracias! Te anotamos en la lista de espera.')">Anotarme en lista de espera</button>
+            <button class="btn-waitlist" data-t="${escHtml(c.title)}" onclick="openWaitlist('${c.id}', this.dataset.t)">Anotarme en lista de espera</button>
           </div>
         </div>`).join('');
 
@@ -1852,6 +1915,75 @@
         el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
         observer.observe(el);
       });
+    }
+
+    // ── Lista de espera (Etapa X.100) ─────────────────
+    let _wlCourseId = null;
+
+    function openWaitlist(courseId, courseName) {
+      _wlCourseId = courseId;
+      document.getElementById('wl-course-name').textContent = courseName || '';
+      document.getElementById('wl-nombre').value = '';
+      document.getElementById('wl-email').value  = '';
+      const msg = document.getElementById('wl-msg');
+      msg.className = 'wl-msg'; msg.textContent = '';
+      const btn = document.getElementById('wl-submit');
+      btn.disabled = false; btn.textContent = 'Anotarme';
+      document.getElementById('modal-waitlist').classList.add('open');
+      setTimeout(() => document.getElementById('wl-nombre').focus(), 50);
+    }
+
+    function closeWaitlist() {
+      document.getElementById('modal-waitlist').classList.remove('open');
+      _wlCourseId = null;
+    }
+
+    function _wlShowMsg(text, type) {
+      const msg = document.getElementById('wl-msg');
+      msg.className = `wl-msg show ${type}`;
+      msg.textContent = text;
+    }
+
+    async function submitWaitlist() {
+      if (!_wlCourseId) return;
+      const nombre = document.getElementById('wl-nombre').value.trim();
+      const email  = document.getElementById('wl-email').value.trim();
+
+      if (!nombre)  { _wlShowMsg('Ingresá tu nombre.', 'bad'); return; }
+      if (!email)   { _wlShowMsg('Ingresá tu email.', 'bad'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        _wlShowMsg('Ese email no parece válido. Revisalo.', 'bad');
+        return;
+      }
+
+      const btn = document.getElementById('wl-submit');
+      btn.disabled = true; btn.textContent = 'Anotando...';
+      const msg = document.getElementById('wl-msg');
+      msg.className = 'wl-msg'; msg.textContent = '';
+
+      const { error } = await sb.from('waitlist').insert({
+        course_id: _wlCourseId,
+        email:     email.toLowerCase(),
+        nombre,
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          _wlShowMsg('¡Ya estás anotada/o en esta lista! Te vamos a avisar. 😊', 'ok');
+          btn.textContent = 'Anotarme';
+          btn.disabled = false;
+          return;
+        }
+        _wlShowMsg('Ups, algo falló. Probá de nuevo en un momento.', 'bad');
+        console.error('waitlist insert:', error);
+        btn.disabled = false; btn.textContent = 'Anotarme';
+        return;
+      }
+
+      _wlShowMsg('✅ ¡Listo! Te vamos a avisar cuando el curso esté disponible.', 'ok');
+      btn.textContent = '¡Anotada/o!';
+      // El botón queda deshabilitado tras el éxito; el modal se cierra solo.
+      setTimeout(closeWaitlist, 2200);
     }
   </script>
 

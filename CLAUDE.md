@@ -77,6 +77,7 @@ hblab/
 | `public.notifications` | `id, user_id, title, body, link, read, created_at` — RLS: usuario lee/actualiza solo lo propio; INSERT abierto a authenticated (Sesión 58) |
 | `public.site_config` | `key TEXT PK, value TEXT` — keys actuales: `global_announcement`, `countdown` (value es JSON serializado). RLS: admin escribe; público lee (Sesión 54) |
 | `public.coupons` | `id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active` — códigos promocionales que el alumno aplica en checkout.html. RLS: admin gestiona todo; público lee solo `is_active=true`. `discount_fixed` está expresado en ARS (no aplica para pagos USD). `course_id IS NULL` → cupón válido para todos los cursos. `max_uses=0` → ilimitado. (Etapa X.12) |
+| `public.waitlist` | `id, course_id (FK courses ON DELETE CASCADE), email, nombre, created_at` — lista de espera de cursos `is_coming_soon`. `UNIQUE(course_id, email)` (duplicado = código `23505`). RLS: INSERT público (anon), SELECT solo admin. Se anota desde el modal de index.html; el admin la ve/exporta desde Tab Cursos. (Etapa X.100) |
 
 **Nueva columna en `courses`**: `display_order INT DEFAULT 0` — controla el orden de aparición en la landing (`index.html` ordena por `display_order ASC, created_at ASC`). Se gestiona desde admin → Tab Landing → sección "Orden de cursos" (Sesión 54).
 
@@ -1330,6 +1331,16 @@ Helper `getEmbedUrl(url)` que detecta:
 Aplicado en los 2 iframes del player de `curso.html`: `renderVideos()` (modo videos sueltos + live recordings) y `renderModulesView()` (modo módulos). `toYoutubeEmbed` se mantiene porque sigue usado en admin al guardar (matcher estricto solo-YouTube).
 
 > **Etapa X.99 — actualización**: `getEmbedUrl` (en `curso.html`, `coach.html` y `admin.html`) ahora devuelve YouTube como **`https://www.youtube-nocookie.com/embed/ID`** (modo privacy-enhanced: menos bloqueos en mobile/webview IG/TikTok, sin cookies de terceros). Los 3 iframes de `curso.html` (`renderVideos`, `renderModulesView`, `renderLiveMainPanel`) suman `referrerpolicy="strict-origin-when-cross-origin"` + `web-share` en `allow` (`allowfullscreen` ya estaba). `toYoutubeEmbed` sigue guardando `youtube.com/embed/ID`; no importa porque `getEmbedUrl` reconvierte al dominio nocookie en tiempo de render.
+
+---
+
+## Etapa X.100 — Lista de espera (cursos "Próximamente")
+
+Tabla `public.waitlist` (ver "Base de datos"). Reemplaza el `alert()` falso del botón "Anotarme en lista de espera" de los cursos `is_coming_soon`.
+
+- **index.html**: modal `#modal-waitlist` (dark/lime, `openWaitlist`/`submitWaitlist`). Valida nombre + email (formato) → `sb.from('waitlist').insert({ course_id, email, nombre })`. Duplicado (`error.code === '23505'`) → "¡Ya estás anotada/o!" amigable; éxito → "✅ ¡Listo! Te vamos a avisar...". El botón de `loadProximos` pasa el `c.id` + título (`data-t`).
+- **admin.html** Tab Cursos: item "👥 Lista de espera" en el ⋮ **solo si `is_coming_soon`** → modal `#modal-waitlist-admin` con tabla (Nombre/Email/Fecha) ordenada por `created_at` desc, contador y "⬇ Exportar CSV" (`openWaitlistModal` + `exportWaitlistCSV`, espejo del flujo de inscritos de talleres).
+- Frontend estático → no requiere re-deploy de Supabase (la tabla + RLS ya están en la BD).
 
 ---
 

@@ -4077,3 +4077,46 @@ Es frontend estático → **no requiere re-deploy de Supabase**.
 **Archivos modificados:** `curso.html`, `coach.html`, `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.100 — Lista de espera para cursos "Próximamente"
+
+Los cursos con `is_coming_soon = true` en la landing tenían un botón "Anotarme en lista de espera" que solo mostraba un `alert()` falso. Ahora captura los datos en una tabla real y el admin puede verlos/exportarlos.
+
+### SQL (ya ejecutado por el usuario — referencia)
+
+```sql
+CREATE TABLE public.waitlist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  nombre TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(course_id, email)
+);
+-- RLS: INSERT público (anon), SELECT solo admin.
+```
+
+Columnas: `id, course_id, email, nombre, created_at`. `UNIQUE(course_id, email)` → un email no se anota dos veces al mismo curso (violación = código Postgres `23505`).
+
+### index.html — modal `#modal-waitlist` (lado público)
+
+- El botón de cada `.soon-card` (`loadProximos`) pasa de `alert(...)` a `onclick="openWaitlist('${c.id}', this.dataset.t)"` (título en `data-t` escapado).
+- **Modal** dark/lime consistente con la paleta (`--card-bg`, `--lime`, `--navy`): título "Anotate en la lista de espera" + nombre del curso (en lime) + input Nombre + input Email + botón "Anotarme". Overlay con blur, cierre por ✕ o click afuera.
+- **`submitWaitlist()`**: valida nombre no vacío, email no vacío y formato (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`). `sb.from('waitlist').insert({ course_id, email: email.toLowerCase(), nombre })`.
+  - Éxito → "✅ ¡Listo! Te vamos a avisar cuando el curso esté disponible." (lime) + auto-cierra a los 2.2s.
+  - Error `code === '23505'` (duplicado) → "¡Ya estás anotada/o en esta lista! Te vamos a avisar. 😊" (tono amigable, en lime, reactiva el botón).
+  - Otro error → mensaje genérico rojo + `console.error`.
+- Globals: `_wlCourseId`. Funciones: `openWaitlist`, `closeWaitlist`, `_wlShowMsg`, `submitWaitlist`.
+
+### admin.html — Tab Cursos, modal de lista de espera
+
+- Nuevo item **"👥 Lista de espera"** en el action menu ⋮ **solo para cursos con `is_coming_soon`** (`loadCursos` ya trae `is_coming_soon`). Espejo del "👥 Inscritos" de talleres.
+- **Modal `#modal-waitlist-admin`**: tabla (Nombre · Email · Fecha de registro) ordenada por `created_at` desc, contador total ("N anotados") y botón "⬇ Exportar CSV".
+- **`openWaitlistModal(courseId, title)`**: `sb.from('waitlist').select('nombre, email, created_at').eq('course_id', courseId).order('created_at', { ascending:false })` (admin puede leer por RLS). Fecha formateada con `_fmtWaitlistDate` (`toLocaleString('es-AR', {día, mes, año, hora, minuto})`).
+- **`exportWaitlistCSV()`**: mismo patrón que `exportInscritosCSV` (BOM UTF-8 para Excel, comillas escapadas, nombre `lista-espera-{slug-título}.csv`), columnas Nombre/Email/Fecha de registro.
+
+Es frontend estático → **no requiere re-deploy de Supabase** (la tabla + RLS ya están en la BD).
+
+**Archivos modificados:** `index.html`, `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

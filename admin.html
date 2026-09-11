@@ -2158,6 +2158,21 @@
     </div>
   </div>
 
+  <!-- Modal: Lista de espera de un curso próximamente (Etapa X.100) -->
+  <div class="modal-overlay" id="modal-waitlist-admin">
+    <div class="modal">
+      <h3 class="modal-title">Lista de espera</h3>
+      <p class="modal-sub"><strong id="wl-admin-curso-nombre"></strong> · <span id="wl-admin-count">0</span> anotados</p>
+      <div id="wl-admin-list" style="max-height:50vh;overflow-y:auto;margin:10px 0;">
+        <div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Cargando…</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('modal-waitlist-admin')">Cerrar</button>
+        <button class="btn-primary" id="btn-export-waitlist" onclick="exportWaitlistCSV()">⬇ Exportar CSV</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Enviar email a los alumnos del curso (Etapa X.93) -->
   <div class="modal-overlay" id="modal-email-curso">
     <div class="modal">
@@ -3535,6 +3550,79 @@
       URL.revokeObjectURL(url);
     }
 
+    // ── Lista de espera (Etapa X.100) — cursos con is_coming_soon ──
+    let _waitlistRows  = [];   // [{ nombre, email, created_at }]
+    let _waitlistTitle = '';
+
+    function _fmtWaitlistDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function openWaitlistModal(courseId, title) {
+      _waitlistTitle = title || '';
+      _waitlistRows = [];
+      document.getElementById('wl-admin-curso-nombre').textContent = _waitlistTitle;
+      document.getElementById('wl-admin-count').textContent = '0';
+      const listEl = document.getElementById('wl-admin-list');
+      listEl.innerHTML = `<div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Cargando…</div>`;
+      openModal('modal-waitlist-admin');
+
+      const { data, error } = await sb
+        .from('waitlist')
+        .select('nombre, email, created_at')
+        .eq('course_id', courseId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        listEl.innerHTML = `<div style="padding:14px 0;color:var(--red,#ef4444);font-size:0.85rem;">Error al cargar la lista: ${escHtmlAdmin(error.message)}</div>`;
+        return;
+      }
+
+      _waitlistRows = (data || []).map(r => ({
+        nombre:     r.nombre || '—',
+        email:      r.email || '—',
+        created_at: r.created_at || '',
+      }));
+
+      document.getElementById('wl-admin-count').textContent = String(_waitlistRows.length);
+      if (!_waitlistRows.length) {
+        listEl.innerHTML = `<div style="padding:14px 0;color:var(--gray-text);font-size:0.85rem;font-style:italic;">Todavía no hay anotados en la lista de espera de este curso.</div>`;
+        return;
+      }
+      listEl.innerHTML = `
+        <table class="data-table" style="width:100%">
+          <thead><tr><th>Nombre</th><th>Email</th><th>Fecha de registro</th></tr></thead>
+          <tbody>${_waitlistRows.map(r => `
+            <tr>
+              <td>${escHtmlAdmin(r.nombre)}</td>
+              <td style="color:var(--gray-text)">${escHtmlAdmin(r.email)}</td>
+              <td style="color:var(--gray-text);white-space:nowrap;">${escHtmlAdmin(_fmtWaitlistDate(r.created_at))}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function exportWaitlistCSV() {
+      if (!_waitlistRows.length) return;
+      const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const lines = [['Nombre', 'Email', 'Fecha de registro'].map(esc).join(',')];
+      _waitlistRows.forEach(r => lines.push([esc(r.nombre), esc(r.email), esc(_fmtWaitlistDate(r.created_at))].join(',')));
+      const csv = '﻿' + lines.join('\r\n');   // BOM para Excel
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (_waitlistTitle || 'curso').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      a.href = url;
+      a.download = `lista-espera-${safeName || 'curso'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     function escHtmlAdmin(s) {
       return String(s == null ? '' : s)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -3730,6 +3818,7 @@
                   <button class="action-menu-item" data-c='${safeC}' onclick='editCurso(JSON.parse(this.dataset.c)); closeAllRowMenus();'>✏️ Editar</button>
                   <button class="action-menu-item" onclick="openEmailCursoModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">📧 Enviar email</button>
                   ${c.is_workshop ? `<button class="action-menu-item" onclick="openInscritosModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">👥 Inscritos</button>` : ''}
+                  ${c.is_coming_soon ? `<button class="action-menu-item" onclick="openWaitlistModal('${c.id}', this.dataset.t); closeAllRowMenus();" data-t="${escapeAttr(c.title)}">👥 Lista de espera</button>` : ''}
                   <button class="action-menu-item" onclick="toggleCursoActive('${c.id}', ${c.is_active}); closeAllRowMenus();">
                     ${c.is_active ? '❌ Desactivar' : '✅ Activar'}
                   </button>
