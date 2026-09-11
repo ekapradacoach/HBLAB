@@ -4120,3 +4120,21 @@ Es frontend estático → **no requiere re-deploy de Supabase** (la tabla + RLS 
 **Archivos modificados:** `index.html`, `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.101 — "Enviar email": incluir a los de lista de espera como destinatarios
+
+Extiende el modal "📧 Enviar email" (Etapa X.93). Antes solo cargaba compradores (`user_courses` paid+active); para un curso "Próximamente" no hay compradores, así que la lista de destinatarios quedaba vacía. Ahora también carga a los anotados en `waitlist` de ese curso, seleccionables individualmente.
+
+### Cambios en `openEmailCursoModal` (admin.html)
+
+- Además de los compradores (`buyers`, `source: 'curso'`), se hace `sb.from('waitlist').select('nombre, email').eq('course_id', courseId)` → `waitlist` (`source: 'espera'`, `full_name = nombre`).
+- Se mergean `[...buyers, ...waitlist]` con **dedupe por email** (compradores tienen prioridad si alguien está en ambos) + orden alfabético; todos `checked: true` por defecto (el admin puede des-seleccionar cualquiera).
+- **`ecRenderRecipients`**: los de lista de espera muestran un badge violeta **"⏳ Lista de espera"** al lado del nombre para distinguirlos de los compradores.
+- Textos actualizados: "Cargando destinatarios…" y, si no hay ninguno, "No hay destinatarios (ni alumnos con acceso, ni anotados en lista de espera)."
+- El envío no cambia: `sendCourseEmail()` ya mapea `{ email, name: full_name }` → el `nombre` del anotado va como saludo del email. Sigue con throttle + reintento 429 de la Edge Function `send-course-email` (X.93/X.98).
+
+Como el email se puede mandar a cualquier curso, en uno normal (no "Próximamente") la `waitlist` suele venir vacía y no cambia nada. Sigue siendo frontend estático → **no requiere re-deploy de Supabase**.
+
+**Archivos modificados:** `admin.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---

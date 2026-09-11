@@ -3646,7 +3646,7 @@
       document.getElementById('ec-total-count').textContent    = '0';
       document.getElementById('ec-selected-count').textContent = '0';
       const listEl = document.getElementById('ec-recipients-list');
-      listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;">Cargando alumnos…</span>`;
+      listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;">Cargando destinatarios…</span>`;
       ecUpdateSendBtn();
       openModal('modal-email-curso');
 
@@ -3680,10 +3680,28 @@
           .map(r => ({ user_id: null, full_name: r.full_name || '—', email: (r.email || '').trim() }));
       }
 
-      // Dedupe por email + orden alfabético + checked por defecto
+      // Compradores (paid + active)
+      const buyers = (rows || []).map(r => ({ ...r, source: 'curso' }));
+
+      // Lista de espera (cursos "Próximamente", Etapa X.101) — también seleccionables.
+      let waitlist = [];
+      const { data: wl, error: wlErr } = await sb
+        .from('waitlist')
+        .select('nombre, email')
+        .eq('course_id', courseId);
+      if (!wlErr) {
+        waitlist = (wl || []).map(r => ({
+          user_id:   null,
+          full_name: r.nombre || '—',
+          email:     (r.email || '').trim(),
+          source:    'espera',
+        }));
+      }
+
+      // Merge (compradores primero) + dedupe por email + orden alfabético + checked por defecto.
       const seen = new Set();
-      _ecRecipients = (rows || [])
-        .filter(r => { const k = r.email.toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+      _ecRecipients = [...buyers, ...waitlist]
+        .filter(r => { const k = (r.email || '').toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
         .sort((a, b) => a.full_name.localeCompare(b.full_name))
         .map(r => ({ ...r, checked: true }));
 
@@ -3694,18 +3712,23 @@
     function ecRenderRecipients() {
       const listEl = document.getElementById('ec-recipients-list');
       if (!_ecRecipients.length) {
-        listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;font-style:italic;">No hay alumnos con acceso activo a este curso.</span>`;
+        listEl.innerHTML = `<span style="color:var(--gray-text);font-size:0.85rem;font-style:italic;">No hay destinatarios (ni alumnos con acceso, ni anotados en lista de espera).</span>`;
         ecUpdateCounts(); ecUpdateSendBtn();
         return;
       }
-      listEl.innerHTML = _ecRecipients.map((r, i) => `
+      listEl.innerHTML = _ecRecipients.map((r, i) => {
+        const badge = r.source === 'espera'
+          ? ` <span style="display:inline-block;font-size:0.62rem;font-weight:700;letter-spacing:0.02em;color:var(--violet-light);background:rgba(123,79,190,0.15);border:1px solid rgba(123,79,190,0.35);border-radius:100px;padding:1px 7px;margin-left:6px;vertical-align:middle;">⏳ Lista de espera</span>`
+          : '';
+        return `
         <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--card-border);cursor:pointer;">
           <input type="checkbox" ${r.checked ? 'checked' : ''} onchange="ecToggle(${i}, this.checked)" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;" />
           <span style="flex:1;min-width:0;overflow:hidden;">
-            <span style="display:block;font-weight:600;font-size:0.85rem;">${escHtmlAdmin(r.full_name)}</span>
+            <span style="display:block;font-weight:600;font-size:0.85rem;">${escHtmlAdmin(r.full_name)}${badge}</span>
             <span style="display:block;color:var(--gray-text);font-size:0.76rem;overflow:hidden;text-overflow:ellipsis;">${escHtmlAdmin(r.email)}</span>
           </span>
-        </label>`).join('');
+        </label>`;
+      }).join('');
       ecUpdateCounts(); ecUpdateSendBtn();
     }
 

@@ -1342,6 +1342,8 @@ Tabla `public.waitlist` (ver "Base de datos"). Reemplaza el `alert()` falso del 
 - **admin.html** Tab Cursos: item "👥 Lista de espera" en el ⋮ **solo si `is_coming_soon`** → modal `#modal-waitlist-admin` con tabla (Nombre/Email/Fecha) ordenada por `created_at` desc, contador y "⬇ Exportar CSV" (`openWaitlistModal` + `exportWaitlistCSV`, espejo del flujo de inscritos de talleres).
 - Frontend estático → no requiere re-deploy de Supabase (la tabla + RLS ya están en la BD).
 
+**Etapa X.101 — "Enviar email" incluye lista de espera**: `openEmailCursoModal` (Etapa X.93) ahora también carga los de `waitlist` del curso además de los compradores, mergeados con dedupe por email, cada uno seleccionable (checkbox) y con badge violeta "⏳ Lista de espera". Útil para avisarles a los anotados de un curso "Próximamente" cuando se lanza. El envío no cambia (mismo `send-course-email`).
+
 ---
 
 ## Etapa X.41 — getEffectivePrice en index.html (cards de landing)
