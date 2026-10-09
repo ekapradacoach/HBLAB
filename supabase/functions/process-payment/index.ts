@@ -38,6 +38,39 @@ const json = (body: unknown, status = 200) =>
   });
 const errOut = (msg: string, status = 400) => json({ error: msg }, status);
 
+// Etapa X.103 — "hoy" en hora argentina (YYYY-MM-DD). El runtime de Edge
+// Functions corre en UTC: con la fecha UTC, un precio programado entraba en
+// vigencia a las 21:00 del día anterior (hora AR) y el server rechazaba con
+// 'Monto inválido' lo que checkout.html todavía cobraba al precio previo.
+function todayInBuenosAires(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+// Precio vigente según courses.scheduled_prices — misma lógica que el
+// getEffectivePrice del front (Etapas X.39/X.41/X.92): tolera string JSON,
+// toma la entrada más reciente con date <= hoy y, si no hay ninguna, el base.
+function getEffectivePrice(course: any): { price_ars: number; price_usd: number } {
+  const base = {
+    price_ars: Number(course?.price_ars || 0),
+    price_usd: Number(course?.price_usd || 0),
+  };
+  let arr = course?.scheduled_prices;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { arr = []; }
+  }
+  if (!Array.isArray(arr) || !arr.length) return base;
+  const today = todayInBuenosAires();
+  const vigentes = arr
+    .filter((r: any) => r && r.date && String(r.date) <= today)
+    .sort((a: any, b: any) => String(b.date).localeCompare(String(a.date)));
+  if (!vigentes.length) return base;
+  const w = vigentes[0];
+  return {
+    price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+    price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // Etapa X.19 — Helpers para creación de usuario + email de bienvenida
 // ─────────────────────────────────────────────────────────────
@@ -675,45 +708,68 @@ serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: course, error: courseErr } = await sbEarly
-      .from('courses').select('id').eq('slug', slug).eq('is_active', true).maybeSingle();
+      .from('courses').select('id, price_ars, price_usd, scheduled_prices').eq('slug', slug).eq('is_active', true).maybeSingle();
     if (courseErr || !course) {
       console.error('process-payment[coupon]: course lookup falló', courseErr);
       return errOut('Curso no encontrado o inactivo.', 404);
     }
     // Validar que el cupón exista, esté activo, y resulte en amount=0 contra el course
     // (defensivo — evita que un cliente malicioso envíe amount:0 con un cupón inválido).
-    const couponCode = (earlyParsed.coupon_code || '').toUpperCase();
-    if (couponCode) {
-      const { data: cps } = await sbEarly
-        .from('coupons')
-        .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
-        .eq('code', couponCode)
-        .eq('is_active', true);
-      const coupon = (cps || [])[0];
-      if (!coupon) return errOut('Cupón inválido o inactivo.', 400);
-      if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
-        return errOut('Cupón vencido.', 400);
-      }
-      if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
-        return errOut('Cupón agotado.', 400);
-      }
-      if (coupon.course_id && coupon.course_id !== course.id) {
-        return errOut('Cupón no aplicable a este curso.', 400);
-      }
-      // (En este flujo NO recalculamos el precio: si el cliente reportó amount=0 y
-      // el cupón existe + está vigente, asumimos que el descuento legítimamente lo dejó
-      // en 0. La validación exhaustiva del cálculo queda como follow-up — process-payment
-      // necesitaría también el price_ars del course, que ya tenemos en `course`. Por ahora
-      // confiamos en la chequeada simétrica que ya hace checkout.html antes de llamar.)
+    // Etapa X.103 — el cupón es OBLIGATORIO: antes, sin coupon_code se salteaba toda
+    // la validación y se otorgaba el curso gratis a cualquiera que llamara al endpoint.
+    const couponCode = (earlyParsed.coupon_code || '').trim().toUpperCase();
+    if (!couponCode) return errOut('Cupón requerido.', 400);
+    // checkout.html manda currency:'ARS' siempre en esta rama. Si el curso no tiene
+    // precio en la moneda declarada (ej. curso solo USD), validamos contra la otra:
+    // si no, un base $0 haría pasar cualquier cupón como "100% off".
+    const eff = getEffectivePrice(course);
+    const declaredCurrency = (earlyParsed.currency || 'ARS').toUpperCase() === 'USD' ? 'USD' : 'ARS';
+    const couponCurrency = (declaredCurrency === 'USD' ? eff.price_usd : eff.price_ars) > 0
+      ? declaredCurrency
+      : (declaredCurrency === 'USD' ? 'ARS' : 'USD');
+
+    const { data: cps } = await sbEarly
+      .from('coupons')
+      .select('id, code, discount_pct, discount_fixed, valid_until, max_uses, uses_count, course_id, is_active')
+      .eq('code', couponCode)
+      .eq('is_active', true);
+    const coupon = (cps || [])[0];
+    if (!coupon) return errOut('Cupón inválido o inactivo.', 400);
+    if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+      return errOut('Cupón vencido.', 400);
+    }
+    if (coupon.max_uses && coupon.max_uses > 0 && (coupon.uses_count || 0) >= coupon.max_uses) {
+      return errOut('Cupón agotado.', 400);
+    }
+    if (coupon.course_id && coupon.course_id !== course.id) {
+      return errOut('Cupón no aplicable a este curso.', 400);
+    }
+    // Etapa X.103 — el descuento tiene que dejar en $0 el precio VIGENTE
+    // (scheduled_prices, misma lógica que checkout.html y create-preference /
+    // create-paypal-order). Sin esto, cualquier cupón válido (ej. 20%) daba acceso gratis.
+    const basePrice = couponCurrency === 'USD' ? eff.price_usd : eff.price_ars;
+    let finalPrice = basePrice;
+    if (coupon.discount_pct && Number(coupon.discount_pct) > 0) {
+      finalPrice = basePrice * (1 - Number(coupon.discount_pct) / 100);
+    } else if (coupon.discount_fixed && Number(coupon.discount_fixed) > 0) {
+      // discount_fixed está expresado en ARS — no aplica a pagos USD (igual que el front).
+      if (couponCurrency === 'USD') return errOut('Este cupón solo aplica a pagos en ARS.', 400);
+      finalPrice = basePrice - Number(coupon.discount_fixed);
+    }
+    finalPrice = Math.max(0, Math.round(finalPrice * 100) / 100);
+    // Misma tolerancia que la validación de monto de MP (±1 ARS) / PayPal (±0.01 USD).
+    if (finalPrice > (couponCurrency === 'USD' ? 0.01 : 1)) {
+      console.warn('process-payment[coupon]: el cupón no cubre el total', { couponCode, basePrice, finalPrice, couponCurrency });
+      return errOut('El cupón no cubre el total del curso.', 400);
     }
 
     normalized = {
       email:          (earlyParsed.email || '').trim().toLowerCase(),
       course_id:      course.id,
       amount:         0,
-      currency:       (earlyParsed.currency || 'ARS').toUpperCase(),
+      currency:       couponCurrency,
       payment_method: 'coupon',
-      external_ref:   couponCode ? `coupon:${couponCode}` : 'coupon:none',
+      external_ref:   `coupon:${couponCode}`,
       nombre:         (earlyParsed.nombre   || '').trim() || undefined,
       apellido:       (earlyParsed.apellido || '').trim() || undefined,
     };

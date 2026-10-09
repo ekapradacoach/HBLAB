@@ -430,8 +430,10 @@
       }
       if (!Array.isArray(arr) || !arr.length) return base;
 
-      const now   = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      // Etapa X.103 — "hoy" en hora argentina, igual que create-preference /
+      // create-paypal-order: con la hora local, un comprador en otro huso
+      // mandaba un precio distinto al que valida el server ('Monto inválido').
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 
       const vigentes = arr
         .filter(r => r && r.date && r.date <= today)

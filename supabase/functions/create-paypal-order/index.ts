@@ -36,24 +36,37 @@ const json = (body: unknown, status = 200) =>
   });
 const errOut = (msg: string, status = 400) => json({ error: msg }, status);
 
-// Etapa X.92 — precio USD vigente según courses.scheduled_prices (espejo del
-// helper getEffectivePrice del front). Si no hay scheduled_prices vigente →
-// devuelve price_usd base. Tolerante con string JSON.
-function getEffectivePriceUsd(course: any): number {
-  const base = Number(course?.price_usd || 0);
+// Etapa X.103 — "hoy" en hora argentina (YYYY-MM-DD). El runtime de Edge
+// Functions corre en UTC: con la fecha UTC, un precio programado entraba en
+// vigencia a las 21:00 del día anterior (hora AR) y el server rechazaba con
+// 'Monto inválido' lo que checkout.html todavía cobraba al precio previo.
+function todayInBuenosAires(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+// Precio vigente según courses.scheduled_prices — misma lógica que el
+// getEffectivePrice del front (Etapas X.39/X.41/X.92): tolera string JSON,
+// toma la entrada más reciente con date <= hoy y, si no hay ninguna, el base.
+function getEffectivePrice(course: any): { price_ars: number; price_usd: number } {
+  const base = {
+    price_ars: Number(course?.price_ars || 0),
+    price_usd: Number(course?.price_usd || 0),
+  };
   let arr = course?.scheduled_prices;
   if (typeof arr === 'string') {
     try { arr = JSON.parse(arr); } catch { arr = []; }
   }
   if (!Array.isArray(arr) || !arr.length) return base;
-  const now   = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const today = todayInBuenosAires();
   const vigentes = arr
-    .filter((r: any) => r && r.date && r.date <= today)
+    .filter((r: any) => r && r.date && String(r.date) <= today)
     .sort((a: any, b: any) => String(b.date).localeCompare(String(a.date)));
   if (!vigentes.length) return base;
   const w = vigentes[0];
-  return Number(w.price_usd != null ? w.price_usd : base) || base;
+  return {
+    price_ars: Number(w.price_ars != null ? w.price_ars : base.price_ars) || base.price_ars,
+    price_usd: Number(w.price_usd != null ? w.price_usd : base.price_usd) || base.price_usd,
+  };
 }
 
 // ── PayPal env / API base ─────────────────────────────────
@@ -163,7 +176,7 @@ serve(async (req: Request) => {
   });
   const { data: course, error: courseErr } = await sbAdmin
     .from('courses')
-    .select('id, price_usd, scheduled_prices, is_active')
+    .select('id, price_ars, price_usd, scheduled_prices, is_active')
     .eq('id', courseId)
     .eq('is_active', true)
     .maybeSingle();
@@ -173,10 +186,9 @@ serve(async (req: Request) => {
   }
   if (!course) return errOut('Curso no encontrado o inactivo.', 404);
 
-  // Etapa X.92 — precio base = precio USD vigente (scheduled_prices), para que
-  // coincida con lo que checkout.html cobra. Sin esto, un scheduled_price activo
-  // haría fallar la validación de monto ('Monto inválido') en PayPal.
-  const basePriceUsd = getEffectivePriceUsd(course);
+  // Etapa X.92/X.103 — precio base = precio USD vigente (scheduled_prices, fecha
+  // en hora argentina), para que coincida con lo que checkout.html cobra.
+  const basePriceUsd = getEffectivePrice(course).price_usd;
   if (!(basePriceUsd > 0)) {
     console.error('create-paypal-order: course sin price_usd válido', course);
     return errOut('Curso sin precio USD configurado.', 500);

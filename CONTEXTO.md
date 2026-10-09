@@ -4167,3 +4167,48 @@ Y **re-deployar manualmente `process-payment`** (Dashboard → Edge Functions �
 **Archivos modificados:** `checkout-success.html`, `supabase/functions/process-payment/index.ts`, `CONTEXTO.md`.
 
 ---
+
+## Etapa X.103 — Precio vigente server-side en hora argentina + hardening del cupón 100% — 2026-10-05
+
+### Síntoma
+
+Pagos de cursos con un `scheduled_price` activo respondían **400 "Monto inválido."** en `create-preference` / `create-paypal-order`. `checkout.html` (Etapa X.92) ya manda el precio vigente; si el server compara contra otro precio, rechaza.
+
+### Diagnóstico
+
+1. **Deploy de X.92 pendiente (causa más probable del 400 permanente)**: el repo ya tenía desde X.92 (`a311962`) el SELECT con `scheduled_prices` y el precio vigente como `basePrice` en las dos funciones, pero ese cambio requería re-deploy manual. Si en producción sigue corriendo la versión X.30/X.75, valida contra `price_ars`/`price_usd` base y rechaza todo pago con precio programado vigente.
+2. **Fecha en UTC (bug real en el código)**: los helpers server-side calculaban "hoy" con `getFullYear/getMonth/getDate` del runtime, que corre en **UTC**. El día de un cambio de precio, entre las 21:00 y las 24:00 hora argentina, el server ya tomaba el precio nuevo mientras checkout (hora local AR) cobraba el anterior → 400. Mismo desfasaje para compradores del front en otro huso horario.
+
+### Cambios
+
+**`create-preference` y `create-paypal-order`:**
+- `getEffectivePriceArs` / `getEffectivePriceUsd` reemplazados por un único **`getEffectivePrice(course)`** con la misma lógica que el del front (X.39/X.41): tolera string JSON, filtra `date <= hoy`, ordena DESC, toma la primera; sin entradas vigentes → precio base. Devuelve `{ price_ars, price_usd }`.
+- Helper nuevo **`todayInBuenosAires()`** = `new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })` → `YYYY-MM-DD` en hora argentina.
+- SELECT del curso: `price_ars, price_usd, scheduled_prices`.
+- `basePrice = getEffectivePrice(course).price_ars` (MP) / `.price_usd` (PayPal). El cálculo de `expectedPrice` (descuento de cupón incluido), la comparación con tolerancia (±1 ARS / ±0.01 USD) y el uso de `expectedPrice` server-side como monto de la preference/order **no cambian**.
+
+**`checkout.html`:** su `getEffectivePrice` calcula "hoy" también en zona Buenos Aires (antes hora local del navegador). Front y server ahora eligen siempre el mismo precio. `index.html`, `venta-curso.html` y `taller.html` siguen con hora local (solo display; no participan de la validación).
+
+**`process-payment` — rama cupón 100% (`provider: 'coupon'`):** revisada a pedido. No usaba el precio base… porque no calculaba ningún precio. Eso dejaba dos agujeros, corregidos:
+- **Sin `coupon_code` se salteaba toda la validación y se otorgaba el curso** → ahora `Cupón requerido.` (400).
+- **No verificaba que el cupón dejara el total en $0** (un cupón del 20% alcanzaba) → ahora calcula el precio vigente con `getEffectivePrice` (copia del helper en el archivo), aplica el descuento (`discount_fixed` rechazado en USD) y exige total ≤ 1 ARS / 0.01 USD; si no → `El cupón no cubre el total del curso.` (400).
+- checkout manda `currency:'ARS'` fijo en esta rama; si el curso no tiene precio en la moneda declarada (curso solo USD) se valida contra la otra, para que un base $0 no haga pasar cualquier cupón.
+
+Cada función tiene su propia copia del helper: el deploy es por el editor del Dashboard, así que no hay imports compartidos entre funciones.
+
+### Verificación
+
+- Helper probado con Node en el borde del día: `2026-10-04T02:30Z` (23:30 AR del 3/10) → hoy `2026-10-03`, sigue el precio anterior; `2026-10-04T03:00Z` (00:00 AR) → toma el nuevo. Fallback a base con `scheduled_prices` vacío/null y con `price_usd: null` en la entrada.
+- Las 3 funciones transpilan sin errores de sintaxis y cierran con `});`.
+
+### ⚠️ Deploy pendiente (manual, Dashboard → Edge Functions → Code → pegar → Deploy updates)
+
+- **`create-preference`**
+- **`create-paypal-order`**
+- **`process-payment`**
+
+Sin secrets nuevos. `checkout.html` es estático (GitHub Pages) y toma efecto con el push.
+
+**Archivos modificados:** `supabase/functions/create-preference/index.ts`, `supabase/functions/create-paypal-order/index.ts`, `supabase/functions/process-payment/index.ts`, `checkout.html`, `CLAUDE.md`, `CONTEXTO.md`.
+
+---
