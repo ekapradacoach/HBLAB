@@ -3100,6 +3100,12 @@ Un **taller** es un `courses` row con `is_workshop = true`. Reusa toda la infra 
 
 ---
 
+## Contacto
+
+WhatsApp oficial: +54 9 11 5957-4043 (wa.me/5491159574043). Usado en el botón "Consultar disponibilidad" de la sección `#incompany` de `index.html`.
+
+---
+
 ## Usuarios registrados
 
 | Email | Rol |
