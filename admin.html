@@ -1744,40 +1744,89 @@
           </div>
         </div>
 
-        <!-- Etapa X.37 — Sincronizar netos reales con MP -->
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;">
-          <button type="button" class="btn-secondary" id="btn-sync-mp"
-                  onclick="syncMpPayments()"
-                  style="border:1px solid var(--lime);color:var(--lime);background:transparent;">
-            🔄 Sincronizar netos con MP
-          </button>
-          <span id="sync-mp-status" style="font-size:0.85rem;color:var(--gray-text);"></span>
-        </div>
+        <!-- Etapa X.104 — Resultado y liquidación (por mes o total) -->
+        <div class="sub-section">
+          <div class="panel-header" style="margin-bottom:16px">
+            <div>
+              <h3 class="sub-section-title">💵 Resultado y liquidación</h3>
+              <p class="panel-sub">Ventas − Mercado Pago − reembolsos − publicidad = neto a repartir. El coach cobra su % sobre ese neto.</p>
+            </div>
+            <select class="form-select" id="fin-periodo" onchange="renderFinanzas()" style="max-width:220px;">
+              <option value="">Total (todos los meses)</option>
+            </select>
+          </div>
 
-        <!-- Resultado neto -->
-        <div class="resultado-neto-card" id="resultado-neto-card" style="display:none">
-          <p class="resultado-neto-title">📊 Resultado neto — histórico acumulado (ARS)</p>
-          <div class="resultado-neto-row">
-            <span>Ingresos totales</span>
-            <span id="rn-ingresos">—</span>
+          <div class="resultado-neto-card" id="resultado-neto-card" style="display:none">
+            <p class="resultado-neto-title" id="rn-title">📊 Resultado — total (ARS)</p>
+            <div class="resultado-neto-row">
+              <span>Ventas brutas <small style="color:var(--gray-text)" id="rn-ventas-count"></small></span>
+              <span id="rn-ingresos">—</span>
+            </div>
+            <div class="resultado-neto-row deduccion">
+              <span>− Comisión Mercado Pago / PayPal (incluye impuestos)</span>
+              <span id="rn-mp">—</span>
+            </div>
+            <div class="resultado-neto-row deduccion">
+              <span>− Reembolsos</span>
+              <span id="rn-reemb">—</span>
+            </div>
+            <div class="resultado-neto-row deduccion">
+              <span>− Publicidad de los cursos</span>
+              <span id="rn-adspend">—</span>
+            </div>
+            <div class="resultado-neto-row" style="font-weight:700;">
+              <span>= Neto a repartir</span>
+              <span id="rn-repartir">—</span>
+            </div>
+            <div class="resultado-neto-row deduccion">
+              <span>− Pago a coaches</span>
+              <span id="rn-comisiones">—</span>
+            </div>
+            <div class="resultado-neto-row deduccion" id="rn-general-row" style="display:none">
+              <span>− Publicidad general (sin curso)</span>
+              <span id="rn-general">—</span>
+            </div>
+            <div class="resultado-neto-divider"></div>
+            <div class="resultado-neto-final">
+              <span>Ganancia HB Lab</span>
+              <span class="rn-total" id="rn-total">—</span>
+            </div>
+            <div class="resultado-neto-row" style="margin-top:10px;">
+              <span>ROI publicitario</span>
+              <span id="rn-roi">—</span>
+            </div>
+            <p id="rn-usd" style="display:none;margin:12px 0 0;font-size:0.82rem;color:var(--violet-light);"></p>
           </div>
-          <div class="resultado-neto-row deduccion">
-            <span>− Comisiones coaches</span>
-            <span id="rn-comisiones">—</span>
+
+          <h4 style="font-size:0.95rem;font-weight:700;margin:4px 0 10px;color:var(--white);">📅 Mes a mes (ARS)</h4>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Ventas</th>
+                  <th>Brutas</th>
+                  <th>− MP</th>
+                  <th>− Reembolsos</th>
+                  <th>− Publicidad</th>
+                  <th>− Coaches</th>
+                  <th>Ganancia HB Lab</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-fin-meses">
+                <tr><td colspan="8" class="empty-td">Cargando...</td></tr>
+              </tbody>
+            </table>
           </div>
-          <div class="resultado-neto-row deduccion">
-            <span>− Inversión publicitaria</span>
-            <span id="rn-adspend">—</span>
-          </div>
-          <!-- Etapa X.24 — ROI publicitario (ingresos - ad_spend) / ad_spend × 100 -->
-          <div class="resultado-neto-row">
-            <span>ROI publicitario</span>
-            <span id="rn-roi">—</span>
-          </div>
-          <div class="resultado-neto-divider"></div>
-          <div class="resultado-neto-final">
-            <span>Ganancia neta</span>
-            <span class="rn-total" id="rn-total">—</span>
+
+          <!-- Etapa X.37 — Recalcular netos (solo para pagos anteriores a X.104) -->
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 0;">
+            <button type="button" class="btn-secondary" id="btn-sync-mp"
+                    onclick="syncMpPayments()"
+                    style="border:1px solid var(--lime);color:var(--lime);background:transparent;">
+              🔄 Recalcular netos de MP (pagos anteriores)
+            </button>
+            <span id="sync-mp-status" style="font-size:0.85rem;color:var(--gray-text);">Los pagos nuevos ya entran con el neto de MP automáticamente.</span>
           </div>
         </div>
 
@@ -1790,7 +1839,7 @@
             </div>
           </div>
           <div class="chart-card">
-            <p class="chart-title">Ingresos por mes — últimos 6 meses (ARS)</p>
+            <p class="chart-title">Ventas vs. publicidad por mes — últimos 6 meses (ARS)</p>
             <div class="chart-wrap">
               <canvas id="chart-bar"></canvas>
             </div>
@@ -1801,8 +1850,8 @@
         <div class="sub-section">
           <div class="panel-header" style="margin-bottom:16px">
             <div>
-              <h3 class="sub-section-title">Ventas por coach</h3>
-              <p class="panel-sub">Ventas e ingresos generados por cada coach según sus cursos asignados.</p>
+              <h3 class="sub-section-title">Liquidación a coaches</h3>
+              <p class="panel-sub">Lo que hay que pagarle a cada coach en el mes: su % sobre el neto a repartir de cada curso (ventas − MP − reembolsos − publicidad).</p>
             </div>
           </div>
 
@@ -1833,8 +1882,8 @@
               <thead>
                 <tr>
                   <th>Coach / Curso</th>
-                  <th>Ventas</th>
-                  <th>Ganancia estimada</th>
+                  <th>Ventas · neto a repartir</th>
+                  <th>A pagar</th>
                 </tr>
               </thead>
               <tbody id="tbody-coach-ventas">
@@ -1856,7 +1905,7 @@
             <div class="form-group">
               <label class="form-label">Curso</label>
               <select class="form-select" id="ad-curso">
-                <option value="">— General —</option>
+                <option value="">— General (no se descuenta a coaches) —</option>
               </select>
             </div>
             <div class="form-group">
@@ -2381,6 +2430,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="supabase.js"></script>
   <script src="notifs.js"></script>
+  <script src="finanzas.js"></script>
   <script>
     // ── Estado global ───────────────────────────────
     let currentUser      = null;
@@ -4831,8 +4881,7 @@
         loadResultadoNeto(),
         loadVentas(),                 // Etapa X.15 — tabla de ventas detallada (puebla _ventas)
       ]);
-      // Etapa X.97 — depende de _ventas (filtro por mes), así que corre DESPUÉS de loadVentas.
-      await loadCoachesVentas();
+      // Etapa X.104 — loadResultadoNeto ya llama a loadCoachesVentas (usa _fin).
     }
 
     // ══════════════════════════════════════════════
@@ -5303,6 +5352,14 @@
         }
       });
 
+      // Etapa X.104 — publicidad mensual (por curso + general) en el mismo gráfico
+      const { data: adRaw } = await sb.from('ad_spend').select('amount_ars, spend_date');
+      months.forEach(m => { m.ad = 0; });
+      (adRaw || []).forEach(a => {
+        const m = months.find(m => m.key === String(a.spend_date || '').slice(0, 7));
+        if (m) m.ad += Number(a.amount_ars || 0);
+      });
+
       const barCtx = document.getElementById('chart-bar')?.getContext('2d');
       if (barCtx) {
         if (chartBar) chartBar.destroy();
@@ -5311,10 +5368,17 @@
           data: {
             labels: months.map(m => m.label),
             datasets: [{
-              label: 'Ingresos ARS',
+              label: 'Ventas ARS',
               data: months.map(m => m.total),
               backgroundColor: 'rgba(200,230,0,0.65)',
               borderColor: '#C8E600',
+              borderWidth: 1,
+              borderRadius: 5,
+            }, {
+              label: 'Publicidad ARS',
+              data: months.map(m => m.ad),
+              backgroundColor: 'rgba(252,129,129,0.55)',
+              borderColor: '#FC8181',
               borderWidth: 1,
               borderRadius: 5,
             }],
@@ -5322,7 +5386,7 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: true, position: 'bottom', labels: { color: '#94A3B8', font: { size: 11 }, boxWidth: 12 } } },
             scales: {
               x: { ticks: { color: '#94A3B8', font: { size: 11 } }, grid: { color: 'rgba(47,62,82,0.6)' } },
               y: {
@@ -5359,74 +5423,79 @@
     }
 
     async function loadCoachesVentas() {
+      // Etapa X.104 — liquidación a coaches desde el motor HBFin (_fin).
+      // Por curso: neto a repartir = ventas − MP − reembolsos − publicidad del curso.
+      // Pago al coach = max(0, neto a repartir) × commission_pct.
       const tbody = document.getElementById('tbody-coach-ventas');
+      if (!tbody) return;
       tbody.innerHTML = `<tr><td colspan="3" class="empty-td">Cargando...</td></tr>`;
 
-      // Inicializa los selectores (mes/año actual por default) la primera vez.
       _cvInitFilters();
       const mes  = document.getElementById('cv-filter-mes')?.value  || '';
       const anio = document.getElementById('cv-filter-anio')?.value || '';
-      const ym   = (anio && mes) ? `${anio}-${mes}` : '';   // 'YYYY-MM'
+      const ym   = (anio && mes) ? `${anio}-${mes}` : '';
 
-      // Config (NO son datos de ventas): coaches + coach_courses con comisión y título.
-      // get_coaches (SECURITY DEFINER) evita problemas de RLS con los nombres.
+      if (!_fin) await loadResultadoNeto({ skipCoaches: true });
+      if (!_fin) { tbody.innerHTML = `<tr><td colspan="3" class="empty-td">No se pudieron cargar los datos.</td></tr>`; return; }
+
       const { data: coaches } = await sb.rpc('get_coaches');
-      const { data: cc } = await sb
-        .from('coach_courses')
-        .select('coach_id, course_id, commission_pct, courses(title, price_ars)');
+      const coachNameMap = {};
+      (coaches || []).forEach(c => { coachNameMap[c.id] = c.full_name; });
 
-      if (!cc?.length) {
+      if (!_finCoachCourses.length) {
         tbody.innerHTML = `<tr><td colspan="3" class="empty-td">No hay coaches con cursos asignados.</td></tr>`;
         return;
       }
 
-      // Ventas del mes seleccionado desde _ventas (YA en memoria — sin query nueva).
-      // Se agrupan por course_title porque la RPC get_ventas no expone course_id (X.26).
-      const salesByTitle = {};
-      _ventas
-        .filter(v => v.enrolled_at && (!ym || v.enrolled_at.slice(0, 7) === ym))
-        .forEach(v => {
-          const key = v.course_title || '';
-          if (!salesByTitle[key]) salesByTitle[key] = { count: 0, total: 0 };
-          salesByTitle[key].count++;
-          salesByTitle[key].total += Number(v.amount_paid || 0);
-        });
+      const rowsMes = _fin.rows.filter(r => !ym || r.ym === ym);
+      const rowByCourse = {};
+      rowsMes.forEach(r => { rowByCourse[r.course_id] = r; });
 
-      // Mapa id→nombre de coaches (desde get_coaches)
-      const coachNameMap = {};
-      (coaches || []).forEach(c => { coachNameMap[c.id] = c.full_name; });
-
-      // Agrupar por coach. Ganancia = ingreso del curso (mes filtrado) × comisión%.
       const byCoach = {};
-      cc.forEach(row => {
-        const cid   = row.coach_id;
-        const title = row.courses?.title || '—';
+      _finCoachCourses.forEach(cc => {
+        const cid = cc.coach_id;
         if (!byCoach[cid]) byCoach[cid] = { name: coachNameMap[cid] || `Coach ${cid.slice(0,8)}…`, rows: [] };
-        const s        = salesByTitle[title] || { count: 0, total: 0 };
-        const ganancia = s.total * (Number(row.commission_pct) || 0) / 100;
-        byCoach[cid].rows.push({ course: title, ventas: s.count, ganancia });
+        const r    = rowByCourse[cc.course_id];
+        const mine = r?.coaches.find(x => x.coach_id === cid);
+        byCoach[cid].rows.push({
+          course:   _finCourseTitle(cc.course_id),
+          pct:      Number(cc.commission_pct || 0),
+          ventas:   r?.ventas || 0,
+          bruto:    r?.bruto_ars || 0,
+          mp:       r?.comision_ars || 0,
+          reemb:    r?.reemb_ars || 0,
+          ad:       r?.ad_ars || 0,
+          repartir: r?.repartir_ars || 0,
+          pago:     mine?.pago_ars || 0,
+          pagoUsd:  mine?.pago_usd || 0,
+        });
       });
 
-      // Acordeón colapsable por coach (Sesión 53) — reusa CSS .coach-courses-row / .coach-courses-subtable
-      // y la función `toggleCoursesRow(rowId, arrowEl)` ya definida para Tab Coaches.
+      const fmt0 = n => fmtARS(Math.round(n));
       tbody.innerHTML = Object.entries(byCoach).map(([cid, coach]) => {
-        const totalGanancia = coach.rows.reduce((s, r) => s + r.ganancia, 0);
-        const rowId         = `ventas-row-${cid}`;
-        const subRows       = coach.rows.map(r => `
+        const total    = coach.rows.reduce((s, r) => s + r.pago, 0);
+        const totalUsd = coach.rows.reduce((s, r) => s + r.pagoUsd, 0);
+        const rowId    = `ventas-row-${cid}`;
+        const subRows  = coach.rows.map(r => `
           <tr>
-            <td style="width:60%;color:var(--white)">${r.course}</td>
-            <td style="white-space:nowrap;color:var(--gray-text)">${r.ventas} venta${r.ventas !== 1 ? 's' : ''}</td>
-            <td style="white-space:nowrap"><strong style="color:var(--lime)">${fmtARS(r.ganancia)}</strong></td>
+            <td style="color:var(--white)">
+              ${escapeHtml(r.course)}
+              <div style="font-size:0.75rem;color:var(--gray-text);margin-top:3px;">
+                ${r.ventas} venta${r.ventas !== 1 ? 's' : ''} · brutas ${fmt0(r.bruto)} − MP ${fmt0(r.mp)}${r.reemb ? ` − reemb. ${fmt0(r.reemb)}` : ''} − publi ${fmt0(r.ad)}
+              </div>
+            </td>
+            <td style="white-space:nowrap;color:${r.repartir < 0 ? 'var(--red)' : 'var(--gray-text)'}">${fmt0(r.repartir)} × ${r.pct}%</td>
+            <td style="white-space:nowrap"><strong style="color:var(--lime)">${fmt0(r.pago)}</strong>${r.pagoUsd ? `<div style="font-size:0.75rem;color:var(--violet-light)">+ ${fmtUSD(r.pagoUsd.toFixed(2))}</div>` : ''}</td>
           </tr>`).join('');
         return `
           <tr style="background:rgba(0,0,0,0.12); cursor:pointer; user-select:none;"
               onclick="toggleCoursesRow('${rowId}', this.querySelector('.vc-arrow'))">
-            <td><strong>${coach.name}</strong></td>
+            <td><strong>${escapeHtml(coach.name)}</strong></td>
             <td>
               <span class="badge badge-violet">${coach.rows.length} curso${coach.rows.length !== 1 ? 's' : ''}</span>
               <span class="vc-arrow" style="margin-left:8px;color:var(--gray-text);font-size:0.8rem;">▾</span>
             </td>
-            <td><strong style="color:var(--lime)">${fmtARS(totalGanancia)}</strong></td>
+            <td><strong style="color:var(--lime)">${fmt0(total)}</strong>${totalUsd ? `<div style="font-size:0.75rem;color:var(--violet-light)">+ ${fmtUSD(totalUsd.toFixed(2))}</div>` : ''}</td>
           </tr>
           <tr class="coach-courses-row" id="${rowId}">
             <td colspan="3" style="padding:0 14px 14px 14px; background:rgba(0,0,0,0.18);">
@@ -5446,7 +5515,7 @@
           const { data } = await sb.from('courses').select('id, title').order('title');
           courses = data || [];
         }
-        sel.innerHTML = `<option value="">— General —</option>` +
+        sel.innerHTML = `<option value="">— General (no se descuenta a coaches) —</option>` +
           courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
       }
 
@@ -5566,84 +5635,123 @@
       }
     }
 
-    // ── Resultado neto ───────────────────────────────
-    async function loadResultadoNeto() {
+    // ── Etapa X.104 — Resultado y liquidación (motor HBFin, finanzas.js) ──
+    let _fin             = null;   // { rows, generalAds } de HBFin.build
+    let _finCoachCourses = [];     // coach_courses crudas
+    let _finCourses      = {};     // course_id → title
+
+    function _finCourseTitle(id) { return _finCourses[id] || '(curso eliminado)'; }
+
+    async function loadResultadoNeto(opts = {}) {
       const card = document.getElementById('resultado-neto-card');
-      if (!card) return;
+      try {
+        const [sales, { data: ccData }, { data: adData }, { data: cData }] = await Promise.all([
+          HBFin.fetchSales(sb),
+          sb.from('coach_courses').select('coach_id, course_id, commission_pct'),
+          sb.from('ad_spend').select('course_id, amount_ars, spend_date'),
+          sb.from('courses').select('id, title'),
+        ]);
+        _finCoachCourses = ccData || [];
+        _finCourses = {};
+        (cData || []).forEach(c => { _finCourses[c.id] = c.title; });
+        _fin = HBFin.build({ sales, ads: adData || [], coachCourses: _finCoachCourses });
+      } catch (e) {
+        console.error('loadResultadoNeto:', e);
+        showAlert('alert-gestion', 'Error al calcular el resultado: ' + (e.message || e));
+        return;
+      }
 
-      const [
-        { data: ucData },
-        { data: ccData },
-        { data: adData }
-      ] = await Promise.all([
-        sb.from('user_courses').select('course_id, amount_paid, net_amount, currency').eq('payment_status', 'paid'),
-        sb.from('coach_courses').select('course_id, commission_pct, courses(price_ars)'),
-        sb.from('ad_spend').select('amount_ars')
-      ]);
+      // Selector de período (preserva selección; default = Total)
+      const sel = document.getElementById('fin-periodo');
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Total (todos los meses)</option>' +
+          HBFin.months(_fin).map(ym => `<option value="${ym}">${HBFin.ymLabel(ym)}</option>`).join('');
+        if (cur) sel.value = cur;
+      }
 
-      // Etapa X.37 — COALESCE(net_amount, amount_paid). Si la venta MP ya fue
-      // sincronizada vía sync-mp-payments, usamos el neto real (post comisión
-      // MP + IIBB). Si no hay net_amount (PayPal, cupón, MP sin sincronizar),
-      // caemos al monto bruto pagado.
-      const effectiveAmount = (r) => Number(r.net_amount != null ? r.net_amount : r.amount_paid || 0);
+      renderFinanzas();
+      if (card) card.style.display = '';
+      if (!opts.skipCoaches) await loadCoachesVentas();
+    }
 
-      // Ingresos totales ARS
-      const totalARS = (ucData || [])
-        .filter(r => !r.currency || r.currency === 'ARS')
-        .reduce((s, r) => s + effectiveAmount(r), 0);
+    function renderFinanzas() {
+      if (!_fin) return;
+      const fmt0 = n => fmtARS(Math.round(n));
+      const ym   = document.getElementById('fin-periodo')?.value || '';
+      const rows = ym ? _fin.rows.filter(r => r.ym === ym) : _fin.rows;
+      const t    = HBFin.sum(rows, _fin.generalAds, ym ? [ym] : null);
 
-      // Mapa de revenue real por curso
-      const salesMap = {};
-      (ucData || [])
-        .filter(r => !r.currency || r.currency === 'ARS')
-        .forEach(r => {
-          if (!salesMap[r.course_id]) salesMap[r.course_id] = { count: 0, revenue: 0 };
-          salesMap[r.course_id].count++;
-          salesMap[r.course_id].revenue += effectiveAmount(r);
-        });
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set('rn-title',        `📊 Resultado — ${ym ? HBFin.ymLabel(ym) : 'total'} (ARS)`);
+      set('rn-ventas-count', `· ${t.ventas} venta${t.ventas !== 1 ? 's' : ''}`);
+      set('rn-ingresos',     fmt0(t.bruto_ars));
+      set('rn-mp',           '− ' + fmt0(t.comision_ars));
+      set('rn-reemb',        t.reemb_ars ? '− ' + fmt0(t.reemb_ars) : '—');
+      set('rn-adspend',      '− ' + fmt0(t.ad_ars));
+      set('rn-repartir',     fmt0(t.repartir_ars));
+      set('rn-comisiones',   '− ' + fmt0(t.coaches_ars));
+      set('rn-general',      '− ' + fmt0(t.ad_general));
+      const genRow = document.getElementById('rn-general-row');
+      if (genRow) genRow.style.display = t.ad_general ? '' : 'none';
 
-      // Total comisiones: por cada coach_course, revenue × commission_pct
-      let totalComisiones = 0;
-      (ccData || []).forEach(row => {
-        const s         = salesMap[row.course_id] || { count: 0, revenue: 0 };
-        const priceArs  = Number(row.courses?.price_ars || 0);
-        const revenue   = s.revenue > 0 ? s.revenue : s.count * priceArs;
-        totalComisiones += revenue * (Number(row.commission_pct) || 0) / 100;
-      });
+      const totalEl = document.getElementById('rn-total');
+      if (totalEl) {
+        totalEl.textContent = fmt0(t.hblab_ars);
+        totalEl.className   = `rn-total ${t.hblab_ars >= 0 ? 'rn-positive' : 'rn-negative'}`;
+      }
 
-      // Total inversión publicitaria ARS
-      const totalAdSpend = (adData || [])
-        .reduce((s, r) => s + Number(r.amount_ars || 0), 0);
-
-      const ganancia = totalARS - totalComisiones - totalAdSpend;
-
-      document.getElementById('rn-ingresos').textContent   = fmtARS(totalARS);
-      document.getElementById('rn-comisiones').textContent = fmtARS(totalComisiones);
-      document.getElementById('rn-adspend').textContent    = fmtARS(totalAdSpend);
-
-      // Etapa X.24 — ROI publicitario: (ingresos - ad_spend) / ad_spend × 100
-      // Lime si positivo, rojo si negativo, gris "—" si no hay ad_spend.
-      const roiEl = document.getElementById('rn-roi');
+      // ROI publicitario: (lo que quedó después de MP y reembolsos − pauta) / pauta
+      const roiEl  = document.getElementById('rn-roi');
+      const adTot  = t.ad_ars + t.ad_general;
       if (roiEl) {
-        if (totalAdSpend <= 0) {
-          roiEl.textContent = '—';
-          roiEl.style.color = 'var(--gray-text)';
-          roiEl.style.fontStyle = 'italic';
+        if (adTot <= 0) {
+          roiEl.textContent = '—'; roiEl.style.color = 'var(--gray-text)'; roiEl.style.fontStyle = 'italic';
         } else {
-          const roi = ((totalARS - totalAdSpend) / totalAdSpend) * 100;
-          const rounded = Math.round(roi);
-          roiEl.textContent = `${rounded >= 0 ? '+' : ''}${rounded}%`;
+          const roi = ((t.bruto_ars - t.comision_ars - t.reemb_ars - adTot) / adTot) * 100;
+          roiEl.textContent = `${roi >= 0 ? '+' : ''}${Math.round(roi)}%`;
           roiEl.style.color = roi >= 0 ? 'var(--lime)' : 'var(--red)';
-          roiEl.style.fontStyle = 'normal';
-          roiEl.style.fontWeight = '800';
+          roiEl.style.fontStyle = 'normal'; roiEl.style.fontWeight = '800';
         }
       }
 
-      const totalEl = document.getElementById('rn-total');
-      totalEl.textContent = fmtARS(ganancia);
-      totalEl.className   = `rn-total ${ganancia >= 0 ? 'rn-positive' : 'rn-negative'}`;
+      const usdEl = document.getElementById('rn-usd');
+      if (usdEl) {
+        if (t.bruto_usd || t.reemb_usd) {
+          usdEl.style.display = '';
+          usdEl.textContent = `Ventas en dólares (aparte): brutas USD ${t.bruto_usd.toFixed(2)} · neto PayPal USD ${(t.repartir_usd).toFixed(2)} · coaches USD ${t.coaches_usd.toFixed(2)} · HB Lab USD ${t.hblab_usd.toFixed(2)}`;
+        } else {
+          usdEl.style.display = 'none';
+        }
+      }
 
-      card.style.display = '';
+      // Tabla mes a mes + total
+      const tbody = document.getElementById('tbody-fin-meses');
+      if (!tbody) return;
+      const yms = HBFin.months(_fin);
+      if (!yms.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-td">Todavía no hay ventas ni publicidad cargada.</td></tr>`;
+        return;
+      }
+      const line = (label, x, strong) => {
+        const pub = x.ad_ars + x.ad_general;
+        const w   = s => strong ? `<strong>${s}</strong>` : s;
+        return `
+          <tr${strong ? ' style="background:rgba(200,230,0,0.06)"' : ''}${!strong && label.ym === ym ? ' style="background:rgba(123,79,190,0.12)"' : ''}>
+            <td>${w(label.text)}</td>
+            <td>${w(x.ventas)}</td>
+            <td>${w(fmt0(x.bruto_ars))}</td>
+            <td style="color:var(--gray-text)">${fmt0(x.comision_ars)}</td>
+            <td style="color:var(--gray-text)">${x.reemb_ars ? fmt0(x.reemb_ars) : '—'}</td>
+            <td style="color:var(--gray-text)">${fmt0(pub)}</td>
+            <td style="color:var(--gray-text)">${fmt0(x.coaches_ars)}</td>
+            <td style="color:${x.hblab_ars >= 0 ? 'var(--lime)' : 'var(--red)'};font-weight:700">${fmt0(x.hblab_ars)}</td>
+          </tr>`;
+      };
+      tbody.innerHTML =
+        yms.map(m => line({ text: HBFin.ymLabel(m), ym: m },
+                          HBFin.sum(_fin.rows.filter(r => r.ym === m), _fin.generalAds, [m]))).join('') +
+        line({ text: 'TOTAL' }, HBFin.sum(_fin.rows, _fin.generalAds, null), true);
     }
 
     // ══════════════════════════════════════════════

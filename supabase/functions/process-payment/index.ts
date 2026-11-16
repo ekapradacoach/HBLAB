@@ -367,6 +367,7 @@ interface NormalizedPayment {
   currency:       string;             // 'ARS' | 'USD'
   payment_method: 'mercadopago' | 'paypal' | 'manual' | 'coupon';
   external_ref?:  string;             // id de la transacción en el proveedor
+  net_amount?:    number;             // Etapa X.104 — neto real recibido (post comisión MP/PayPal + impuestos)
   // Datos opcionales del comprador para el invite (Etapa X.13)
   nombre?:        string;
   apellido?:      string;
@@ -835,6 +836,32 @@ serve(async (req: Request) => {
       // status posibles: approved, in_process, pending, rejected, cancelled,
       // refunded, charged_back. Solo procesamos `approved`. MP reintenta los
       // webhooks ante 4xx/5xx, así que respondemos 200 con skipped:true.
+      // Etapa X.104 — Reembolsos / contracargos: MP manda el mismo webhook con
+      // status refunded | charged_back. Marcamos la inscripción como reembolsada
+      // (pierde el acceso) y guardamos la fecha para descontarlo en ese mes.
+      if (payment.status === 'refunded' || payment.status === 'charged_back') {
+        try {
+          const sbRef = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const refundedAt = payment.date_last_updated || new Date().toISOString();
+          const { data: upd, error: refErr } = await sbRef
+            .from('user_courses')
+            .update({ payment_status: 'refunded', status: 'inactive', refunded_at: refundedAt })
+            .eq('mp_payment_id', String(paymentId))
+            .select('user_id');
+          if (refErr) {
+            console.error('process-payment[MP]: no se pudo marcar el reembolso:', refErr);
+            return errOut('No se pudo registrar el reembolso: ' + refErr.message, 500);
+          }
+          console.log(`process-payment[MP]: payment ${paymentId} ${payment.status} → ${upd?.length || 0} inscripción(es) marcadas como reembolsadas`);
+          return json({ ok: true, refunded: true, payment_id: paymentId, updated: upd?.length || 0 });
+        } catch (e: any) {
+          console.error('process-payment[MP]: excepción en reembolso:', e);
+          return errOut('Error registrando reembolso: ' + (e.message || e), 500);
+        }
+      }
+
       if (payment.status !== 'approved') {
         console.log(`process-payment[MP]: payment ${paymentId} status=${payment.status} → skip`);
         return json({ ok: true, skipped: true, reason: `status=${payment.status}`, payment_id: paymentId });
@@ -883,6 +910,10 @@ serve(async (req: Request) => {
         external_ref:   String(payment.id),
         nombre:         refNombre,
         apellido:       refApell,
+        // Etapa X.104 — neto real que deposita MP (descontada comisión + impuestos)
+        net_amount:     Number.isFinite(Number(payment?.transaction_details?.net_received_amount))
+                          && Number(payment.transaction_details.net_received_amount) > 0
+                          ? Number(payment.transaction_details.net_received_amount) : undefined,
       };
 
       // (Follow-up Etapa X.14): incrementar coupons.uses_count si extRef.coupon_code
@@ -966,13 +997,19 @@ serve(async (req: Request) => {
         external_ref:   String(order.id || orderId),
         nombre:         ppGiven,
         apellido:       ppSurname,
+        // Etapa X.104 — neto que recibe la cuenta PayPal (sin la comisión de PayPal)
+        net_amount:     (() => {
+          const cap = (unit?.payments?.captures || []).find((c: any) => c?.seller_receivable_breakdown?.net_amount?.value);
+          const v   = Number(cap?.seller_receivable_breakdown?.net_amount?.value);
+          return Number.isFinite(v) && v > 0 ? v : undefined;
+        })(),
       };
     } else {
       return errOut(`Payload no reconocido (provider=${sigInfo.provider}).`);
     }
   }
 
-  const { email, course_id, amount, currency, payment_method, external_ref, nombre, apellido } = normalized;
+  const { email, course_id, amount, currency, payment_method, external_ref, nombre, apellido, net_amount } = normalized;
 
   // ── 3) Cliente service role ─────────────────────────────
   const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -1105,6 +1142,11 @@ serve(async (req: Request) => {
   // En MP, `external_ref` ya contiene String(payment.id).
   if (payment_method === 'mercadopago' && external_ref) {
     upsertPayload.mp_payment_id = external_ref;
+  }
+  // Etapa X.104 — el neto entra solo, sin "Sincronizar netos". Si el proveedor
+  // no lo informó, no lo pisamos (queda el anterior o null → se usa el bruto).
+  if (net_amount != null) {
+    upsertPayload.net_amount = net_amount;
   }
   const { error: ucErr } = await sbAdmin
     .from('user_courses')

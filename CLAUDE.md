@@ -3112,3 +3112,30 @@ WhatsApp oficial: +54 9 11 5957-4043 (wa.me/5491159574043). Usado en el botón "
 |-------|-----|
 | `ekapradacoach@gmail.com` | `admin` |
 | `test@hblab.com` | `student` (password: `HBLab2024!`) |
+
+---
+
+## Etapa X.104 — Liquidación mensual a coaches (neto MP + pauta por curso + reembolsos)
+
+**Regla de negocio** (definida por Erika): el coach cobra su `coach_courses.commission_pct` (hoy 50%) sobre el **neto a repartir** de cada curso, liquidado **por mes** (hora argentina):
+
+```
+Ventas brutas − comisión MP/PayPal (real, incluye impuestos) − reembolsos − publicidad del curso = Neto a repartir
+Coach = max(0, neto a repartir) × commission_pct      ·      HB Lab = neto a repartir − coach
+```
+- Publicidad: se carga en **pesos** (monto del resumen de tarjeta) en `ad_spend`, **por curso**. La pauta "General" (sin `course_id`) NO se descuenta a coaches: la absorbe HB Lab.
+- Mes negativo (pauta > ventas): coach cobra $0, HB Lab absorbe, **no se arrastra**.
+- Reembolso: la venta queda en su mes; se descuenta su neto en el mes de `refunded_at`.
+- USD se calcula aparte (sin conversión); la pauta solo descuenta de ARS.
+
+**`finanzas.js` (NUEVO, compartido)** — `window.HBFin` con `ymOf`, `ymLabel`, `fetchSales(sb, courseIds?)`, `build({sales, ads, coachCourses})`, `sum(rows, generalAds, yms)`, `months(result)`. Única fuente de la cuenta: admin y coach muestran los mismos números. Incluido en `admin.html` y `coach.html` después de `notifs.js`. `fetchSales` reintenta sin `refunded_at` si la columna no existe.
+
+**admin.html — Tab Gestión**: `loadResultadoNeto()` reescrito → arma `_fin` con HBFin y llama `renderFinanzas()` + `loadCoachesVentas()`. Card "💵 Resultado y liquidación" con selector `#fin-periodo` (Total / cada mes): ventas brutas, − MP, − reembolsos, − publicidad de cursos, = neto a repartir, − coaches, − publicidad general, = Ganancia HB Lab, ROI, línea USD aparte. Tabla `#tbody-fin-meses` mes a mes + fila TOTAL. "Liquidación a coaches" (ex Ventas por coach) usa `_fin` filtrado por `cv-filter-mes/anio`, muestra desglose por curso y "A pagar". Gráfico de barras ahora con dataset **Publicidad ARS**. Botón de sync renombrado "Recalcular netos de MP (pagos anteriores)". Opción del form de pauta: "— General (no se descuenta a coaches) —".
+
+**coach.html — Tab Ganancias**: `loadGanancias()` reescrito con HBFin. Tabla: Curso · Ventas · Ventas brutas · − Mercado Pago · (− Reembolsos si hay) · − Publicidad · Neto a repartir · Tu ganancia. Revierte la decisión de X.33: el coach ahora ve el bruto y la pauta (pedido explícito). Histórico = suma de liquidaciones mensuales. Se quitó la regla mobile que ocultaba la col 3 (ahora scroll horizontal).
+
+**process-payment**: (a) guarda `net_amount` en el UPSERT — MP: `transaction_details.net_received_amount`; PayPal: `captures[].seller_receivable_breakdown.net_amount.value`. (b) Webhook MP con `status refunded | charged_back` → `UPDATE user_courses SET payment_status='refunded', status='inactive', refunded_at=date_last_updated WHERE mp_payment_id = id` (el alumno pierde acceso). Reembolsos parciales y reembolsos de PayPal NO se manejan automáticamente (pendiente).
+
+**SQL** (`supabase/sql/x104_liquidacion.sql`, correr ANTES del deploy): `user_courses.refunded_at TIMESTAMPTZ` + policy SELECT de `ad_spend` para coaches de sus cursos (y admin).
+
+**Deploy**: 1) SQL · 2) re-deploy manual de `process-payment` · 3) subir `finanzas.js`, `admin.html`, `coach.html`. Para pagos viejos sin neto: botón "Recalcular netos de MP".

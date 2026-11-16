@@ -913,8 +913,8 @@
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
       }
-      .gains-table th:nth-child(3),
-      .gains-table td:nth-child(3) { display: none; }
+      /* Etapa X.104 — la tabla ya no oculta columnas: scroll horizontal en el card */
+      .gains-table th, .gains-table td { white-space: nowrap; }
     }
   </style>
 </head>
@@ -1049,6 +1049,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase.js"></script>
 <script src="notifs.js"></script>
+<script src="finanzas.js"></script>
 <script>
 /* ══════════════════════════════════════════════════
    GLOBALS
@@ -3284,8 +3285,12 @@ function initGananciasSelectors() {
 }
 
 async function loadGanancias() {
+  // Etapa X.104 — Liquidación mensual con el motor compartido HBFin (finanzas.js).
+  // Por curso: ventas brutas − Mercado Pago − reembolsos − publicidad = neto a repartir.
+  // Tu ganancia = max(0, neto a repartir) × tu %. Mismos números que ve el admin.
   const mes  = parseInt(document.getElementById('gains-mes').value);
   const anio = parseInt(document.getElementById('gains-anio').value);
+  const ym   = `${anio}-${String(mes).padStart(2, '0')}`;
   const wrap = document.getElementById('gains-content');
   const totalBox    = document.getElementById('gains-total-box');
   const totalAmount = document.getElementById('gains-total-amount');
@@ -3294,19 +3299,14 @@ async function loadGanancias() {
   wrap.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div>';
   totalBox.style.display = 'none';
 
-  const startDate = new Date(anio, mes - 1, 1).toISOString();
-  const endDate   = new Date(anio, mes,     1).toISOString();
-
   let coachCourseData = [];
   if (currentRole === 'admin') {
     const { data: allC } = await sb.from('courses')
-      .select('id, title, price_ars')
-      .eq('is_active', true)
-      .order('title');
+      .select('id, title').eq('is_active', true).order('title');
     coachCourseData = (allC || []).map(c => ({ course_id: c.id, commission_pct: 100, courses: c }));
   } else {
     const { data: cc, error } = await sb.from('coach_courses')
-      .select('course_id, commission_pct, courses(id, title, price_ars)')
+      .select('course_id, commission_pct, courses(id, title)')
       .eq('coach_id', currentUser.id);
     if (error || !cc?.length) {
       wrap.innerHTML = '<div class="empty-state"><span class="emoji">💰</span>No tenés cursos asignados.</div>';
@@ -3314,70 +3314,57 @@ async function loadGanancias() {
     }
     coachCourseData = cc.filter(r => r.courses);
   }
-
   if (!coachCourseData.length) {
     wrap.innerHTML = '<div class="empty-state"><span class="emoji">💰</span>No hay cursos disponibles.</div>';
     return;
   }
 
   const courseIds = coachCourseData.map(c => c.course_id);
-  const { data: sales } = await sb.from('user_courses')
-    .select('course_id, amount_paid')
-    .in('course_id', courseIds)
-    .eq('payment_status', 'paid')
-    .gte('enrolled_at', startDate)
-    .lt('enrolled_at', endDate);
+  let fin;
+  try {
+    const [sales, { data: ads, error: adErr }] = await Promise.all([
+      HBFin.fetchSales(sb, courseIds),
+      sb.from('ad_spend').select('course_id, amount_ars, spend_date').in('course_id', courseIds),
+    ]);
+    if (adErr) console.warn('[ganancias] ad_spend no accesible (¿falta la policy de X.104?):', adErr);
+    fin = HBFin.build({
+      sales,
+      ads: ads || [],
+      coachCourses: coachCourseData.map(c => ({ coach_id: 'me', course_id: c.course_id, commission_pct: c.commission_pct })),
+    });
+  } catch (e) {
+    console.error('loadGanancias:', e);
+    wrap.innerHTML = '<div class="empty-state"><span class="emoji">⚠️</span>No se pudieron cargar tus ganancias.</div>';
+    return;
+  }
 
-  const salesByCourse = {};
-  (sales || []).forEach(s => {
-    if (!salesByCourse[s.course_id]) salesByCourse[s.course_id] = { count: 0, revenue: 0 };
-    salesByCourse[s.course_id].count++;
-    salesByCourse[s.course_id].revenue += Number(s.amount_paid || 0);
-  });
+  const fmt0 = n => fmtARS(Math.round(n));
+  const rowByCourse = {};
+  fin.rows.filter(r => r.ym === ym).forEach(r => { rowByCourse[r.course_id] = r; });
 
-  let grandTotal = 0;
-  let totalVentas = 0;
+  let grandTotal = 0, grandUsd = 0, totalVentas = 0;
   const rows = coachCourseData.map(cc => {
-    const courseTitle   = cc.courses?.title    || '—';
-    const priceArs      = Number(cc.courses?.price_ars || 0);
-    const commissionPct = Number(cc.commission_pct || 0);
-    const data          = salesByCourse[cc.course_id] || { count: 0, revenue: 0 };
-    const revenue       = data.revenue > 0 ? data.revenue : data.count * priceArs;
-    const commission    = revenue * commissionPct / 100;
-    grandTotal += commission;
-    totalVentas += data.count;
-    return { courseTitle, priceArs, commissionPct, count: data.count, revenue, commission };
+    const r    = rowByCourse[cc.course_id] || {};
+    const pago = r.coaches?.[0]?.pago_ars || 0;
+    const usd  = r.coaches?.[0]?.pago_usd || 0;
+    grandTotal += pago; grandUsd += usd; totalVentas += r.ventas || 0;
+    return {
+      title: cc.courses?.title || '—', pct: Number(cc.commission_pct || 0),
+      ventas: r.ventas || 0, bruto: r.bruto_ars || 0, mp: r.comision_ars || 0,
+      reemb: r.reemb_ars || 0, ad: r.ad_ars || 0, repartir: r.repartir_ars || 0,
+      pago, usd,
+    };
   });
+  const anyReemb = rows.some(r => r.reemb);
 
   totalBox.style.display = '';
-  totalAmount.textContent = fmtARS(grandTotal);
+  totalAmount.textContent = fmt0(grandTotal) + (grandUsd ? ` + USD ${grandUsd.toFixed(2)}` : '');
   totalDetail.textContent = `${totalVentas} venta${totalVentas !== 1 ? 's' : ''} en ${mesNombre(mes)} ${anio}`;
 
-  // Etapa X.34 — Histórico acumulado (sin filtro de fecha)
-  const { data: histData } = await sb
-    .from('user_courses')
-    .select('amount_paid, course_id')
-    .eq('payment_status', 'paid')
-    .eq('status', 'active')
-    .in('course_id', courseIds);
-
-  const histByCourse = {};
-  (histData || []).forEach(s => {
-    if (!histByCourse[s.course_id]) histByCourse[s.course_id] = { count: 0, revenue: 0 };
-    histByCourse[s.course_id].count++;
-    histByCourse[s.course_id].revenue += Number(s.amount_paid || 0);
-  });
-
-  let histTotalGain   = 0;
-  let histTotalVentas = 0;
-  coachCourseData.forEach(cc => {
-    const priceArs      = Number(cc.courses?.price_ars || 0);
-    const commissionPct = Number(cc.commission_pct || 0);
-    const d             = histByCourse[cc.course_id] || { count: 0, revenue: 0 };
-    const rev           = d.revenue > 0 ? d.revenue : d.count * priceArs;
-    histTotalGain   += rev * commissionPct / 100;
-    histTotalVentas += d.count;
-  });
+  // Histórico: suma de cada mes liquidado por separado (un mes negativo no resta a otro)
+  const histPago   = fin.rows.reduce((s, r) => s + (r.coaches?.[0]?.pago_ars || 0), 0);
+  const histUsd    = fin.rows.reduce((s, r) => s + (r.coaches?.[0]?.pago_usd || 0), 0);
+  const histVentas = fin.rows.reduce((s, r) => s + (r.ventas || 0), 0);
 
   wrap.innerHTML = `
     <div class="card">
@@ -3385,8 +3372,12 @@ async function loadGanancias() {
         <thead>
           <tr>
             <th>Curso</th>
-            <th>Ventas del mes</th>
-            <th>Comisión</th>
+            <th>Ventas</th>
+            <th>Ventas brutas</th>
+            <th>− Mercado Pago</th>
+            ${anyReemb ? '<th>− Reembolsos</th>' : ''}
+            <th>− Publicidad</th>
+            <th>Neto a repartir</th>
             <th>Tu ganancia</th>
           </tr>
         </thead>
@@ -3394,22 +3385,30 @@ async function loadGanancias() {
           ${rows.map(r => `
             <tr>
               <td>
-                <div class="gains-course-title">${escapeHtml(r.courseTitle)}</div>
-                <div class="gains-commission-pct">${r.commissionPct}% comisión</div>
+                <div class="gains-course-title">${escapeHtml(r.title)}</div>
+                <div class="gains-commission-pct">Tu parte: ${r.pct}% del neto</div>
               </td>
-              <td>${r.count > 0 ? r.count : '<span style="color:var(--gray-text)">—</span>'}</td>
-              <td style="color:var(--violet-light)">${r.commissionPct}%</td>
-              <td class="${r.commission > 0 ? 'gains-amount' : 'gains-amount-zero'}">${fmtARS(r.commission)}</td>
+              <td>${r.ventas || '<span style="color:var(--gray-text)">—</span>'}</td>
+              <td>${fmt0(r.bruto)}</td>
+              <td style="color:var(--gray-text)">${fmt0(r.mp)}</td>
+              ${anyReemb ? `<td style="color:var(--gray-text)">${r.reemb ? fmt0(r.reemb) : '—'}</td>` : ''}
+              <td style="color:var(--gray-text)">${fmt0(r.ad)}</td>
+              <td style="color:${r.repartir < 0 ? 'var(--red)' : 'var(--white)'}">${fmt0(r.repartir)}</td>
+              <td class="${r.pago > 0 ? 'gains-amount' : 'gains-amount-zero'}">
+                ${fmt0(r.pago)}${r.usd ? `<div style="font-size:0.75rem;color:var(--violet-light)">+ USD ${r.usd.toFixed(2)}</div>` : ''}
+              </td>
             </tr>`).join('')}
         </tbody>
       </table>
     </div>
+    ${rows.some(r => r.repartir < 0) ? `<p style="margin:12px 0 0;font-size:0.82rem;color:var(--gray-text);">En rojo: ese mes la publicidad superó a las ventas, así que no hubo neto para repartir. La diferencia la absorbe HB Lab y no se arrastra al mes siguiente.</p>` : ''}
+    <p style="margin:8px 0 0;font-size:0.78rem;color:var(--gray-text);">La comisión de Mercado Pago es la real que descontó MP en cada pago (incluye impuestos y retenciones).</p>
 
     <div class="gains-historic-box">
       <div class="gains-total-label">Histórico acumulado</div>
-      <div class="gains-historic-amount">${fmtARS(histTotalGain)}</div>
+      <div class="gains-historic-amount">${fmt0(histPago)}${histUsd ? ` + USD ${histUsd.toFixed(2)}` : ''}</div>
       <div class="gains-total-detail">
-        ${histTotalVentas} venta${histTotalVentas !== 1 ? 's' : ''} totales · Desde el inicio hasta hoy
+        ${histVentas} venta${histVentas !== 1 ? 's' : ''} totales · Desde el inicio hasta hoy
       </div>
     </div>
   `;
