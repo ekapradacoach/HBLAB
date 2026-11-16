@@ -1711,7 +1711,7 @@
                   <th>Alumno</th>
                   <th>Curso</th>
                   <th>Monto</th>
-                  <th>Neto MP</th>
+                  <th>Final (con descuento)</th>
                   <th>Moneda</th>
                   <th>Método</th>
                 </tr>
@@ -1731,6 +1731,8 @@
             <span style="color:var(--gray-text);">Total filtrado:</span>
             <strong id="ventas-total-ars" style="color:var(--lime);">$0 ARS</strong>
             <strong id="ventas-total-usd" style="color:var(--violet-light);">USD 0</strong>
+            <span style="color:var(--gray-text);">·</span>
+            <strong id="ventas-total-final" style="color:var(--lime);">Final con descuento: $0 ARS</strong>
             <span style="color:var(--gray-text);">·</span>
             <strong id="ventas-total-count">0 ventas</strong>
           </div>
@@ -1819,15 +1821,7 @@
             </table>
           </div>
 
-          <!-- Etapa X.37 — Recalcular netos (solo para pagos anteriores a X.104) -->
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 0;">
-            <button type="button" class="btn-secondary" id="btn-sync-mp"
-                    onclick="syncMpPayments()"
-                    style="border:1px solid var(--lime);color:var(--lime);background:transparent;">
-              🔄 Recalcular netos de MP (pagos anteriores)
-            </button>
-            <span id="sync-mp-status" style="font-size:0.85rem;color:var(--gray-text);">Los pagos nuevos ya entran con el neto de MP automáticamente.</span>
-          </div>
+          <!-- Etapa X.105 — sin botón: los netos faltantes se completan solos (autoSyncNetos) -->
         </div>
 
         <!-- Gráficos -->
@@ -4995,6 +4989,30 @@
       // (no hace falta query extra; ya tenemos los datos en memoria).
       renderKPIs();
       renderRankingCursos();
+      autoSyncNetos();
+    }
+
+    // Etapa X.105 — Completa solo el "final con descuento" de las ventas de MP
+    // que todavía no lo tienen (pagos viejos o si MP tardó en informarlo).
+    // Corre en segundo plano una vez por carga de página; reemplaza al botón.
+    let _autoSyncDone = false;
+    let _autoSyncFinished = false;
+    async function autoSyncNetos() {
+      if (_autoSyncDone) return;
+      const faltan = _ventas.some(v => v.payment_method === 'mercadopago' && v.mp_payment_id && v.net_amount == null);
+      if (!faltan) { _autoSyncFinished = true; return; }
+      _autoSyncDone = true;
+      try {
+        const { data, error } = await sb.functions.invoke('sync-mp-payments');
+        if (error || data?.error) { console.warn('[autoSyncNetos]', error || data.error); return; }
+        if (data?.errors?.length) console.warn('[autoSyncNetos] pagos con error:', data.errors);
+        if ((data?.updated || 0) > 0) await Promise.all([loadVentas(), loadResultadoNeto()]);
+      } catch (e) {
+        console.warn('[autoSyncNetos] excepción:', e);
+      } finally {
+        _autoSyncFinished = true;
+        renderVentas();
+      }
     }
 
     function _filteredVentas() {
@@ -5061,10 +5079,24 @@
           coupon:      '🎟 Cupón',
           manual:      '✋ Manual',
         })[metodo] || metodo;
-        // Etapa X.37 — columna Neto MP: muestra net_amount si existe, "—" si no.
-        const netoMp = (v.net_amount != null)
-          ? `<strong style="color:var(--lime);">$${Number(v.net_amount).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</strong>`
-          : '<span style="color:var(--gray-text);">—</span>';
+        // Etapa X.105 — "Final (con descuento)": lo que realmente entró después de
+        // la comisión de MP/PayPal. Se completa solo (webhook + auto-sync al abrir
+        // Gestión). Cupones y pagos manuales no tienen comisión → final = monto.
+        const fmtMoney = n => v.currency === 'USD'
+          ? `USD ${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
+          : `$${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+        let netoMp;
+        if (v.net_amount != null) {
+          const desc = v.amount_paid - v.net_amount;
+          netoMp = `<strong style="color:var(--lime);">${fmtMoney(v.net_amount)}</strong>` +
+            (desc > 0.009 ? `<div style="font-size:0.72rem;color:var(--gray-text);">− ${fmtMoney(desc)} comisión</div>` : '');
+        } else if (v.payment_method === 'mercadopago' && v.mp_payment_id) {
+          netoMp = _autoSyncFinished
+            ? '<span style="color:var(--gray-text);" title="Mercado Pago no informó el neto de este pago">—</span>'
+            : '<span style="color:var(--gray-text);font-size:0.8rem;">⏳ calculando…</span>';
+        } else {
+          netoMp = `<strong style="color:var(--lime);">${fmtMoney(v.amount_paid)}</strong>`;
+        }
         return `${sepHtml}
           <tr>
             <td style="white-space:nowrap;color:var(--gray-text);font-size:0.84rem;">${fecha}</td>
@@ -5110,6 +5142,10 @@
     function _renderVentasTotals(filtered) {
       const totARS = filtered.filter(v => v.currency === 'ARS').reduce((s, v) => s + v.amount_paid, 0);
       const totUSD = filtered.filter(v => v.currency === 'USD').reduce((s, v) => s + v.amount_paid, 0);
+      const finalARS = filtered.filter(v => v.currency === 'ARS')
+        .reduce((s, v) => s + (v.net_amount != null ? v.net_amount : v.amount_paid), 0);
+      const finEl = document.getElementById('ventas-total-final');
+      if (finEl) finEl.textContent = `Final con descuento: $${Math.round(finalARS).toLocaleString('es-AR')} ARS`;
       const arsEl = document.getElementById('ventas-total-ars');
       const usdEl = document.getElementById('ventas-total-usd');
       const cntEl = document.getElementById('ventas-total-count');
